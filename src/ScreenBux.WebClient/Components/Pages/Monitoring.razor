@@ -1,0 +1,168 @@
+@page "/monitoring"
+@using ScreenBux.Shared.Models
+@using ScreenBux.WebClient.Services
+@inject MonitoringService MonitoringService
+@implements IAsyncDisposable
+
+<PageTitle>Monitoring</PageTitle>
+
+<h1>ScreenBux Monitoring</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Connection Status</h5>
+        <p>
+            Status: <strong class="@(_isConnected ? "text-success" : "text-danger")">
+                @(_isConnected ? "Connected" : "Disconnected")
+            </strong>
+        </p>
+        <button class="btn btn-primary me-2" @onclick="Connect" disabled="@_isConnected">Connect</button>
+        <button class="btn btn-secondary me-2" @onclick="Disconnect" disabled="@(!_isConnected)">Disconnect</button>
+        <button class="btn btn-info" @onclick="RequestStatus" disabled="@(!_isConnected)">Get Status</button>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Recent Activity</h5>
+        @if (_processHistory.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Process Name</th>
+                            <th>PID</th>
+                            <th>Window Title</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var process in _processHistory.Take(20))
+                        {
+                            <tr>
+                                <td>@process.DetectedAt.ToLocalTime().ToString("HH:mm:ss")</td>
+                                <td>@process.ProcessName</td>
+                                <td>@process.ProcessId</td>
+                                <td>@process.WindowTitle</td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning" @onclick="() => CloseProcess(process.ProcessId)">
+                                        Close
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted">No activity detected yet.</p>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Status Messages</h5>
+        <div style="height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; font-family: monospace; font-size: 0.9em;">
+            @foreach (var message in _statusMessages)
+            {
+                <div>@message</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _isConnected = false;
+    private List<ProcessInfo> _processHistory = new();
+    private List<string> _statusMessages = new();
+
+    protected override void OnInitialized()
+    {
+        MonitoringService.ProcessDetected += OnProcessDetected;
+        MonitoringService.PolicyUpdated += OnPolicyUpdated;
+        MonitoringService.StatusReceived += OnStatusReceived;
+    }
+
+    private async Task Connect()
+    {
+        try
+        {
+            await MonitoringService.StartAsync();
+            _isConnected = MonitoringService.IsConnected;
+            AddStatusMessage("Connected to monitoring service");
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Error connecting: {ex.Message}");
+        }
+        StateHasChanged();
+    }
+
+    private async Task Disconnect()
+    {
+        try
+        {
+            await MonitoringService.StopAsync();
+            _isConnected = MonitoringService.IsConnected;
+            AddStatusMessage("Disconnected from monitoring service");
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Error disconnecting: {ex.Message}");
+        }
+        StateHasChanged();
+    }
+
+    private async Task RequestStatus()
+    {
+        await MonitoringService.RequestStatusAsync();
+        AddStatusMessage("Status request sent");
+    }
+
+    private async Task CloseProcess(int processId)
+    {
+        await MonitoringService.CloseProcessAsync(processId);
+        AddStatusMessage($"Close request sent for process {processId}");
+    }
+
+    private void OnProcessDetected(object? sender, ProcessInfo processInfo)
+    {
+        _processHistory.Insert(0, processInfo);
+        AddStatusMessage($"Process detected: {processInfo.ProcessName} (PID: {processInfo.ProcessId})");
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPolicyUpdated(object? sender, PolicyConfiguration config)
+    {
+        AddStatusMessage("Policy configuration updated");
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStatusReceived(object? sender, string status)
+    {
+        AddStatusMessage($"Status: {status}");
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void AddStatusMessage(string message)
+    {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        _statusMessages.Insert(0, $"[{timestamp}] {message}");
+        if (_statusMessages.Count > 50)
+        {
+            _statusMessages.RemoveAt(_statusMessages.Count - 1);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        MonitoringService.ProcessDetected -= OnProcessDetected;
+        MonitoringService.PolicyUpdated -= OnPolicyUpdated;
+        MonitoringService.StatusReceived -= OnStatusReceived;
+    }
+}

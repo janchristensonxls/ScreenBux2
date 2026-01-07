@@ -1,0 +1,6 @@
+@ScreenBux.WebServer_HostAddress = http://localhost:5246
+
+GET {{ScreenBux.WebServer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
