@@ -12,8 +12,9 @@ builder.Services.AddWindowsService(options =>
 // Register services
 builder.Services.AddSingleton<PolicyService>();
 builder.Services.AddSingleton<ProcessKillerService>();
-builder.Services.AddSingleton<NamedPipeServerService>();
+builder.Services.AddHostedService<NamedPipeServerService>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
 host.Run();
+var app = host;

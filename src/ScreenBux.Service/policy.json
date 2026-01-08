@@ -1,0 +1,16 @@
+{
+  "Policies": [
+    {
+      "ApplicationName": "Example Blocked App",
+      "ExecutablePath": "example.exe",
+      "Action": 1,
+      "AllowedTimeWindows": [],
+      "MaxUsageMinutesPerDay": 0,
+      "BlockOnWeekdays": true,
+      "BlockOnWeekends": true
+    }
+  ],
+  "EnableMonitoring": true,
+  "CheckIntervalSeconds": 5,
+  "LogActivity": true
+}
