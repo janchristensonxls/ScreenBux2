@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using ScreenBux.Agent.Services;
 using ScreenBux.Shared.Models;
 
@@ -20,34 +21,66 @@ public partial class MainWindow : Window
 {
     private readonly MonitoringService _monitoringService;
     private readonly NamedPipeClient _pipeClient;
+    private readonly DispatcherTimer _serviceStatusTimer;
+    private bool _isCheckingService;
 
     public MainWindow()
     {
         InitializeComponent();
         _monitoringService = new MonitoringService();
         _pipeClient = new NamedPipeClient();
+        _serviceStatusTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _serviceStatusTimer.Tick += ServiceStatusTimer_Tick;
 
         _monitoringService.StatusChanged += OnStatusChanged;
         _monitoringService.ProcessDetected += OnProcessDetected;
 
         Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         // Check service status
         await CheckServiceStatusAsync();
+        _serviceStatusTimer.Start();
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _serviceStatusTimer.Stop();
+    }
+
+    private async void ServiceStatusTimer_Tick(object? sender, EventArgs e)
+    {
+        await CheckServiceStatusAsync();
     }
 
     private async Task CheckServiceStatusAsync()
     {
-        var isAvailable = await _pipeClient.IsServiceAvailableAsync();
-        ServiceStatusText.Text = isAvailable ? "Service: Connected" : "Service: Disconnected";
-        ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;
-        
-        if (!isAvailable)
+        if (_isCheckingService)
         {
-            LogMessage("Warning: Service is not running. Please start the ScreenBux Service.");
+            return;
+        }
+
+        _isCheckingService = true;
+        try
+        {
+            var isAvailable = await _pipeClient.IsServiceAvailableAsync();
+            ServiceStatusText.Text = isAvailable ? "Service: Connected" : "Service: Disconnected";
+            ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;
+
+            if (!isAvailable)
+            {
+                LogMessage("Warning: Service is not running. Please start the ScreenBux Service.");
+            }
+        }
+        finally
+        {
+            _isCheckingService = false;
         }
     }
 
