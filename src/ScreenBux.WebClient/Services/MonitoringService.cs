@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Configuration;
 using ScreenBux.Shared.Models;
 
 namespace ScreenBux.WebClient.Services;
@@ -12,12 +13,18 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<PolicyConfiguration>? PolicyUpdated;
     public event EventHandler<string>? StatusReceived;
 
-    public MonitoringService(ILogger<MonitoringService> logger)
+    public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration)
     {
         _logger = logger;
+
+        var hubUrl = configuration["MonitoringHubUrl"];
+        if (string.IsNullOrWhiteSpace(hubUrl))
+        {
+            hubUrl = "https://localhost:7225/monitoringHub";
+        }
         
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl("https://localhost:7000/monitoringHub") // WebServer URL
+            .WithUrl(hubUrl)
             .WithAutomaticReconnect()
             .Build();
 
