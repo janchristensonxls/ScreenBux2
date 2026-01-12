@@ -20,7 +20,7 @@ public class MonitoringService : IAsyncDisposable
         var hubUrl = configuration["MonitoringHubUrl"];
         if (string.IsNullOrWhiteSpace(hubUrl))
         {
-            hubUrl = "https://localhost:7225/monitoringHub";
+            hubUrl = "https://localhost:44323/monitoringHub";
         }
         
         _hubConnection = new HubConnectionBuilder()
