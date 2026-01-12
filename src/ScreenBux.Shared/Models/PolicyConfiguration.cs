@@ -5,6 +5,7 @@ namespace ScreenBux.Shared.Models;
 /// </summary>
 public class PolicyConfiguration
 {
+    public List<PolicyRule> Rules { get; set; } = new();
     public List<AppPolicy> Policies { get; set; } = new();
     public bool EnableMonitoring { get; set; } = true;
     public int CheckIntervalSeconds { get; set; } = 5;

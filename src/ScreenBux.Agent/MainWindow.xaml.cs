@@ -47,11 +47,18 @@ public partial class MainWindow : Window
         // Check service status
         await CheckServiceStatusAsync();
         _serviceStatusTimer.Start();
+
+        _monitoringService.Start();
+        StartButton.IsEnabled = false;
+        StopButton.IsEnabled = true;
+        StatusText.Text = "Monitoring active";
+        LogMessage("Monitoring started automatically");
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
         _serviceStatusTimer.Stop();
+        _monitoringService.Stop();
     }
 
     private async void ServiceStatusTimer_Tick(object? sender, EventArgs e)
