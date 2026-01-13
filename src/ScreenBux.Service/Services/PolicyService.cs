@@ -1,5 +1,7 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.Service.Services;
 
@@ -11,11 +13,13 @@ public class PolicyService
     private readonly ILogger<PolicyService> _logger;
     private PolicyConfiguration _configuration;
     private readonly string _policyFilePath;
+    private DateTime? _lastWriteTimeUtc;
 
     public PolicyService(ILogger<PolicyService> logger, IConfiguration configuration)
     {
         _logger = logger;
-        _policyFilePath = configuration["PolicyFilePath"] ?? "policy.json";
+        _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
+        PolicyStorage.EnsurePolicyDirectory(_policyFilePath);
         _configuration = new PolicyConfiguration();
     }
 
@@ -27,6 +31,7 @@ public class PolicyService
             {
                 var json = await File.ReadAllTextAsync(_policyFilePath);
                 _configuration = JsonSerializer.Deserialize<PolicyConfiguration>(json) ?? new PolicyConfiguration();
+                _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
                 _logger.LogInformation("Policy loaded successfully with {Count} policies", _configuration.Policies.Count);
             }
             else
@@ -42,6 +47,27 @@ public class PolicyService
         }
     }
 
+    public async Task ReloadPolicyIfChangedAsync()
+    {
+        try
+        {
+            if (!File.Exists(_policyFilePath))
+            {
+                return;
+            }
+
+            var lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
+            if (_lastWriteTimeUtc == null || lastWriteTimeUtc > _lastWriteTimeUtc)
+            {
+                await LoadPolicyAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking policy file for changes");
+        }
+    }
+
     public async Task SavePolicyAsync()
     {
         try
@@ -51,6 +77,7 @@ public class PolicyService
                 WriteIndented = true
             });
             await File.WriteAllTextAsync(_policyFilePath, json);
+            _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
             _logger.LogInformation("Policy saved successfully");
         }
         catch (Exception ex)
@@ -66,15 +93,14 @@ public class PolicyService
             EnableMonitoring = true,
             CheckIntervalSeconds = 5,
             LogActivity = true,
-            Policies = new List<AppPolicy>
+            Rules = new List<PolicyRule>
             {
-                new AppPolicy
+                new PolicyRule
                 {
-                    ApplicationName = "Example Blocked App",
-                    ExecutablePath = "example.exe",
-                    Action = PolicyAction.Block,
-                    BlockOnWeekdays = true,
-                    BlockOnWeekends = true
+                    Name = "Example Blocked App",
+                    ProcessNameRegex = "^example$",
+                    WindowTitleRegex = string.Empty,
+                    Enabled = true
                 }
             }
         };
@@ -83,10 +109,26 @@ public class PolicyService
 
     public PolicyConfiguration GetConfiguration() => _configuration;
 
-    public bool ShouldBlockProcess(ProcessInfo processInfo)
+    public async Task UpdatePolicyAsync(PolicyConfiguration configuration)
+    {
+        if (configuration == null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        _configuration = configuration;
+        await SavePolicyAsync();
+    }
+
+    public bool ShouldBlockProcess(ProcessInfo processInfo, bool isForegroundWindow = true)
     {
         if (!_configuration.EnableMonitoring)
             return false;
+
+        if (_configuration.Rules.Count > 0)
+        {
+            return GetMatchingRule(processInfo, isForegroundWindow) != null;
+        }
 
         var policy = _configuration.Policies.FirstOrDefault(p =>
             processInfo.ProcessName.Contains(p.ApplicationName, StringComparison.OrdinalIgnoreCase) ||
@@ -101,6 +143,42 @@ public class PolicyService
             PolicyAction.TimeRestricted => !IsWithinAllowedTime(policy),
             _ => false
         };
+    }
+
+    public PolicyRule? GetMatchingRule(ProcessInfo processInfo, bool isForegroundWindow)
+    {
+        foreach (var rule in _configuration.Rules.Where(rule => rule.Enabled))
+        {
+            if (IsRegexMatch(rule.ProcessNameRegex, processInfo.ProcessName))
+            {
+                return rule;
+            }
+
+            if (isForegroundWindow && IsRegexMatch(rule.WindowTitleRegex, processInfo.WindowTitle))
+            {
+                return rule;
+            }
+        }
+
+        return null;
+    }
+
+    private bool IsRegexMatch(string? pattern, string input)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return false;
+        }
+
+        try
+        {
+            return Regex.IsMatch(input ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Invalid regex pattern in policy: {Pattern}", pattern);
+            return false;
+        }
     }
 
     private bool IsWithinAllowedTime(AppPolicy policy)
