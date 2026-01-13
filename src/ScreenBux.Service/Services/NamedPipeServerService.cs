@@ -52,7 +52,7 @@ public class NamedPipeServerService : BackgroundService
 
                 _logger.LogDebug("Waiting for client connection...");
                 await pipeServer.WaitForConnectionAsync(stoppingToken);
-                _logger.LogInformation("Client connected to named pipe");
+                _logger.LogDebug("Client connected to named pipe");
 
                 // Handle the connection in a separate task
                 _ = Task.Run(async () => await HandleClientAsync(pipeServer, stoppingToken), stoppingToken);

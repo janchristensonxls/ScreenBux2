@@ -2,30 +2,19 @@
   "EnableMonitoring": true,
   "CheckIntervalSeconds": 5,
   "LogActivity": true,
-  "Policies": [
+  "Rules": [
     {
-      "ApplicationName": "notepad",
-      "ExecutablePath": "notepad.exe",
-      "Action": "Block",
-      "AllowedTimeWindows": [],
-      "MaxUsageMinutesPerDay": 0,
-      "BlockOnWeekdays": true,
-      "BlockOnWeekends": true
+      "Name": "Block Notepad",
+      "ProcessNameRegex": "^notepad$",
+      "WindowTitleRegex": "",
+      "Enabled": true
     },
     {
-      "ApplicationName": "chrome",
-      "ExecutablePath": "chrome.exe",
-      "Action": "TimeRestricted",
-      "AllowedTimeWindows": [
-        {
-          "StartTime": "09:00:00",
-          "EndTime": "17:00:00",
-          "DaysOfWeek": [1, 2, 3, 4, 5]
-        }
-      ],
-      "MaxUsageMinutesPerDay": 120,
-      "BlockOnWeekdays": false,
-      "BlockOnWeekends": true
+      "Name": "Block Games by Window Title",
+      "ProcessNameRegex": "",
+      "WindowTitleRegex": "Minecraft|Roblox",
+      "Enabled": true
     }
-  ]
+  ],
+  "Policies": []
 }
