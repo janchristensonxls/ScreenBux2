@@ -9,6 +9,12 @@ builder.Services.AddRazorComponents()
 
 // Register MonitoringService
 builder.Services.AddScoped<MonitoringService>();
+builder.Services.AddHttpClient<PolicyApiService>((serviceProvider, client) =>
+{
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["PolicyApiBaseUrl"] ?? "https://localhost:7225";
+    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+});
 
 var app = builder.Build();
 

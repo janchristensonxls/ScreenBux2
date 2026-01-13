@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Utilities;
+using ScreenBux.WebServer.Hubs;
 
 namespace ScreenBux.WebServer.Controllers;
 
@@ -9,11 +12,16 @@ public class PolicyController : ControllerBase
 {
     private readonly ILogger<PolicyController> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<MonitoringHub> _hubContext;
 
-    public PolicyController(ILogger<PolicyController> logger, IConfiguration configuration)
+    public PolicyController(
+        ILogger<PolicyController> logger,
+        IConfiguration configuration,
+        IHubContext<MonitoringHub> hubContext)
     {
         _logger = logger;
         _configuration = configuration;
+        _hubContext = hubContext;
     }
 
     [HttpGet]
@@ -21,7 +29,7 @@ public class PolicyController : ControllerBase
     {
         try
         {
-            var policyPath = _configuration["PolicyFilePath"] ?? "policy.json";
+            var policyPath = _configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
             
             if (!System.IO.File.Exists(policyPath))
             {
@@ -45,7 +53,8 @@ public class PolicyController : ControllerBase
     {
         try
         {
-            var policyPath = _configuration["PolicyFilePath"] ?? "policy.json";
+            var policyPath = _configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
+            PolicyStorage.EnsurePolicyDirectory(policyPath);
             
             var json = System.Text.Json.JsonSerializer.Serialize(policy, new System.Text.Json.JsonSerializerOptions
             {
@@ -53,6 +62,7 @@ public class PolicyController : ControllerBase
             });
             
             await System.IO.File.WriteAllTextAsync(policyPath, json);
+            await _hubContext.Clients.All.SendAsync("PolicyUpdated", policy);
             
             _logger.LogInformation("Policy updated successfully");
             return Ok(new { message = "Policy updated successfully" });
