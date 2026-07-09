@@ -15,7 +15,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowWebClient", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://localhost:5173") // Blazor default ports
+        policy.WithOrigins(
+                  "https://localhost:7123", "http://localhost:5239",   // WebClient Kestrel (dotnet run)
+                  "https://localhost:44331", "http://localhost:15426")  // WebClient IIS Express
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

@@ -11,16 +11,19 @@ public class ProcessMonitoringService : BackgroundService
     private readonly ILogger<ProcessMonitoringService> _logger;
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
+    private readonly PolicySyncService _policySync;
     private readonly ForegroundWindowDetector _foregroundWindowDetector;
 
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
-        ProcessKillerService processKiller)
+        ProcessKillerService processKiller,
+        PolicySyncService policySync)
     {
         _logger = logger;
         _policyService = policyService;
         _processKiller = processKiller;
+        _policySync = policySync;
         _foregroundWindowDetector = new ForegroundWindowDetector();
     }
 
@@ -107,6 +110,9 @@ public class ProcessMonitoringService : BackgroundService
             ruleName);
 
         await _processKiller.TryCloseProcessAsync(processInfo.ProcessId);
+
+        processInfo.DetectedAt = DateTime.UtcNow;
+        await _policySync.SendProcessDetectionAsync(processInfo);
     }
 
     private ProcessInfo? CreateProcessInfo(Process process)

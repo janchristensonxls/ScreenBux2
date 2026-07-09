@@ -12,9 +12,10 @@ builder.Services.AddWindowsService(options =>
 // Register services
 builder.Services.AddSingleton<PolicyService>();
 builder.Services.AddSingleton<ProcessKillerService>();
+builder.Services.AddSingleton<PolicySyncService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>());
 builder.Services.AddHostedService<NamedPipeServerService>();
 builder.Services.AddHostedService<ProcessMonitoringService>();
-builder.Services.AddHostedService<PolicySyncService>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

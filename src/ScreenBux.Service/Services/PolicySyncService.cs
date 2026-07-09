@@ -4,7 +4,8 @@ using ScreenBux.Shared.Models;
 namespace ScreenBux.Service.Services;
 
 /// <summary>
-/// Syncs policy updates from the web server via SignalR.
+/// Maintains the SignalR connection to the web server: receives policy updates
+/// and relays process detections to the monitoring UI.
 /// </summary>
 public class PolicySyncService : BackgroundService
 {
@@ -25,7 +26,7 @@ public class PolicySyncService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var hubUrl = _configuration["MonitoringHubUrl"] ?? "https://localhost:7225/monitoringHub";
+        var hubUrl = _configuration["MonitoringHubUrl"] ?? "https://localhost:44323/monitoringHub";
 
         _hubConnection = new HubConnectionBuilder()
             .WithUrl(hubUrl)
@@ -90,5 +91,27 @@ public class PolicySyncService : BackgroundService
         }
 
         await base.StopAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Relays a process detection to the web server hub so the monitoring UI updates live.
+    /// No-op when the hub connection is not established.
+    /// </summary>
+    public async Task SendProcessDetectionAsync(ProcessInfo processInfo)
+    {
+        var connection = _hubConnection;
+        if (connection is not { State: HubConnectionState.Connected })
+        {
+            return;
+        }
+
+        try
+        {
+            await connection.InvokeAsync("BroadcastProcessDetection", processInfo);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send process detection to hub");
+        }
     }
 }
