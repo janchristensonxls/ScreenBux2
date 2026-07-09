@@ -30,7 +30,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        // Use an absolute path for the definition as a small robustness measure so the
+        // URL never depends on the current browser path (redirects, trailing slash, etc.).
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ScreenBux.WebServer v1");
+    });
 }
 
 app.UseHttpsRedirection();
