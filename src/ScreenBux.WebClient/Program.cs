@@ -12,7 +12,7 @@ builder.Services.AddScoped<MonitoringService>();
 builder.Services.AddHttpClient<PolicyApiService>((serviceProvider, client) =>
 {
     var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-    var baseUrl = configuration["PolicyApiBaseUrl"] ?? "https://localhost:7225";
+    var baseUrl = configuration["PolicyApiBaseUrl"] ?? "https://localhost:44323";
     client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
 });
 

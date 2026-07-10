@@ -1,0 +1,3412 @@
+{
+  "settings": {
+    "components": {
+      "code": true,
+      "binaries": false
+    },
+    "targetId": "net10.0",
+    "targetDisplayName": ".NETCoreApp,Version=v10.0"
+  },
+  "analysisStartTime": "2026-07-09T15:09:35.3300364Z",
+  "analysisEndTime": "2026-07-09T15:09:35.7311536Z",
+  "privacyModeHelpUrl": "https://go.microsoft.com/fwlink/?linkid=2270980",
+  "stats": {
+    "summary": {
+      "projects": 5,
+      "issues": 6,
+      "incidents": 144,
+      "effort": 144
+    },
+    "charts": {
+      "severity": {
+        "Mandatory": 117,
+        "Optional": 0,
+        "Potential": 27,
+        "Information": 0
+      },
+      "category": {
+        "Project": 5,
+        "Api": 134,
+        "NuGet": 5
+      }
+    }
+  },
+  "projects": [
+    {
+      "path": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+      "startingProject": true,
+      "issues": 4,
+      "storyPoints": 122,
+      "properties": {
+        "appName": "ScreenBux.Agent",
+        "projectKind": "Wpf",
+        "frameworks": [
+          "net8.0-windows"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 6,
+        "numberOfCodeFiles": 6,
+        "linesTotal": 453,
+        "linesOfCode": 453,
+        "totalApiScanned": 426,
+        "minLinesOfCodeToChange": 121,
+        "maxLinesOfCodeToChange": 121
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "d6cf203f-ae39-4f30-b7c6-43a828ed3c0d",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0-windows\nRecommended target framework: net10.0-windows",
+              "protected": "Current target framework: net8.0-windows\nRecommended target framework: net10.0-windows"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+            "snippet": "Current target framework: net8.0-windows\nRecommended target framework: net10.0-windows",
+            "protectedSnippet": "Current target framework: net8.0-windows\nRecommended target framework: net10.0-windows",
+            "properties": {
+              "CurrentTargetFramework": "net8.0-windows",
+              "RecommendedTargetFramework": "net10.0-windows"
+            }
+          }
+        },
+        {
+          "incidentId": "a92ea2c9-f915-425e-90da-6550d7f61a86",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Stop();",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Stop();",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 39,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "124d1877-d4db-457b-9df5-ead33bd0e7d9",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Stop();",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.Stop"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Stop();",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.Stop",
+            "label": "M:System.Windows.Threading.DispatcherTimer.Stop",
+            "line": 39,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3da0ac7e-a6f6-4c3b-b80c-c5a33b558d2d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Start();",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Start();",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 33,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3479e1f2-4118-443f-9824-9178418f45e6",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Start();",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.Start"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Start();",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.Start",
+            "label": "M:System.Windows.Threading.DispatcherTimer.Start",
+            "line": 33,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5ae44150-7d40-4e78-adf3-65a049dbb926",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Tick \u002B= OnTimerTick;",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Tick \u002B= OnTimerTick;",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 28,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b8873a5e-0b9a-477b-98d0-36a63cebce05",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Tick \u002B= OnTimerTick;",
+              "protected": "E:System.Windows.Threading.DispatcherTimer.Tick"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Tick \u002B= OnTimerTick;",
+            "protectedSnippet": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "label": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "line": 28,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "66fbae2a-fe2f-4b66-a7c6-675d58878292",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "64a963dd-a57c-4084-862e-0992f1b85cbe",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "P:System.Windows.Threading.DispatcherTimer.Interval"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "label": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5cd0ee6d-3f10-493a-b762-fd5fc98f2ac5",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "28a01e03-169d-48ca-9eed-2b248954631c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "label": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "1b31d92e-4e30-4d8f-a3d0-f5a2a4444a11",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e2a45c64-b8f7-4cc9-920a-bda376c782d5",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 14,
+            "column": 37
+          }
+        },
+        {
+          "incidentId": "14b37432-01dd-464b-9fa6-8b06e50603bf",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Tick \u002B= OnTimerTick;",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Tick \u002B= OnTimerTick;",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 28,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f7a82c1f-02fa-48a7-9bc3-ba9b3771674b",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer.Tick \u002B= OnTimerTick;",
+              "protected": "E:System.Windows.Threading.DispatcherTimer.Tick"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer.Tick \u002B= OnTimerTick;",
+            "protectedSnippet": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "label": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "line": 28,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "1e6252da-6d40-43a4-b165-af1a43b84fc7",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f0f1025c-9c88-48ad-854a-b897d9ba7993",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "P:System.Windows.Threading.DispatcherTimer.Interval"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "label": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "440840d7-5aea-4ce6-a0ca-e8a817a7ab88",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "c9a4f533-618b-48dd-9d01-02901cde387f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "label": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5c436f2f-df94-4fb9-a45c-45bd3c3b02f3",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\Services\\MonitoringService.cs",
+            "snippet": "_timer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(2)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 24,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b657d4bb-f3eb-4af7-abd3-f0210db22997",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "app.Run();",
+              "protected": "M:System.Windows.Application.Run"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\App.g.i.cs",
+            "snippet": "app.Run();",
+            "protectedSnippet": "M:System.Windows.Application.Run",
+            "label": "M:System.Windows.Application.Run",
+            "line": 66,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "83663cb9-9e34-4b7a-a43c-bcb306b5ad38",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\App.g.i.cs",
+            "snippet": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 51,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "aa605d18-9b26-48d8-82c0-581ed58550f0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "M:System.Uri.#ctor(System.String,System.UriKind)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\App.g.i.cs",
+            "snippet": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String,System.UriKind)",
+            "label": "M:System.Uri.#ctor(System.String,System.UriKind)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 51,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "96688947-2b8c-47fd-84f9-eed156402f85",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\App.g.i.cs",
+            "snippet": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 51,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "eefa6369-5e95-426e-bcc8-248dc88764ba",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "P:System.Windows.Application.StartupUri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\App.g.i.cs",
+            "snippet": "this.StartupUri = new System.Uri(\u0022MainWindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "P:System.Windows.Application.StartupUri",
+            "label": "P:System.Windows.Application.StartupUri",
+            "line": 51,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "13ba376b-372d-44e8-bd1a-23bc660baa2d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Application",
+              "protected": "M:System.Windows.Application.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\App.xaml.cs",
+            "snippet": "Application",
+            "protectedSnippet": "M:System.Windows.Application.#ctor",
+            "label": "M:System.Windows.Application.#ctor",
+            "line": 9,
+            "column": 27
+          }
+        },
+        {
+          "incidentId": "23dbfec5-1db2-4bf8-ab15-98904a3479fb",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Application",
+              "protected": "T:System.Windows.Application"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\App.xaml.cs",
+            "snippet": "Application",
+            "protectedSnippet": "T:System.Windows.Application",
+            "label": "T:System.Windows.Application",
+            "line": 9,
+            "column": 27
+          }
+        },
+        {
+          "incidentId": "a401bc72-45b4-41cd-b4d0-8605615bf5fa",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StatusText = ((System.Windows.Controls.TextBlock)(target));",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StatusText = ((System.Windows.Controls.TextBlock)(target));",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 138,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "03e69654-462b-410b-b396-772bea21cb1d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.LogTextBox = ((System.Windows.Controls.TextBox)(target));",
+              "protected": "T:System.Windows.Controls.TextBox"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.LogTextBox = ((System.Windows.Controls.TextBox)(target));",
+            "protectedSnippet": "T:System.Windows.Controls.TextBox",
+            "label": "T:System.Windows.Controls.TextBox",
+            "line": 135,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "0887ba0f-6657-4833-bcac-a4e5c40bdb36",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.ServiceStatusText = ((System.Windows.Controls.TextBlock)(target));",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.ServiceStatusText = ((System.Windows.Controls.TextBlock)(target));",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 132,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "a91e29f8-f005-461a-ae93-c14182d06324",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 126,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8f283a4d-3a20-4561-9dbc-0fbdbb381bab",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 126,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "2a575fda-833f-4c7f-802e-4f54bb12eb60",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 126,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "5927c99c-ca2e-4002-9f24-8728d91ffcf8",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+              "protected": "E:System.Windows.Controls.Primitives.ButtonBase.Click"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StopButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StopButton_Click);",
+            "protectedSnippet": "E:System.Windows.Controls.Primitives.ButtonBase.Click",
+            "label": "E:System.Windows.Controls.Primitives.ButtonBase.Click",
+            "line": 126,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "aa2d1db0-9887-4544-84bc-f749eeb7ec11",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StopButton = ((System.Windows.Controls.Button)(target));",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StopButton = ((System.Windows.Controls.Button)(target));",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 123,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "823a1f0a-3812-4fa3-8b84-62e668dc3f34",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 117,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "f341c63e-9a2c-4bf9-9416-87b5ab7d613c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 117,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "881a1df0-74cf-444e-a643-3e42bbea1b1a",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 117,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "30c0eb4f-2c12-4e84-a3df-d6471db5bbb7",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+              "protected": "E:System.Windows.Controls.Primitives.ButtonBase.Click"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StartButton.Click \u002B= new System.Windows.RoutedEventHandler(this.StartButton_Click);",
+            "protectedSnippet": "E:System.Windows.Controls.Primitives.ButtonBase.Click",
+            "label": "E:System.Windows.Controls.Primitives.ButtonBase.Click",
+            "line": 117,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "98020c3d-5559-4de4-a4bd-bf35cd06acf5",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "this.StartButton = ((System.Windows.Controls.Button)(target));",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "this.StartButton = ((System.Windows.Controls.Button)(target));",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 114,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "6c99ef38-a1e9-4aab-b851-84d6f4dcf8f3",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "System.Windows.Application.LoadComponent(this, resourceLocater);",
+              "protected": "T:System.Windows.Application"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "System.Windows.Application.LoadComponent(this, resourceLocater);",
+            "protectedSnippet": "T:System.Windows.Application",
+            "label": "T:System.Windows.Application",
+            "line": 98,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "d3c5a906-ea78-4b39-b26e-33c74a5f5b2f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "System.Windows.Application.LoadComponent(this, resourceLocater);",
+              "protected": "M:System.Windows.Application.LoadComponent(System.Object,System.Uri)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "System.Windows.Application.LoadComponent(this, resourceLocater);",
+            "protectedSnippet": "M:System.Windows.Application.LoadComponent(System.Object,System.Uri)",
+            "label": "M:System.Windows.Application.LoadComponent(System.Object,System.Uri)",
+            "line": 98,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8bbff02d-889d-4379-a95b-8ff63e332108",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "System.Uri resourceLocater = new System.Uri(\u0022/ScreenBux.Agent;component/mainwindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "System.Uri resourceLocater = new System.Uri(\u0022/ScreenBux.Agent;component/mainwindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "7121cc56-ea47-4950-b92e-f5be9348145a",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "System.Uri resourceLocater = new System.Uri(\u0022/ScreenBux.Agent;component/mainwindow.xaml\u0022, System.UriKind.Relative);",
+              "protected": "M:System.Uri.#ctor(System.String,System.UriKind)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "System.Uri resourceLocater = new System.Uri(\u0022/ScreenBux.Agent;component/mainwindow.xaml\u0022, System.UriKind.Relative);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String,System.UriKind)",
+            "label": "M:System.Uri.#ctor(System.String,System.UriKind)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 95,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "75e476ca-d0b5-46c6-af88-a19ab13be673",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "StatusText",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 78,
+            "column": 51
+          }
+        },
+        {
+          "incidentId": "182052f5-b957-4208-b128-506685ec5f1f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "LogTextBox",
+              "protected": "T:System.Windows.Controls.TextBox"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "LogTextBox",
+            "protectedSnippet": "T:System.Windows.Controls.TextBox",
+            "label": "T:System.Windows.Controls.TextBox",
+            "line": 70,
+            "column": 49
+          }
+        },
+        {
+          "incidentId": "e7aa67ef-bc76-4f9c-9726-1bf6d581f709",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "ServiceStatusText",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 62,
+            "column": 51
+          }
+        },
+        {
+          "incidentId": "ff238182-75f0-42a3-8e24-a5ba5ed4f42d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "StopButton",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 54,
+            "column": 48
+          }
+        },
+        {
+          "incidentId": "e9095abc-5d16-416b-b568-ae821aa3decc",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "StartButton",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 46,
+            "column": 48
+          }
+        },
+        {
+          "incidentId": "0aa15b7b-c5e3-4662-b362-e5a4b4d3e335",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "LogTextBox.ScrollToEnd();",
+              "protected": "T:System.Windows.Controls.TextBox"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "LogTextBox.ScrollToEnd();",
+            "protectedSnippet": "T:System.Windows.Controls.TextBox",
+            "label": "T:System.Windows.Controls.TextBox",
+            "line": 131,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "36755b04-0767-4b19-b182-9abb06bec97c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "LogTextBox.ScrollToEnd();",
+              "protected": "M:System.Windows.Controls.Primitives.TextBoxBase.ScrollToEnd"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "LogTextBox.ScrollToEnd();",
+            "protectedSnippet": "M:System.Windows.Controls.Primitives.TextBoxBase.ScrollToEnd",
+            "label": "M:System.Windows.Controls.Primitives.TextBoxBase.ScrollToEnd",
+            "line": 131,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "2f751061-96f5-4129-a136-b6be2977acf1",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "LogTextBox.AppendText($\u0022[{timestamp}] {message}\\n\u0022);",
+              "protected": "T:System.Windows.Controls.TextBox"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "LogTextBox.AppendText($\u0022[{timestamp}] {message}\\n\u0022);",
+            "protectedSnippet": "T:System.Windows.Controls.TextBox",
+            "label": "T:System.Windows.Controls.TextBox",
+            "line": 130,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "2b7284a9-09ad-40be-9a12-adf342fd443e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "LogTextBox.AppendText($\u0022[{timestamp}] {message}\\n\u0022);",
+              "protected": "M:System.Windows.Controls.Primitives.TextBoxBase.AppendText(System.String)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "LogTextBox.AppendText($\u0022[{timestamp}] {message}\\n\u0022);",
+            "protectedSnippet": "M:System.Windows.Controls.Primitives.TextBoxBase.AppendText(System.String)",
+            "label": "M:System.Windows.Controls.Primitives.TextBoxBase.AppendText(System.String)",
+            "line": 130,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "cd852b44-7abd-41a1-a303-85c1f983de87",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+              "protected": "T:System.Windows.Threading.Dispatcher"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+            "protectedSnippet": "T:System.Windows.Threading.Dispatcher",
+            "label": "T:System.Windows.Threading.Dispatcher",
+            "line": 121,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0f3d75c9-6df4-4a7d-b2a4-9613f35a16ab",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+              "protected": "P:System.Windows.Threading.DispatcherObject.Dispatcher"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherObject.Dispatcher",
+            "label": "P:System.Windows.Threading.DispatcherObject.Dispatcher",
+            "line": 121,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "93e599fb-ac37-46a3-a2c3-016a59a381fa",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+              "protected": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Detected: {process.ProcessName} (PID: {process.ProcessId}) - {process.WindowTitle}\u0022);\r\n        });",
+            "protectedSnippet": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)",
+            "label": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)",
+            "line": 121,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "09e257c7-4773-4170-9300-ffd7f780168b",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+              "protected": "T:System.Windows.Threading.Dispatcher"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+            "protectedSnippet": "T:System.Windows.Threading.Dispatcher",
+            "label": "T:System.Windows.Threading.Dispatcher",
+            "line": 113,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "cc1806bb-b496-4654-a7c4-00343d7918f5",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+              "protected": "P:System.Windows.Threading.DispatcherObject.Dispatcher"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherObject.Dispatcher",
+            "label": "P:System.Windows.Threading.DispatcherObject.Dispatcher",
+            "line": 113,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3eabf2bd-eda0-48dd-a7bd-80638a269f06",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+              "protected": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Dispatcher.Invoke(() =\u003E\r\n        {\r\n            LogMessage($\u0022Status: {status}\u0022);\r\n        });",
+            "protectedSnippet": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)",
+            "label": "M:System.Windows.Threading.Dispatcher.Invoke(System.Action)",
+            "line": 113,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "34d27235-d093-4045-a066-39098ed56df7",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "private void StopButton_Click(object sender, RoutedEventArgs e)",
+              "protected": "T:System.Windows.RoutedEventArgs"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "private void StopButton_Click(object sender, RoutedEventArgs e)",
+            "protectedSnippet": "T:System.Windows.RoutedEventArgs",
+            "label": "T:System.Windows.RoutedEventArgs",
+            "line": 102,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "9da9fe49-216a-4a98-8c15-e56cde574a6c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring stopped\u0022;",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring stopped\u0022;",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 107,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f060d7c0-552a-4fdc-9214-894784e018a9",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring stopped\u0022;",
+              "protected": "P:System.Windows.Controls.TextBlock.Text"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring stopped\u0022;",
+            "protectedSnippet": "P:System.Windows.Controls.TextBlock.Text",
+            "label": "P:System.Windows.Controls.TextBlock.Text",
+            "line": 107,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "d812f65e-9986-4287-8365-d51eef63628a",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = false;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = false;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 106,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "4560854f-d1b7-4a68-9d17-59e73d8bf718",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = false;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = false;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 106,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "4cd48736-5880-4a69-9e72-18aa2c4109ee",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = true;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = true;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 105,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "270f2c15-c165-4ec2-be12-84f2e3b9df3d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = true;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = true;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 105,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f53bf6be-f810-4448-97ce-9de9af87a0fb",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "private void StartButton_Click(object sender, RoutedEventArgs e)",
+              "protected": "T:System.Windows.RoutedEventArgs"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "private void StartButton_Click(object sender, RoutedEventArgs e)",
+            "protectedSnippet": "T:System.Windows.RoutedEventArgs",
+            "label": "T:System.Windows.RoutedEventArgs",
+            "line": 93,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "77f1483b-e915-4c91-8474-6447d7eb7327",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring active\u0022;",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring active\u0022;",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 98,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "afcbe90b-a614-4809-aeec-b5b1f1e0fe7b",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring active\u0022;",
+              "protected": "P:System.Windows.Controls.TextBlock.Text"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring active\u0022;",
+            "protectedSnippet": "P:System.Windows.Controls.TextBlock.Text",
+            "label": "P:System.Windows.Controls.TextBlock.Text",
+            "line": 98,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "7ef238e2-3909-4d25-90be-413040f2557f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = true;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = true;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 97,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "bd6d1517-285a-4593-94b7-d0404761deb1",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = true;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = true;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 97,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f2038062-971d-446b-a5d5-b7ff073b8b8e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = false;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = false;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 96,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "82e694ab-a0b3-4568-9e69-2f6cd22e957e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = false;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = false;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 96,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e9f5c3fe-e578-4323-a64a-84822a5a163d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Media.Brushes"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Media.Brushes",
+            "label": "T:System.Windows.Media.Brushes",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "1fddfbf2-37a2-496a-8ae1-0c360ef92a15",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Media.SolidColorBrush"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Media.SolidColorBrush",
+            "label": "T:System.Windows.Media.SolidColorBrush",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "b9f9cb94-21cf-4cea-acda-9cf47ebe890e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "P:System.Windows.Media.Brushes.Red"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "P:System.Windows.Media.Brushes.Red",
+            "label": "P:System.Windows.Media.Brushes.Red",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "18ec9f24-43ff-45d8-9d27-b5b5b01ced01",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Media.Brushes"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Media.Brushes",
+            "label": "T:System.Windows.Media.Brushes",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "08c16c08-b450-4808-9533-3643f3bafb49",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Media.SolidColorBrush"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Media.SolidColorBrush",
+            "label": "T:System.Windows.Media.SolidColorBrush",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "880dde19-b0d7-4d33-8bd2-dc9678890bab",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "P:System.Windows.Media.Brushes.Green"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "P:System.Windows.Media.Brushes.Green",
+            "label": "P:System.Windows.Media.Brushes.Green",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "c5418f4d-3a94-493c-8603-f6f51dca4beb",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8ae01dba-f10f-4c26-91f3-9eff486af80d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "T:System.Windows.Media.Brush"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "T:System.Windows.Media.Brush",
+            "label": "T:System.Windows.Media.Brush",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "ae955108-982c-493c-9b33-2b2126369101",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+              "protected": "P:System.Windows.Controls.TextBlock.Foreground"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;",
+            "protectedSnippet": "P:System.Windows.Controls.TextBlock.Foreground",
+            "label": "P:System.Windows.Controls.TextBlock.Foreground",
+            "line": 80,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "89e770c8-2b1f-44bd-a32a-f34950d4956e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Text = isAvailable ? \u0022Service: Connected\u0022 : \u0022Service: Disconnected\u0022;",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Text = isAvailable ? \u0022Service: Connected\u0022 : \u0022Service: Disconnected\u0022;",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 79,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "c8c3f722-7a97-43aa-8372-e1aa5cf163b2",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ServiceStatusText.Text = isAvailable ? \u0022Service: Connected\u0022 : \u0022Service: Disconnected\u0022;",
+              "protected": "P:System.Windows.Controls.TextBlock.Text"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "ServiceStatusText.Text = isAvailable ? \u0022Service: Connected\u0022 : \u0022Service: Disconnected\u0022;",
+            "protectedSnippet": "P:System.Windows.Controls.TextBlock.Text",
+            "label": "P:System.Windows.Controls.TextBlock.Text",
+            "line": 79,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "8537469a-9245-4bc5-9bf3-62a272f2a40c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Stop();",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Stop();",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 59,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "af952750-90cd-4d5f-981e-e80ccea92dc3",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Stop();",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.Stop"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Stop();",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.Stop",
+            "label": "M:System.Windows.Threading.DispatcherTimer.Stop",
+            "line": 59,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "396544e7-3baf-463c-b4e2-b9cb7593c1a8",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "private async void MainWindow_Loaded(object sender, RoutedEventArgs e)",
+              "protected": "T:System.Windows.RoutedEventArgs"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "private async void MainWindow_Loaded(object sender, RoutedEventArgs e)",
+            "protectedSnippet": "T:System.Windows.RoutedEventArgs",
+            "label": "T:System.Windows.RoutedEventArgs",
+            "line": 44,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "9c64d5e9-53fa-408d-aa86-b87b6ce5373e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring active\u0022;",
+              "protected": "T:System.Windows.Controls.TextBlock"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring active\u0022;",
+            "protectedSnippet": "T:System.Windows.Controls.TextBlock",
+            "label": "T:System.Windows.Controls.TextBlock",
+            "line": 53,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "842b5045-27be-478c-9988-2871cb201bb2",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StatusText.Text = \u0022Monitoring active\u0022;",
+              "protected": "P:System.Windows.Controls.TextBlock.Text"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StatusText.Text = \u0022Monitoring active\u0022;",
+            "protectedSnippet": "P:System.Windows.Controls.TextBlock.Text",
+            "label": "P:System.Windows.Controls.TextBlock.Text",
+            "line": 53,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "450836df-c55a-4d25-95ad-c823afd7957e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = true;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = true;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 52,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "c6c8bbac-4676-4754-a089-ff402b7c0f7c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StopButton.IsEnabled = true;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StopButton.IsEnabled = true;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 52,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e0d90cc5-a413-4d93-b3cb-eb0a4a6e30e0",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = false;",
+              "protected": "T:System.Windows.Controls.Button"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = false;",
+            "protectedSnippet": "T:System.Windows.Controls.Button",
+            "label": "T:System.Windows.Controls.Button",
+            "line": 51,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "90c873d8-1ad3-411d-b314-9f68a0278cd7",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "StartButton.IsEnabled = false;",
+              "protected": "P:System.Windows.UIElement.IsEnabled"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "StartButton.IsEnabled = false;",
+            "protectedSnippet": "P:System.Windows.UIElement.IsEnabled",
+            "label": "P:System.Windows.UIElement.IsEnabled",
+            "line": 51,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "4d76862b-d76c-42e4-9bb4-1201a060d136",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Start();",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Start();",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 48,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "5f49d9be-9647-4e12-8bce-8df4cc538235",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Start();",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.Start"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Start();",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.Start",
+            "label": "M:System.Windows.Threading.DispatcherTimer.Start",
+            "line": 48,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f98d0b27-e542-4208-8742-99a79e90b6bd",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Closed \u002B= MainWindow_Closed;",
+              "protected": "E:System.Windows.Window.Closed"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Closed \u002B= MainWindow_Closed;",
+            "protectedSnippet": "E:System.Windows.Window.Closed",
+            "label": "E:System.Windows.Window.Closed",
+            "line": 41,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "fb13704e-5bf4-4204-a42c-c70edbc81d19",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "00257149-513f-4272-beb0-f94cb062f95e",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b8f5efb4-c96d-4829-9da3-7bcedd234fc6",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "E:System.Windows.FrameworkElement.Loaded"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "E:System.Windows.FrameworkElement.Loaded",
+            "label": "E:System.Windows.FrameworkElement.Loaded",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "ac7a844d-1cad-47f6-9058-1c3def15278f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 35,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "15f632f4-0fcd-424a-8e59-f7b3c2ffa1c0",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+              "protected": "E:System.Windows.Threading.DispatcherTimer.Tick"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+            "protectedSnippet": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "label": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "line": 35,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "56d4d90e-62ac-4431-b3b4-648cd541bcd3",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "80a39f74-86a6-40ff-9ce4-b9c9b246dc65",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "P:System.Windows.Threading.DispatcherTimer.Interval"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "label": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "04ddff09-3d2f-48e2-a849-b24e3d958108",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "63d741b1-b3f6-4b84-afcb-3a14794172bd",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "label": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "ff181161-855d-4eca-a018-f518a03508e6",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "6b63aae2-be71-490f-91a1-e7ab594883c1",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "public MainWindow()\r\n    {\r\n        InitializeComponent();\r\n        _monitoringService = new MonitoringService();\r\n        _pipeClient = new NamedPipeClient();\r\n        _serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };\r\n        _serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;\r\n\r\n        _monitoringService.StatusChanged \u002B= OnStatusChanged;\r\n        _monitoringService.ProcessDetected \u002B= OnProcessDetected;\r\n\r\n        Loaded \u002B= MainWindow_Loaded;\r\n        Closed \u002B= MainWindow_Closed;\r\n    }",
+              "protected": "M:System.Windows.Window.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "public MainWindow()\r\n    {\r\n        InitializeComponent();\r\n        _monitoringService = new MonitoringService();\r\n        _pipeClient = new NamedPipeClient();\r\n        _serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };\r\n        _serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;\r\n\r\n        _monitoringService.StatusChanged \u002B= OnStatusChanged;\r\n        _monitoringService.ProcessDetected \u002B= OnProcessDetected;\r\n\r\n        Loaded \u002B= MainWindow_Loaded;\r\n        Closed \u002B= MainWindow_Closed;\r\n    }",
+            "protectedSnippet": "M:System.Windows.Window.#ctor",
+            "label": "M:System.Windows.Window.#ctor",
+            "line": 26,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "931f8657-930c-45db-bcfd-2ef34e24e58d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 23,
+            "column": 37
+          }
+        },
+        {
+          "incidentId": "d746b0fa-60da-4b92-933b-74b52ffa0054",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Closed \u002B= MainWindow_Closed;",
+              "protected": "E:System.Windows.Window.Closed"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Closed \u002B= MainWindow_Closed;",
+            "protectedSnippet": "E:System.Windows.Window.Closed",
+            "label": "E:System.Windows.Window.Closed",
+            "line": 41,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "79e367e6-b37a-4e49-8708-6264e8ee62f8",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "3efbdc5f-71fd-4ae9-b422-dd67ce4e32af",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "T:System.Windows.RoutedEventHandler"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "T:System.Windows.RoutedEventHandler",
+            "label": "T:System.Windows.RoutedEventHandler",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "69d32d95-18d5-4d34-9c06-0d885f24fa5d",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Loaded \u002B= MainWindow_Loaded;",
+              "protected": "E:System.Windows.FrameworkElement.Loaded"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Loaded \u002B= MainWindow_Loaded;",
+            "protectedSnippet": "E:System.Windows.FrameworkElement.Loaded",
+            "label": "E:System.Windows.FrameworkElement.Loaded",
+            "line": 40,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "0da95595-c177-4595-b015-173bed21e17f",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 35,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "e0cdb352-f5c9-480b-adcf-5d9ad2ed9428",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+              "protected": "E:System.Windows.Threading.DispatcherTimer.Tick"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;",
+            "protectedSnippet": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "label": "E:System.Windows.Threading.DispatcherTimer.Tick",
+            "line": 35,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "9adf7e34-7932-40b4-aaac-7bf667ed83d0",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "b551e5b7-7c6f-47f2-a2e4-3a95f0627f49",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "P:System.Windows.Threading.DispatcherTimer.Interval"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "label": "P:System.Windows.Threading.DispatcherTimer.Interval",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "ded308ab-e796-467d-932e-99d4abe3c7c6",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "f1458692-0827-4373-bfe7-c7005010dba5",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "M:System.Windows.Threading.DispatcherTimer.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "label": "M:System.Windows.Threading.DispatcherTimer.#ctor",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "c0d70cb1-1d53-4097-8355-5d473758c8a2",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+              "protected": "T:System.Windows.Threading.DispatcherTimer"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "_serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };",
+            "protectedSnippet": "T:System.Windows.Threading.DispatcherTimer",
+            "label": "T:System.Windows.Threading.DispatcherTimer",
+            "line": 31,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "69f4d4d9-1c8b-4d63-b882-432f49512e3c",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "public MainWindow()\r\n    {\r\n        InitializeComponent();\r\n        _monitoringService = new MonitoringService();\r\n        _pipeClient = new NamedPipeClient();\r\n        _serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };\r\n        _serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;\r\n\r\n        _monitoringService.StatusChanged \u002B= OnStatusChanged;\r\n        _monitoringService.ProcessDetected \u002B= OnProcessDetected;\r\n\r\n        Loaded \u002B= MainWindow_Loaded;\r\n        Closed \u002B= MainWindow_Closed;\r\n    }",
+              "protected": "M:System.Windows.Window.#ctor"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "public MainWindow()\r\n    {\r\n        InitializeComponent();\r\n        _monitoringService = new MonitoringService();\r\n        _pipeClient = new NamedPipeClient();\r\n        _serviceStatusTimer = new DispatcherTimer\r\n        {\r\n            Interval = TimeSpan.FromSeconds(5)\r\n        };\r\n        _serviceStatusTimer.Tick \u002B= ServiceStatusTimer_Tick;\r\n\r\n        _monitoringService.StatusChanged \u002B= OnStatusChanged;\r\n        _monitoringService.ProcessDetected \u002B= OnProcessDetected;\r\n\r\n        Loaded \u002B= MainWindow_Loaded;\r\n        Closed \u002B= MainWindow_Closed;\r\n    }",
+            "protectedSnippet": "M:System.Windows.Window.#ctor",
+            "label": "M:System.Windows.Window.#ctor",
+            "line": 26,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "7035ca29-836d-4efb-a0e5-5ef8ef526121",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "IComponentConnector",
+              "protected": "T:System.Windows.Markup.IComponentConnector"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\obj\\Debug\\net8.0-windows\\MainWindow.g.i.cs",
+            "snippet": "IComponentConnector",
+            "protectedSnippet": "T:System.Windows.Markup.IComponentConnector",
+            "label": "T:System.Windows.Markup.IComponentConnector",
+            "line": 41,
+            "column": 83
+          }
+        },
+        {
+          "incidentId": "6f2adf20-78a0-4e3b-95a9-cf4038f2a523",
+          "ruleId": "Api.0001",
+          "description": "API is unavailable in net8.0 ",
+          "projectPath": "src\\ScreenBux.Agent\\ScreenBux.Agent.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Window",
+              "protected": "T:System.Windows.Window"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Agent\\MainWindow.xaml.cs",
+            "snippet": "Window",
+            "protectedSnippet": "T:System.Windows.Window",
+            "label": "T:System.Windows.Window",
+            "line": 19,
+            "column": 34
+          }
+        }
+      ],
+      "features": [
+        {
+          "featureId": "Wpf",
+          "incidents": [
+            "7035ca29-836d-4efb-a0e5-5ef8ef526121",
+            "c0d70cb1-1d53-4097-8355-5d473758c8a2",
+            "f1458692-0827-4373-bfe7-c7005010dba5",
+            "ded308ab-e796-467d-932e-99d4abe3c7c6",
+            "b551e5b7-7c6f-47f2-a2e4-3a95f0627f49",
+            "e0cdb352-f5c9-480b-adcf-5d9ad2ed9428",
+            "0da95595-c177-4595-b015-173bed21e17f",
+            "931f8657-930c-45db-bcfd-2ef34e24e58d",
+            "ff181161-855d-4eca-a018-f518a03508e6",
+            "63d741b1-b3f6-4b84-afcb-3a14794172bd",
+            "04ddff09-3d2f-48e2-a849-b24e3d958108",
+            "80a39f74-86a6-40ff-9ce4-b9c9b246dc65",
+            "15f632f4-0fcd-424a-8e59-f7b3c2ffa1c0",
+            "ac7a844d-1cad-47f6-9058-1c3def15278f",
+            "5f49d9be-9647-4e12-8bce-8df4cc538235",
+            "4d76862b-d76c-42e4-9bb4-1201a060d136",
+            "e0d90cc5-a413-4d93-b3cb-eb0a4a6e30e0",
+            "450836df-c55a-4d25-95ad-c823afd7957e",
+            "842b5045-27be-478c-9988-2871cb201bb2",
+            "9c64d5e9-53fa-408d-aa86-b87b6ce5373e",
+            "af952750-90cd-4d5f-981e-e80ccea92dc3",
+            "8537469a-9245-4bc5-9bf3-62a272f2a40c",
+            "c8c3f722-7a97-43aa-8372-e1aa5cf163b2",
+            "89e770c8-2b1f-44bd-a32a-f34950d4956e",
+            "ae955108-982c-493c-9b33-2b2126369101",
+            "8ae01dba-f10f-4c26-91f3-9eff486af80d",
+            "c5418f4d-3a94-493c-8603-f6f51dca4beb",
+            "880dde19-b0d7-4d33-8bd2-dc9678890bab",
+            "08c16c08-b450-4808-9533-3643f3bafb49",
+            "18ec9f24-43ff-45d8-9d27-b5b5b01ced01",
+            "b9f9cb94-21cf-4cea-acda-9cf47ebe890e",
+            "1fddfbf2-37a2-496a-8ae1-0c360ef92a15",
+            "e9f5c3fe-e578-4323-a64a-84822a5a163d",
+            "f2038062-971d-446b-a5d5-b7ff073b8b8e",
+            "7ef238e2-3909-4d25-90be-413040f2557f",
+            "afcbe90b-a614-4809-aeec-b5b1f1e0fe7b",
+            "77f1483b-e915-4c91-8474-6447d7eb7327",
+            "4cd48736-5880-4a69-9e72-18aa2c4109ee",
+            "d812f65e-9986-4287-8365-d51eef63628a",
+            "f060d7c0-552a-4fdc-9214-894784e018a9",
+            "9da9fe49-216a-4a98-8c15-e56cde574a6c",
+            "3eabf2bd-eda0-48dd-a7bd-80638a269f06",
+            "cc1806bb-b496-4654-a7c4-00343d7918f5",
+            "09e257c7-4773-4170-9300-ffd7f780168b",
+            "93e599fb-ac37-46a3-a2c3-016a59a381fa",
+            "0f3d75c9-6df4-4a7d-b2a4-9613f35a16ab",
+            "cd852b44-7abd-41a1-a303-85c1f983de87",
+            "2b7284a9-09ad-40be-9a12-adf342fd443e",
+            "2f751061-96f5-4129-a136-b6be2977acf1",
+            "36755b04-0767-4b19-b182-9abb06bec97c",
+            "0aa15b7b-c5e3-4662-b362-e5a4b4d3e335",
+            "e9095abc-5d16-416b-b568-ae821aa3decc",
+            "ff238182-75f0-42a3-8e24-a5ba5ed4f42d",
+            "e7aa67ef-bc76-4f9c-9726-1bf6d581f709",
+            "182052f5-b957-4208-b128-506685ec5f1f",
+            "75e476ca-d0b5-46c6-af88-a19ab13be673",
+            "98020c3d-5559-4de4-a4bd-bf35cd06acf5",
+            "30c0eb4f-2c12-4e84-a3df-d6471db5bbb7",
+            "823a1f0a-3812-4fa3-8b84-62e668dc3f34",
+            "aa2d1db0-9887-4544-84bc-f749eeb7ec11",
+            "5927c99c-ca2e-4002-9f24-8728d91ffcf8",
+            "a91e29f8-f005-461a-ae93-c14182d06324",
+            "0887ba0f-6657-4833-bcac-a4e5c40bdb36",
+            "03e69654-462b-410b-b396-772bea21cb1d",
+            "a401bc72-45b4-41cd-b4d0-8605615bf5fa",
+            "5c436f2f-df94-4fb9-a45c-45bd3c3b02f3",
+            "c9a4f533-618b-48dd-9d01-02901cde387f",
+            "440840d7-5aea-4ce6-a0ca-e8a817a7ab88",
+            "f0f1025c-9c88-48ad-854a-b897d9ba7993",
+            "f7a82c1f-02fa-48a7-9bc3-ba9b3771674b",
+            "14b37432-01dd-464b-9fa6-8b06e50603bf",
+            "e2a45c64-b8f7-4cc9-920a-bda376c782d5",
+            "1b31d92e-4e30-4d8f-a3d0-f5a2a4444a11",
+            "28a01e03-169d-48ca-9eed-2b248954631c",
+            "5cd0ee6d-3f10-493a-b762-fd5fc98f2ac5",
+            "64a963dd-a57c-4084-862e-0992f1b85cbe",
+            "b8873a5e-0b9a-477b-98d0-36a63cebce05",
+            "5ae44150-7d40-4e78-adf3-65a049dbb926",
+            "3479e1f2-4118-443f-9824-9178418f45e6",
+            "3da0ac7e-a6f6-4c3b-b80c-c5a33b558d2d",
+            "124d1877-d4db-457b-9df5-ead33bd0e7d9",
+            "a92ea2c9-f915-425e-90da-6550d7f61a86"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+      "startingProject": true,
+      "issues": 4,
+      "storyPoints": 12,
+      "properties": {
+        "appName": "ScreenBux.Service",
+        "projectKind": "DotNetCoreApp",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 11,
+        "numberOfCodeFiles": 8,
+        "linesTotal": 996,
+        "linesOfCode": 962,
+        "totalApiScanned": 905,
+        "minLinesOfCodeToChange": 8,
+        "maxLinesOfCodeToChange": 8
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "36269661-57b1-426f-926c-4a047b32bd94",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Hosting, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting, and replace with new package Microsoft.Extensions.Hosting 10.0.9",
+              "protected": "Microsoft.Extensions.Hosting, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting, and replace with new package Microsoft.Extensions.Hosting 10.0.9"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+            "snippet": "Microsoft.Extensions.Hosting, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting, and replace with new package Microsoft.Extensions.Hosting 10.0.9",
+            "protectedSnippet": "Microsoft.Extensions.Hosting, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting, and replace with new package Microsoft.Extensions.Hosting 10.0.9",
+            "label": "Microsoft.Extensions.Hosting 8.0.1",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Hosting",
+              "PackageVersion": "8.0.1",
+              "PackageNewVersion": "10.0.9",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "244940f2-6c8f-4a9b-a3e7-cf41412fe832",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.Extensions.Hosting.WindowsServices, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting.WindowsServices, and replace with new package Microsoft.Extensions.Hosting.WindowsServices 10.0.9",
+              "protected": "Microsoft.Extensions.Hosting.WindowsServices, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting.WindowsServices, and replace with new package Microsoft.Extensions.Hosting.WindowsServices 10.0.9"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+            "snippet": "Microsoft.Extensions.Hosting.WindowsServices, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting.WindowsServices, and replace with new package Microsoft.Extensions.Hosting.WindowsServices 10.0.9",
+            "protectedSnippet": "Microsoft.Extensions.Hosting.WindowsServices, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.Extensions.Hosting.WindowsServices, and replace with new package Microsoft.Extensions.Hosting.WindowsServices 10.0.9",
+            "label": "Microsoft.Extensions.Hosting.WindowsServices 8.0.1",
+            "properties": {
+              "PackageId": "Microsoft.Extensions.Hosting.WindowsServices",
+              "PackageVersion": "8.0.1",
+              "PackageNewVersion": "10.0.9",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "7bec816a-5783-4cef-975e-65f8e2009e9b",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+              "protected": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+            "snippet": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+            "protectedSnippet": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+            "label": "Microsoft.AspNetCore.SignalR.Client 8.0.1",
+            "properties": {
+              "PackageId": "Microsoft.AspNetCore.SignalR.Client",
+              "PackageVersion": "8.0.1",
+              "PackageNewVersion": "10.0.9",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "c3d5a61f-1d91-4b18-8c9e-fca8bed59235",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        },
+        {
+          "incidentId": "e9d5cfa3-d081-4849-b70c-addbfe583ca9",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(messageJson);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\NamedPipeServerService.cs",
+            "snippet": "using var doc = JsonDocument.Parse(messageJson);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 122,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "fc1d68d4-cfe0-482c-9c32-1cca4b4afbc5",
+          "ruleId": "Api.0003",
+          "description": "Nullable JsonDocument properties deserialize to JsonValueKind.Null ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "using var doc = JsonDocument.Parse(messageJson);",
+              "protected": "T:System.Text.Json.JsonDocument"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\NamedPipeServerService.cs",
+            "snippet": "using var doc = JsonDocument.Parse(messageJson);",
+            "protectedSnippet": "T:System.Text.Json.JsonDocument",
+            "label": "T:System.Text.Json.JsonDocument",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/serialization/9.0/jsondocument-props.md",
+                "isCustom": false
+              }
+            ],
+            "line": 122,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "35e6d481-0335-4c14-8de3-f5a8d9da2865",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\ProcessKillerService.cs",
+            "snippet": "var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 124,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "ac2894f4-56d8-42ab-8068-592351876942",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\ProcessKillerService.cs",
+            "snippet": "var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 62,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "be2e33f2-2ae8-4163-8699-fdc2121f183d",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\ProcessMonitoringService.cs",
+            "snippet": "await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 46,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "c517600d-9228-42dd-9635-3b73d461c95f",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\PolicySyncService.cs",
+            "snippet": "await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 70,
+            "column": 16
+          }
+        },
+        {
+          "incidentId": "566e51ef-026d-473f-8b45-d8f974947ec0",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);",
+              "protected": "M:System.TimeSpan.FromSeconds(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Services\\PolicySyncService.cs",
+            "snippet": "await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);",
+            "protectedSnippet": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "label": "M:System.TimeSpan.FromSeconds(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 56,
+            "column": 12
+          }
+        },
+        {
+          "incidentId": "f88cc975-5813-46ff-b7c0-2aac1bdfb332",
+          "ruleId": "Api.0002",
+          "description": "Breaking change: New TimeSpan.From*() overloads that take integers ",
+          "projectPath": "src\\ScreenBux.Service\\ScreenBux.Service.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);",
+              "protected": "M:System.TimeSpan.FromMinutes(System.Double)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Service\\Worker.cs",
+            "snippet": "await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);",
+            "protectedSnippet": "M:System.TimeSpan.FromMinutes(System.Double)",
+            "label": "M:System.TimeSpan.FromMinutes(System.Double)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/core-libraries/9.0/timespan-from-overloads.md",
+                "isCustom": false
+              }
+            ],
+            "line": 23,
+            "column": 12
+          }
+        }
+      ],
+      "features": []
+    },
+    {
+      "path": "src\\ScreenBux.Shared\\ScreenBux.Shared.csproj",
+      "startingProject": true,
+      "issues": 1,
+      "storyPoints": 1,
+      "properties": {
+        "appName": "ScreenBux.Shared",
+        "projectKind": "ClassLibrary",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 7,
+        "numberOfCodeFiles": 7,
+        "linesTotal": 155,
+        "linesOfCode": 155,
+        "totalApiScanned": 172,
+        "minLinesOfCodeToChange": 0,
+        "maxLinesOfCodeToChange": 0
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "71b17c06-f949-4e59-a0c5-449a415022f4",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\ScreenBux.Shared\\ScreenBux.Shared.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.Shared\\ScreenBux.Shared.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        }
+      ],
+      "features": []
+    },
+    {
+      "path": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+      "startingProject": true,
+      "issues": 3,
+      "storyPoints": 7,
+      "properties": {
+        "appName": "ScreenBux.WebClient",
+        "projectKind": "AspNetCore",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 18,
+        "numberOfCodeFiles": 3,
+        "linesTotal": 631,
+        "linesOfCode": 159,
+        "totalApiScanned": 1031,
+        "minLinesOfCodeToChange": 5,
+        "maxLinesOfCodeToChange": 5
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "409ddf1e-c938-4cda-ab44-a3eee2976997",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+              "protected": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+            "snippet": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+            "protectedSnippet": "Microsoft.AspNetCore.SignalR.Client, 8.0.1\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.SignalR.Client, and replace with new package Microsoft.AspNetCore.SignalR.Client 10.0.9",
+            "label": "Microsoft.AspNetCore.SignalR.Client 8.0.1",
+            "properties": {
+              "PackageId": "Microsoft.AspNetCore.SignalR.Client",
+              "PackageVersion": "8.0.1",
+              "PackageNewVersion": "10.0.9",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "d34d03d3-c312-418f-96d9-7fbc3086a9a0",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        },
+        {
+          "incidentId": "43f2be15-c956-4615-adda-ae412ab07e8f",
+          "ruleId": "Api.0003",
+          "description": "Breaking change - Streaming HTTP responses enabled by default in browser HTTP clients ",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "return await response.Content.ReadAsStringAsync();",
+              "protected": "T:System.Net.Http.HttpContent"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\Services\\PolicyApiService.cs",
+            "snippet": "return await response.Content.ReadAsStringAsync();",
+            "protectedSnippet": "T:System.Net.Http.HttpContent",
+            "label": "T:System.Net.Http.HttpContent",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/default-http-streaming.md",
+                "isCustom": false
+              }
+            ],
+            "line": 18,
+            "column": 8
+          }
+        },
+        {
+          "incidentId": "7f041827-0a0d-484b-8848-f53a34b3c7ac",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: Exception diagnostics are suppressed when IExceptionHandler.TryHandleAsync returns true ",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "app.UseExceptionHandler(\u0022/Error\u0022, createScopeForErrors: true);",
+              "protected": "M:Microsoft.AspNetCore.Builder.ExceptionHandlerExtensions.UseExceptionHandler(Microsoft.AspNetCore.Builder.IApplicationBuilder,System.String,System.Boolean)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\Program.cs",
+            "snippet": "app.UseExceptionHandler(\u0022/Error\u0022, createScopeForErrors: true);",
+            "protectedSnippet": "M:Microsoft.AspNetCore.Builder.ExceptionHandlerExtensions.UseExceptionHandler(Microsoft.AspNetCore.Builder.IApplicationBuilder,System.String,System.Boolean)",
+            "label": "M:Microsoft.AspNetCore.Builder.ExceptionHandlerExtensions.UseExceptionHandler(Microsoft.AspNetCore.Builder.IApplicationBuilder,System.String,System.Boolean)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/aspnet-core/10/exception-handler-diagnostics-suppressed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 23,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "6388b75c-a809-42e1-a7cb-b14b686533e0",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\Program.cs",
+            "snippet": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 15,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "329cdf60-684c-491a-b5e3-f285f45a72fe",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+              "protected": "M:System.Uri.#ctor(System.String)"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\Program.cs",
+            "snippet": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+            "protectedSnippet": "M:System.Uri.#ctor(System.String)",
+            "label": "M:System.Uri.#ctor(System.String)",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 15,
+            "column": 4
+          }
+        },
+        {
+          "incidentId": "0a19b5fe-e7fc-413d-bb8a-c8864827b168",
+          "ruleId": "Api.0003",
+          "description": "Breaking change: URI length limits removed ",
+          "projectPath": "src\\ScreenBux.WebClient\\ScreenBux.WebClient.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+              "protected": "T:System.Uri"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebClient\\Program.cs",
+            "snippet": "client.BaseAddress = new Uri(baseUrl.TrimEnd(\u0027/\u0027) \u002B \u0022/\u0022);",
+            "protectedSnippet": "T:System.Uri",
+            "label": "T:System.Uri",
+            "links": [
+              {
+                "title": "API documentation",
+                "url": "https://github.com/dotnet/docs/blob/main/docs/core/compatibility/networking/10.0/uri-length-limits-removed.md",
+                "isCustom": false
+              }
+            ],
+            "line": 15,
+            "column": 4
+          }
+        }
+      ],
+      "features": []
+    },
+    {
+      "path": "src\\ScreenBux.WebServer\\ScreenBux.WebServer.csproj",
+      "startingProject": true,
+      "issues": 2,
+      "storyPoints": 2,
+      "properties": {
+        "appName": "ScreenBux.WebServer",
+        "projectKind": "AspNetCore",
+        "frameworks": [
+          "net8.0"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": true,
+        "numberOfFiles": 5,
+        "numberOfCodeFiles": 3,
+        "linesTotal": 225,
+        "linesOfCode": 208,
+        "totalApiScanned": 266,
+        "minLinesOfCodeToChange": 0,
+        "maxLinesOfCodeToChange": 0
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "56eb1261-c41e-470d-b1ab-52bd418f449c",
+          "ruleId": "NuGet.0002",
+          "projectPath": "src\\ScreenBux.WebServer\\ScreenBux.WebServer.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Microsoft.AspNetCore.OpenApi, 8.0.22\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.OpenApi, and replace with new package Microsoft.AspNetCore.OpenApi 10.0.9",
+              "protected": "Microsoft.AspNetCore.OpenApi, 8.0.22\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.OpenApi, and replace with new package Microsoft.AspNetCore.OpenApi 10.0.9"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebServer\\ScreenBux.WebServer.csproj",
+            "snippet": "Microsoft.AspNetCore.OpenApi, 8.0.22\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.OpenApi, and replace with new package Microsoft.AspNetCore.OpenApi 10.0.9",
+            "protectedSnippet": "Microsoft.AspNetCore.OpenApi, 8.0.22\n\nRecommendation:\n\nRemove Microsoft.AspNetCore.OpenApi, and replace with new package Microsoft.AspNetCore.OpenApi 10.0.9",
+            "label": "Microsoft.AspNetCore.OpenApi 8.0.22",
+            "properties": {
+              "PackageId": "Microsoft.AspNetCore.OpenApi",
+              "PackageVersion": "8.0.22",
+              "PackageNewVersion": "10.0.9",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "a95f7b02-1f76-4771-936c-6ebf8eb46237",
+          "ruleId": "Project.0002",
+          "projectPath": "src\\ScreenBux.WebServer\\ScreenBux.WebServer.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "Current target framework: net8.0\nRecommended target framework: net10.0",
+              "protected": "Current target framework: net8.0\nRecommended target framework: net10.0"
+            },
+            "kind": "File",
+            "path": "src\\ScreenBux.WebServer\\ScreenBux.WebServer.csproj",
+            "snippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "protectedSnippet": "Current target framework: net8.0\nRecommended target framework: net10.0",
+            "properties": {
+              "CurrentTargetFramework": "net8.0",
+              "RecommendedTargetFramework": "net10.0"
+            }
+          }
+        }
+      ],
+      "features": []
+    }
+  ],
+  "rules": {
+    "Project.0002": {
+      "id": "Project.0002",
+      "isFeature": false,
+      "description": "Project\u0027s target framework(s) needs to be changed to the new target framework that you selected for this upgrade.\n\nDuring upgrade target framework will be adjusted to corresponding platform when applicable. In some cases project would result in multiple target frameworks after the upgrade if it was using features that now have their own platforms in modern .NET frameworks (windows, iOS, Android etc).",
+      "label": "Project\u0027s target framework(s) needs to be changed",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Overview of porting from .NET Framework to .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265227",
+          "isCustom": false
+        },
+        {
+          "title": ".NET project SDKs",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265226",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0001": {
+      "id": "Api.0001",
+      "isFeature": false,
+      "description": "API is binary incompatible for selected .NET version: affects existing binaries, often requiring recompilation, because the API has changed in a way that prevents older binaries from loading or executing.",
+      "label": "Binary incompatible for selected .NET version",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Breaking changes in .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262679",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0002": {
+      "id": "Api.0002",
+      "isFeature": false,
+      "description": "API is source incompatible for selected .NET version: requires code changes to compile successfully when targeting a new version, such as removing obsolete APIs or changing method signatures.",
+      "label": "Source incompatible for selected .NET version",
+      "severity": "Potential",
+      "effort": 1,
+      "links": [
+        {
+          "title": "Breaking changes in .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262679",
+          "isCustom": false
+        }
+      ]
+    },
+    "Api.0003": {
+      "id": "Api.0003",
+      "isFeature": false,
+      "description": "API has a behavioral change in selected .NET version: code and binaries may behave differently at runtime without needing recompilation, but the new behavior might be undesirable and require updates.",
+      "label": "Behavioral change in selected .NET version",
+      "severity": "Potential",
+      "effort": 1
+    },
+    "Wpf": {
+      "id": "Wpf",
+      "isFeature": false,
+      "description": "WPF APIs for building Windows desktop applications with XAML-based UI that are available in .NET on Windows. WPF provides rich desktop UI capabilities with data binding and styling. Enable Windows Desktop support: Option 1 (Recommended): Target net9.0-windows; Option 2: Add \u003CUseWindowsDesktop\u003Etrue\u003C/UseWindowsDesktop\u003E.",
+      "label": "WPF (Windows Presentation Foundation)",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "WPF on .NET",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2342008",
+          "isCustom": false
+        }
+      ]
+    },
+    "NuGet.0002": {
+      "id": "NuGet.0002",
+      "isFeature": false,
+      "description": "NuGet package upgrade is recommended for selected target framework.\n\nStandard .NET packages are recommended to have versions matching version of .NET that project targets.\n\nSome other packages also are known to work better for selected target frameworks.",
+      "label": "NuGet package upgrade is recommended",
+      "severity": "Potential",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262530",
+          "isCustom": false
+        }
+      ]
+    }
+  }
+}

@@ -43,19 +43,31 @@ public class NamedPipeServerService : BackgroundService
                     transmissionMode = PipeTransmissionMode.Message;
                 }
 
-                await using var pipeServer = new NamedPipeServerStream(
+                var pipeServer = new NamedPipeServerStream(
                     PipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
                     transmissionMode,
                     PipeOptions.Asynchronous);
 
-                _logger.LogDebug("Waiting for client connection...");
-                await pipeServer.WaitForConnectionAsync(stoppingToken);
-                _logger.LogDebug("Client connected to named pipe");
+                try
+                {
+                    _logger.LogDebug("Waiting for client connection...");
+                    await pipeServer.WaitForConnectionAsync(stoppingToken);
+                    _logger.LogDebug("Client connected to named pipe");
+                }
+                catch
+                {
+                    // Connection wait failed or was cancelled (e.g. shutdown);
+                    // dispose the orphaned pipe and let the outer handler react.
+                    await pipeServer.DisposeAsync();
+                    throw;
+                }
 
-                // Handle the connection in a separate task
-                _ = Task.Run(async () => await HandleClientAsync(pipeServer, stoppingToken), stoppingToken);
+                // Ownership of the pipe is transferred to the handler, which disposes it
+                // when the client disconnects. Do NOT wrap the pipe in a 'using' here:
+                // the loop would dispose it while the background handler is still reading.
+                _ = Task.Run(() => HandleClientAsync(pipeServer, stoppingToken), stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -72,45 +84,62 @@ public class NamedPipeServerService : BackgroundService
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        try
+        await using (pipeServer)
         {
-            while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
+            try
             {
-                var buffer = new byte[4096];
-                var messageBuilder = new StringBuilder();
-                int bytesRead;
-
-                do
+                while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
                 {
-                    bytesRead = await pipeServer.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
-                    messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
-                } while (!pipeServer.IsMessageComplete);
+                    var buffer = new byte[4096];
+                    var messageBuilder = new StringBuilder();
+                    int bytesRead;
 
-                var messageJson = messageBuilder.ToString();
-                if (string.IsNullOrEmpty(messageJson))
-                    continue;
+                    do
+                    {
+                        bytesRead = await pipeServer.ReadAsync(buffer, cancellationToken);
 
-                _logger.LogDebug("Received message: {Message}", messageJson);
+                        // A zero-byte read means the client closed the pipe. Stop here
+                        // instead of touching IsMessageComplete on a broken/closed pipe.
+                        if (bytesRead == 0)
+                        {
+                            return;
+                        }
 
-                // Process the message and get response
-                var response = await ProcessMessageAsync(messageJson);
+                        messageBuilder.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
+                    } while (!pipeServer.IsMessageComplete);
 
-                // Send response back
-                var responseJson = JsonSerializer.Serialize(response);
-                var responseBytes = Encoding.UTF8.GetBytes(responseJson);
-                await pipeServer.WriteAsync(responseBytes, 0, responseBytes.Length, cancellationToken);
-                await pipeServer.FlushAsync(cancellationToken);
+                    var messageJson = messageBuilder.ToString();
+                    if (string.IsNullOrEmpty(messageJson))
+                        continue;
+
+                    _logger.LogDebug("Received message: {Message}", messageJson);
+
+                    // Process the message and get response
+                    var response = await ProcessMessageAsync(messageJson);
+
+                    // Send response back
+                    var responseJson = JsonSerializer.Serialize(response);
+                    var responseBytes = Encoding.UTF8.GetBytes(responseJson);
+                    await pipeServer.WriteAsync(responseBytes, cancellationToken);
+                    await pipeServer.FlushAsync(cancellationToken);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error handling client connection");
-        }
-        finally
-        {
-            if (pipeServer.IsConnected)
+            catch (OperationCanceledException)
             {
-                pipeServer.Disconnect();
+                // Service is shutting down - expected, nothing to do.
+            }
+            catch (IOException ex)
+            {
+                // Broken pipe / client disconnected mid-message - expected during normal operation.
+                _logger.LogDebug(ex, "Named pipe connection closed by client");
+            }
+            catch (ObjectDisposedException)
+            {
+                // Pipe disposed during shutdown - expected, nothing to do.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error handling client connection");
             }
         }
     }

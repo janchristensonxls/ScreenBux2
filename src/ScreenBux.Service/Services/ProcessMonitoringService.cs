@@ -11,16 +11,19 @@ public class ProcessMonitoringService : BackgroundService
     private readonly ILogger<ProcessMonitoringService> _logger;
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
+    private readonly PolicySyncService _policySync;
     private readonly ForegroundWindowDetector _foregroundWindowDetector;
 
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
-        ProcessKillerService processKiller)
+        ProcessKillerService processKiller,
+        PolicySyncService policySync)
     {
         _logger = logger;
         _policyService = policyService;
         _processKiller = processKiller;
+        _policySync = policySync;
         _foregroundWindowDetector = new ForegroundWindowDetector();
     }
 
@@ -37,7 +40,7 @@ public class ProcessMonitoringService : BackgroundService
             var config = _policyService.GetConfiguration();
             if (config.EnableMonitoring)
             {
-                await EnforcePoliciesAsync(stoppingToken);
+                await EnforcePoliciesAsync(config, stoppingToken);
             }
 
             var delaySeconds = Math.Max(1, config.CheckIntervalSeconds);
@@ -47,9 +50,15 @@ public class ProcessMonitoringService : BackgroundService
         _logger.LogInformation("Process monitoring service stopping at: {time}", DateTimeOffset.Now);
     }
 
-    private async Task EnforcePoliciesAsync(CancellationToken stoppingToken)
+    private async Task EnforcePoliciesAsync(PolicyConfiguration config, CancellationToken stoppingToken)
     {
         var handledProcesses = new HashSet<int>();
+
+        // The executable path is only consulted by the legacy AppPolicy matching path,
+        // which is dead whenever regex Rules exist. Resolving it requires Process.MainModule,
+        // which throws Win32Exception for every protected/system process we can't open -
+        // producing a flood of first-chance exceptions. Only resolve it when it can matter.
+        var resolveExecutablePath = !config.Rules.Any(r => r.Enabled) && config.Policies.Count > 0;
 
         foreach (var process in Process.GetProcesses())
         {
@@ -58,7 +67,7 @@ public class ProcessMonitoringService : BackgroundService
                 return;
             }
 
-            var processInfo = CreateProcessInfo(process);
+            var processInfo = CreateProcessInfo(process, resolveExecutablePath);
             if (processInfo == null)
             {
                 continue;
@@ -107,9 +116,12 @@ public class ProcessMonitoringService : BackgroundService
             ruleName);
 
         await _processKiller.TryCloseProcessAsync(processInfo.ProcessId);
+
+        processInfo.DetectedAt = DateTime.UtcNow;
+        await _policySync.SendProcessDetectionAsync(processInfo);
     }
 
-    private ProcessInfo? CreateProcessInfo(Process process)
+    private ProcessInfo? CreateProcessInfo(Process process, bool resolveExecutablePath)
     {
         try
         {
@@ -117,7 +129,7 @@ public class ProcessMonitoringService : BackgroundService
             {
                 ProcessId = process.Id,
                 ProcessName = process.ProcessName,
-                ExecutablePath = GetProcessExecutablePath(process),
+                ExecutablePath = resolveExecutablePath ? GetProcessExecutablePath(process) : string.Empty,
                 DetectedAt = DateTime.UtcNow
             };
         }
