@@ -1,0 +1,94 @@
+@page "/link-device"
+@attribute [Authorize]
+@inject DevicesApiService DevicesApi
+
+<PageTitle>Link a device</PageTitle>
+
+<h1>Link a device</h1>
+
+<p>Generate a code, then enter it on the device you want to control. The code expires shortly.</p>
+
+<button class="btn btn-primary" @onclick="GenerateAsync" disabled="@_busy">Generate link code</button>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger mt-3">@_error</div>
+}
+
+@if (_code is not null)
+{
+    <div class="alert alert-success mt-3">
+        <div>Enter this code on the device:</div>
+        <h2 class="mt-2"><code>@_code.Code</code></h2>
+        <div class="text-muted">Expires at @_code.ExpiresAt.ToLocalTime().ToString("t")</div>
+    </div>
+}
+
+<h2 class="mt-4">Linked devices</h2>
+
+@if (_devices is null)
+{
+    <p><em>Loading…</em></p>
+}
+else if (_devices.Count == 0)
+{
+    <p>No devices linked yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr><th>Name</th><th>Linked</th><th>Last seen</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var device in _devices)
+            {
+                <tr>
+                    <td>@device.Name</td>
+                    <td>@device.LinkedAt.ToLocalTime().ToString("g")</td>
+                    <td>@(device.LastSeenAt?.ToLocalTime().ToString("g") ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private ScreenBux.Shared.Models.Devices.LinkCodeResponse? _code;
+    private List<ScreenBux.Shared.Models.Devices.DeviceDto>? _devices;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await RefreshDevicesAsync();
+
+    private async Task GenerateAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _code = await DevicesApi.GenerateLinkCodeAsync();
+            await RefreshDevicesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not generate a code: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshDevicesAsync()
+    {
+        try
+        {
+            _devices = (await DevicesApi.ListDevicesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not load devices: {ex.Message}";
+        }
+    }
+}

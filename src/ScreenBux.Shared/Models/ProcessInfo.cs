@@ -10,4 +10,9 @@ public class ProcessInfo
     public string WindowTitle { get; set; } = string.Empty;
     public DateTime DetectedAt { get; set; }
     public string ExecutablePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Identifies the device this process was detected on. Empty until the device is linked.
+    /// </summary>
+    public Guid? DeviceId { get; set; }
 }

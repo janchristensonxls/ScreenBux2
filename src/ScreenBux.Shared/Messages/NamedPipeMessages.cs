@@ -10,6 +10,11 @@ public class ProcessReportMessage : Contracts.INamedPipeMessage
     public string MessageType => "ProcessReport";
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public ProcessInfo? Process { get; set; }
+
+    /// <summary>
+    /// Identifies the reporting device. Empty until the device is linked to an account.
+    /// </summary>
+    public Guid? DeviceId { get; set; }
 }
 
 /// <summary>

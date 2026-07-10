@@ -1,4 +1,12 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using ScreenBux.Data;
+using ScreenBux.Data.Entities;
 using ScreenBux.WebServer.Hubs;
+using ScreenBux.WebServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +14,68 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// EF Core (SQL Server for both local dev and Azure SQL prod).
+var connectionString = builder.Configuration.GetConnectionString("AppDb")
+    ?? throw new InvalidOperationException("Connection string 'AppDb' is not configured.");
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+// ASP.NET Core Identity as the user store (JWT is issued separately, no cookies).
+builder.Services
+    .AddIdentityCore<Account>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.Password.RequiredLength = 8;
+    })
+    .AddEntityFrameworkStores<AppDbContext>();
+
+// JWT bearer authentication for all clients (Blazor, Service, device).
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var signingKey = jwtSection["SigningKey"]
+    ?? throw new InvalidOperationException("Jwt:SigningKey is not configured.");
+var tokenValidationParameters = new TokenValidationParameters
+{
+    ValidateIssuer = true,
+    ValidIssuer = jwtSection["Issuer"],
+    ValidateAudience = true,
+    ValidAudience = jwtSection["Audience"],
+    ValidateIssuerSigningKey = true,
+    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+    ValidateLifetime = true,
+    ClockSkew = TimeSpan.FromMinutes(1)
+};
+
+builder.Services.AddSingleton(tokenValidationParameters);
+builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<IPolicyStore, EfPolicyStore>();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = tokenValidationParameters;
+
+        // Allow SignalR clients to send the token via the query string, since browsers
+        // cannot set Authorization headers on the WebSocket handshake.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/monitoringHub"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // Add SignalR
 builder.Services.AddSignalR();
@@ -42,6 +112,7 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowWebClient");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
