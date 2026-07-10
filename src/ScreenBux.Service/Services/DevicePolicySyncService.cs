@@ -78,32 +78,60 @@ public class DevicePolicySyncService : BackgroundService
             return;
         }
 
+        var (success, _, _) = await RedeemCodeAsync(linkCode, cancellationToken);
+        if (!success)
+        {
+            _logger.LogWarning("Auto-redemption of configured LinkCode failed.");
+        }
+    }
+
+    /// <summary>
+    /// Redeems a parent-generated link code with the server.
+    /// Returns (success, message, deviceId).
+    /// </summary>
+    public async Task<(bool Success, string Message, Guid? DeviceId)> RedeemCodeAsync(
+        string code, CancellationToken cancellationToken = default)
+    {
+        var serverBaseUrl = _configuration["ServerBaseUrl"];
+        if (string.IsNullOrWhiteSpace(serverBaseUrl))
+        {
+            return (false, "ServerBaseUrl is not configured.", null);
+        }
+
+        var state = _deviceIdentity.GetOrCreate();
         var client = CreateClient(serverBaseUrl);
         var request = new RedeemLinkCodeRequest
         {
-            Code = linkCode,
+            Code = code.Trim().ToUpperInvariant(),
             DeviceName = Environment.MachineName,
             MachineKey = state.MachineKey
         };
 
-        using var response = await client.PostAsJsonAsync("api/devices/redeem", request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            _logger.LogWarning("Link code redemption failed ({Status}).", (int)response.StatusCode);
-            return;
-        }
+            using var response = await client.PostAsJsonAsync("api/devices/redeem", request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (false, $"Server rejected the code ({(int)response.StatusCode}).", null);
+            }
 
-        var result = await response.Content.ReadFromJsonAsync<DeviceTokenResponse>(cancellationToken);
-        if (result is null || string.IsNullOrEmpty(result.Token))
+            var result = await response.Content.ReadFromJsonAsync<DeviceTokenResponse>(cancellationToken);
+            if (result is null || string.IsNullOrEmpty(result.Token))
+            {
+                return (false, "Server returned an invalid response.", null);
+            }
+
+            state.DeviceId = result.DeviceId;
+            state.DeviceToken = result.Token;
+            _deviceIdentity.Save(state);
+            _logger.LogInformation("Device linked successfully as {DeviceId}.", state.DeviceId);
+            return (true, $"Device linked as {result.DeviceId}.", result.DeviceId);
+        }
+        catch (Exception ex)
         {
-            _logger.LogWarning("Link code redemption returned an invalid response.");
-            return;
+            _logger.LogError(ex, "Error redeeming link code.");
+            return (false, $"Error: {ex.Message}", null);
         }
-
-        state.DeviceId = result.DeviceId;
-        state.DeviceToken = result.Token;
-        _deviceIdentity.Save(state);
-        _logger.LogInformation("Device linked successfully as {DeviceId}.", state.DeviceId);
     }
 
     private async Task FetchPolicyAsync(string serverBaseUrl, CancellationToken cancellationToken)

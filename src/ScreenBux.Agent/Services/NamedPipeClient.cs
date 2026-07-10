@@ -28,6 +28,13 @@ public class NamedPipeClient
 
             await pipeClient.ConnectAsync((int)_connectionTimeout.TotalMilliseconds);
 
+            // Switch to message mode so IsMessageComplete works correctly.
+            // The server runs in PipeTransmissionMode.Message; the client must opt-in after connecting.
+            if (OperatingSystem.IsWindows())
+            {
+                pipeClient.ReadMode = PipeTransmissionMode.Message;
+            }
+
             // Serialize and send message
             var messageJson = JsonSerializer.Serialize(message);
             var messageBytes = Encoding.UTF8.GetBytes(messageJson);
@@ -53,9 +60,9 @@ public class NamedPipeClient
             // Service not running or not responding
             return null;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Connection error
+            System.Diagnostics.Debug.WriteLine($"[NamedPipeClient] Error: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }

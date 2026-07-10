@@ -57,3 +57,26 @@ public class PolicyResponse : Contracts.INamedPipeMessage
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public PolicyConfiguration? Configuration { get; set; }
 }
+
+/// <summary>
+/// Sent from Agent to Service to redeem a parent-generated link code and bind this
+/// device to an account.
+/// </summary>
+public class LinkDeviceRequest : Contracts.INamedPipeMessage
+{
+    public string MessageType => "LinkDevice";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string LinkCode { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response from the Service after a link-code redemption attempt.
+/// </summary>
+public class LinkDeviceResponse : Contracts.INamedPipeMessage
+{
+    public string MessageType => "LinkDeviceResponse";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public Guid? DeviceId { get; set; }
+}

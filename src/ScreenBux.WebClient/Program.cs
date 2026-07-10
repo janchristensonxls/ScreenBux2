@@ -38,17 +38,17 @@ builder.Services.AddScoped<MonitoringService>();
 builder.Services.AddHttpClient<PolicyApiService>((serviceProvider, client) =>
 {
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);
-}).AddHttpMessageHandler<BearerTokenHandler>();
+});
 
 builder.Services.AddHttpClient<AuthApiService>((serviceProvider, client) =>
 {
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);
-}).AddHttpMessageHandler<BearerTokenHandler>();
+});
 
 builder.Services.AddHttpClient<DevicesApiService>((serviceProvider, client) =>
 {
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);
-}).AddHttpMessageHandler<BearerTokenHandler>();
+});
 
 var app = builder.Build();
 

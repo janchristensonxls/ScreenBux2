@@ -69,6 +69,15 @@ public class PolicySyncService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Wait until this device is linked and has a token before connecting.
+            var state = _deviceIdentity.GetOrCreate();
+            if (string.IsNullOrEmpty(state.DeviceToken))
+            {
+                _logger.LogDebug("Device not yet linked; waiting before connecting to SignalR hub.");
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                continue;
+            }
+
             try
             {
                 await _hubConnection.StartAsync(stoppingToken);
