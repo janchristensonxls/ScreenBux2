@@ -5,10 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ScreenBux.Agent"
         mc:Ignorable="d"
-        Title="ScreenBux Agent" Height="500" Width="700"
+        Title="ScreenBux Agent" Height="580" Width="700"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -29,8 +30,34 @@
                        Margin="10,0,0,0" Text="Service: Unknown" FontWeight="Bold"/>
         </StackPanel>
 
+        <!-- Link Device Panel -->
+        <GroupBox x:Name="LinkDevicePanel" Grid.Row="2" Header="Link Device to Parent Account" Margin="0,0,0,10">
+            <Grid Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
+                           Text="Enter the 8-character code shown on the parent&apos;s Link Device page:"
+                           Margin="0,0,0,5" TextWrapping="Wrap"/>
+
+                <TextBox x:Name="LinkCodeTextBox" Grid.Row="1" Grid.Column="0"
+                         Height="30" VerticalContentAlignment="Center"
+                         FontSize="14" CharacterCasing="Upper" MaxLength="8"
+                         Margin="0,0,8,0" ToolTip="Enter link code from parent portal"/>
+                <Button x:Name="LinkButton" Grid.Row="1" Grid.Column="1"
+                        Content="Link This Device" Width="130" Height="30"
+                        Click="LinkButton_Click"/>
+            </Grid>
+        </GroupBox>
+
         <!-- Activity Log -->
-        <GroupBox Grid.Row="2" Header="Activity Log" Margin="0,0,0,10">
+        <GroupBox Grid.Row="3" Header="Activity Log" Margin="0,0,0,10">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <TextBox x:Name="LogTextBox" IsReadOnly="True" 
                          TextWrapping="Wrap" BorderThickness="0"
@@ -39,7 +66,7 @@
         </GroupBox>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="3">
+        <StatusBar Grid.Row="4">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Ready"/>
             </StatusBarItem>

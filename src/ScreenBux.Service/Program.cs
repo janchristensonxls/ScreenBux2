@@ -10,10 +10,14 @@ builder.Services.AddWindowsService(options =>
 });
 
 // Register services
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<DeviceIdentityService>();
 builder.Services.AddSingleton<PolicyService>();
 builder.Services.AddSingleton<ProcessKillerService>();
 builder.Services.AddSingleton<PolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>());
+builder.Services.AddSingleton<DevicePolicySyncService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DevicePolicySyncService>());
 builder.Services.AddHostedService<NamedPipeServerService>();
 builder.Services.AddHostedService<ProcessMonitoringService>();
 builder.Services.AddHostedService<Worker>();

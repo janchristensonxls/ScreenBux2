@@ -12,16 +12,19 @@ public class PolicySyncService : BackgroundService
     private readonly ILogger<PolicySyncService> _logger;
     private readonly IConfiguration _configuration;
     private readonly PolicyService _policyService;
+    private readonly DeviceIdentityService _deviceIdentity;
     private HubConnection? _hubConnection;
 
     public PolicySyncService(
         ILogger<PolicySyncService> logger,
         IConfiguration configuration,
-        PolicyService policyService)
+        PolicyService policyService,
+        DeviceIdentityService deviceIdentity)
     {
         _logger = logger;
         _configuration = configuration;
         _policyService = policyService;
+        _deviceIdentity = deviceIdentity;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,7 +32,14 @@ public class PolicySyncService : BackgroundService
         var hubUrl = _configuration["MonitoringHubUrl"] ?? "https://localhost:44323/monitoringHub";
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(hubUrl)
+            .WithUrl(hubUrl, options =>
+            {
+                options.AccessTokenProvider = () =>
+                {
+                    var state = _deviceIdentity.GetOrCreate();
+                    return Task.FromResult(state.DeviceToken);
+                };
+            })
             .WithAutomaticReconnect()
             .Build();
 
@@ -59,6 +69,15 @@ public class PolicySyncService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Wait until this device is linked and has a token before connecting.
+            var state = _deviceIdentity.GetOrCreate();
+            if (string.IsNullOrEmpty(state.DeviceToken))
+            {
+                _logger.LogDebug("Device not yet linked; waiting before connecting to SignalR hub.");
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                continue;
+            }
+
             try
             {
                 await _hubConnection.StartAsync(stoppingToken);

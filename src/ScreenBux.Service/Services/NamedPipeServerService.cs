@@ -14,16 +14,19 @@ public class NamedPipeServerService : BackgroundService
     private readonly ILogger<NamedPipeServerService> _logger;
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
+    private readonly DevicePolicySyncService _devicePolicySync;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
         ILogger<NamedPipeServerService> logger,
         PolicyService policyService,
-        ProcessKillerService processKiller)
+        ProcessKillerService processKiller,
+        DevicePolicySyncService devicePolicySync)
     {
         _logger = logger;
         _policyService = policyService;
         _processKiller = processKiller;
+        _devicePolicySync = devicePolicySync;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -161,6 +164,10 @@ public class NamedPipeServerService : BackgroundService
                 case "GetPolicy":
                     return HandleGetPolicyRequest();
 
+                case "LinkDevice":
+                    var linkRequest = JsonSerializer.Deserialize<LinkDeviceRequest>(messageJson);
+                    return await HandleLinkDeviceAsync(linkRequest);
+
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
                     return new CommandResponse
@@ -221,6 +228,24 @@ public class NamedPipeServerService : BackgroundService
         return new PolicyResponse
         {
             Configuration = _policyService.GetConfiguration()
+        };
+    }
+
+    private async Task<LinkDeviceResponse> HandleLinkDeviceAsync(LinkDeviceRequest? request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.LinkCode))
+        {
+            return new LinkDeviceResponse { Success = false, Message = "Link code is required." };
+        }
+
+        _logger.LogInformation("Link-device request received for code {Code}.", request.LinkCode);
+        var (success, message, deviceId) = await _devicePolicySync.RedeemCodeAsync(request.LinkCode);
+
+        return new LinkDeviceResponse
+        {
+            Success = success,
+            Message = message,
+            DeviceId = deviceId
         };
     }
 }

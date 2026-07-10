@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ScreenBux.Shared.Models;
 
@@ -7,9 +8,14 @@ public class PolicyApiService
 {
     private readonly HttpClient _httpClient;
 
-    public PolicyApiService(HttpClient httpClient)
+    public PolicyApiService(HttpClient httpClient, TokenProvider tokenProvider)
     {
         _httpClient = httpClient;
+        if (!string.IsNullOrEmpty(tokenProvider.Token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", tokenProvider.Token);
+        }
     }
 
     public async Task<string> GetPolicyJsonAsync()

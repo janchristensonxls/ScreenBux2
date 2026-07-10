@@ -1,44 +1,43 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using ScreenBux.Shared.Models;
-using ScreenBux.Shared.Utilities;
 using ScreenBux.WebServer.Hubs;
+using ScreenBux.WebServer.Services;
 
 namespace ScreenBux.WebServer.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class PolicyController : ControllerBase
 {
     private readonly ILogger<PolicyController> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly IPolicyStore _policyStore;
     private readonly IHubContext<MonitoringHub> _hubContext;
 
     public PolicyController(
         ILogger<PolicyController> logger,
-        IConfiguration configuration,
+        IPolicyStore policyStore,
         IHubContext<MonitoringHub> hubContext)
     {
         _logger = logger;
-        _configuration = configuration;
+        _policyStore = policyStore;
         _hubContext = hubContext;
     }
 
     [HttpGet]
-    public async Task<ActionResult<PolicyConfiguration>> GetPolicy()
+    public async Task<ActionResult<PolicyConfiguration>> GetPolicy(CancellationToken cancellationToken)
     {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
         try
         {
-            var policyPath = _configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
-            
-            if (!System.IO.File.Exists(policyPath))
-            {
-                return NotFound(new { message = "Policy file not found" });
-            }
-
-            var json = await System.IO.File.ReadAllTextAsync(policyPath);
-            var policy = System.Text.Json.JsonSerializer.Deserialize<PolicyConfiguration>(json);
-            
+            var policy = await _policyStore.GetPolicyAsync(accountId, cancellationToken);
             return Ok(policy);
         }
         catch (Exception ex)
@@ -49,22 +48,22 @@ public class PolicyController : ControllerBase
     }
 
     [HttpPut]
-    public async Task<ActionResult> UpdatePolicy([FromBody] PolicyConfiguration policy)
+    public async Task<ActionResult> UpdatePolicy([FromBody] PolicyConfiguration policy, CancellationToken cancellationToken)
     {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
         try
         {
-            var policyPath = _configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
-            PolicyStorage.EnsurePolicyDirectory(policyPath);
-            
-            var json = System.Text.Json.JsonSerializer.Serialize(policy, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-            
-            await System.IO.File.WriteAllTextAsync(policyPath, json);
-            await _hubContext.Clients.All.SendAsync("PolicyUpdated", policy);
-            
-            _logger.LogInformation("Policy updated successfully");
+            await _policyStore.SavePolicyAsync(accountId, policy, cancellationToken);
+
+            // Notify this account's connected devices/clients.
+            await _hubContext.Clients.Group(accountId).SendAsync("PolicyUpdated", policy, cancellationToken);
+
+            _logger.LogInformation("Policy updated successfully for account {AccountId}", accountId);
             return Ok(new { message = "Policy updated successfully" });
         }
         catch (Exception ex)
@@ -77,8 +76,6 @@ public class PolicyController : ControllerBase
     [HttpPost("reload")]
     public ActionResult ReloadPolicy()
     {
-        // This would trigger the Windows Service to reload the policy
-        // For now, just acknowledge
         _logger.LogInformation("Policy reload requested");
         return Ok(new { message = "Policy reload requested" });
     }

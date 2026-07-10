@@ -13,7 +13,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<PolicyConfiguration>? PolicyUpdated;
     public event EventHandler<string>? StatusReceived;
 
-    public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration)
+    public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
         _logger = logger;
 
@@ -22,9 +22,12 @@ public class MonitoringService : IAsyncDisposable
         {
             hubUrl = "https://localhost:44323/monitoringHub";
         }
-        
+
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(hubUrl)
+            .WithUrl(hubUrl, options =>
+            {
+                options.AccessTokenProvider = () => Task.FromResult(tokenProvider.Token);
+            })
             .WithAutomaticReconnect()
             .Build();
 

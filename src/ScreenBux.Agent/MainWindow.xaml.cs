@@ -11,6 +11,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using ScreenBux.Agent.Services;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.Agent;
 
@@ -44,6 +45,8 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        RefreshLinkPanel();
+
         // Check service status
         await CheckServiceStatusAsync();
         _serviceStatusTimer.Start();
@@ -107,6 +110,61 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = false;
         StatusText.Text = "Monitoring stopped";
         LogMessage("Monitoring stopped");
+    }
+
+    private async void LinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        var code = LinkCodeTextBox.Text.Trim().ToUpperInvariant();
+        if (code.Length != 8)
+        {
+            LogMessage("Error: Link code must be exactly 8 characters.");
+            return;
+        }
+
+        LinkButton.IsEnabled = false;
+        StatusText.Text = "Linking device...";
+        LogMessage($"Sending link code to service: {code}");
+
+        try
+        {
+            var request = new ScreenBux.Shared.Messages.LinkDeviceRequest { LinkCode = code };
+            var response = await _pipeClient.SendMessageAsync<ScreenBux.Shared.Messages.LinkDeviceResponse>(request);
+
+            if (response is null)
+            {
+                LogMessage("Error: Service did not respond. Ensure the ScreenBux Service is running.");
+                StatusText.Text = "Link failed — service unavailable";
+            }
+            else if (response.Success)
+            {
+                LogMessage($"Device linked successfully! Device ID: {response.DeviceId}");
+                StatusText.Text = "Device linked";
+                LinkCodeTextBox.Clear();
+                RefreshLinkPanel();
+            }
+            else
+            {
+                LogMessage($"Link failed: {response.Message}");
+                StatusText.Text = "Link failed";
+            }
+        }
+        finally
+        {
+            LinkButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Shows the link panel only when this device is not yet linked to a parent account.
+    /// </summary>
+    private void RefreshLinkPanel()
+    {
+        var linked = PolicyStorage.IsDeviceLinked();
+        LinkDevicePanel.Visibility = linked ? Visibility.Collapsed : Visibility.Visible;
+        if (linked)
+        {
+            LogMessage("Device is linked to a parent account.");
+        }
     }
 
     private void OnStatusChanged(object? sender, string status)
