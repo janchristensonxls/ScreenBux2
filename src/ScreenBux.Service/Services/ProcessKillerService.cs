@@ -8,16 +8,26 @@ namespace ScreenBux.Service.Services;
 public class ProcessKillerService
 {
     private readonly ILogger<ProcessKillerService> _logger;
+    private readonly IConfiguration _configuration;
 
-    public ProcessKillerService(ILogger<ProcessKillerService> logger)
+    /// <summary>
+    /// Raised for every enforcement attempt, whether real or dry-run. Subscribe to this to
+    /// observe policy enforcement without necessarily acting on process lifetimes yourself.
+    /// </summary>
+    public event EventHandler<ProcessEnforcementEventArgs>? ProcessEnforcementAttempted;
+
+    public ProcessKillerService(ILogger<ProcessKillerService> logger, IConfiguration configuration)
     {
         _logger = logger;
+        _configuration = configuration;
     }
+
+    private bool IsDryRun => _configuration.GetValue<bool>("Enforcement:DryRun");
 
     /// <summary>
     /// Kills a process and all its child processes
     /// </summary>
-    public async Task<bool> KillProcessTreeAsync(int processId)
+    public async Task<bool> KillProcessTreeAsync(int processId, string? reason = null)
     {
         try
         {
@@ -28,8 +38,18 @@ public class ProcessKillerService
                 return false;
             }
 
+            if (IsDryRun)
+            {
+                _logger.LogInformation(
+                    "[DRY-RUN] Would kill process tree for PID {ProcessId} ({ProcessName}). Reason: {Reason}",
+                    processId, process.ProcessName, reason ?? "(none)");
+                RaiseEnforcementEvent(processId, process.ProcessName, reason, "KillTree", dryRun: true);
+                return true;
+            }
+
             _logger.LogInformation("Killing process tree for PID {ProcessId} ({ProcessName})", 
                 processId, process.ProcessName);
+            RaiseEnforcementEvent(processId, process.ProcessName, reason, "KillTree", dryRun: false);
 
             // Get all child processes
             var childProcesses = GetChildProcesses(processId);
@@ -106,7 +126,7 @@ public class ProcessKillerService
     /// <summary>
     /// Attempts to gracefully close a process by sending a close message
     /// </summary>
-    public async Task<bool> TryCloseProcessAsync(int processId)
+    public async Task<bool> TryCloseProcessAsync(int processId, string? reason = null)
     {
         try
         {
@@ -116,8 +136,18 @@ public class ProcessKillerService
                 return true;
             }
 
+            if (IsDryRun)
+            {
+                _logger.LogInformation(
+                    "[DRY-RUN] Would attempt to close process {ProcessName} (PID: {ProcessId}). Reason: {Reason}",
+                    process.ProcessName, processId, reason ?? "(none)");
+                RaiseEnforcementEvent(processId, process.ProcessName, reason, "Close", dryRun: true);
+                return true;
+            }
+
             _logger.LogInformation("Attempting to gracefully close process {ProcessId}", processId);
-            
+            RaiseEnforcementEvent(processId, process.ProcessName, reason, "Close", dryRun: false);
+
             // Try to close the main window gracefully
             if (process.CloseMainWindow())
             {
@@ -137,12 +167,24 @@ public class ProcessKillerService
 
             // If graceful close failed, kill the process
             _logger.LogWarning("Graceful close failed for process {ProcessId}, forcing kill", processId);
-            return await KillProcessTreeAsync(processId);
+            return await KillProcessTreeAsync(processId, reason);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error trying to close process {ProcessId}", processId);
             return false;
         }
+    }
+
+    private void RaiseEnforcementEvent(int processId, string processName, string? reason, string action, bool dryRun)
+    {
+        ProcessEnforcementAttempted?.Invoke(this, new ProcessEnforcementEventArgs
+        {
+            ProcessId = processId,
+            ProcessName = processName,
+            Reason = reason,
+            Action = action,
+            DryRun = dryRun
+        });
     }
 }

@@ -59,9 +59,16 @@ public class ProcessMonitoringService : BackgroundService
         // which throws Win32Exception for every protected/system process we can't open -
         // producing a flood of first-chance exceptions. Only resolve it when it can matter.
         var resolveExecutablePath = !config.Rules.Any(r => r.Enabled) && config.Policies.Count > 0;
+        var dbgProcesses = Process.GetProcesses().Select(p => new { p.MainWindowTitle, p.Id, p.ProcessName }).ToList();
+
 
         foreach (var process in Process.GetProcesses())
         {
+
+            if(process.ProcessName.Contains("blox"))
+            {
+                var dbg = 56;
+            }
             if (stoppingToken.IsCancellationRequested)
             {
                 return;
@@ -115,7 +122,7 @@ public class ProcessMonitoringService : BackgroundService
             processInfo.ProcessId,
             ruleName);
 
-        await _processKiller.TryCloseProcessAsync(processInfo.ProcessId);
+        await _processKiller.TryCloseProcessAsync(processInfo.ProcessId, ruleName);
 
         processInfo.DetectedAt = DateTime.UtcNow;
         await _policySync.SendProcessDetectionAsync(processInfo);

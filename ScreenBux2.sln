@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12120.119
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
@@ -16,6 +16,22 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenBux.Agent", "src\ScreenBux.Agent\ScreenBux.Agent.csproj", "{45B419FD-A4EA-4B2A-9E46-0545111A2CA8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenBux.Data", "src\ScreenBux.Data\ScreenBux.Data.csproj", "{1C4CFA45-95A0-445A-BF39-7C0D6A58A8D1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{878D0619-8443-4CAE-AE90-A620B8A7C84C}"
+	ProjectSection(SolutionItems) = preProject
+		docs\ARCHITECTURE.md = docs\ARCHITECTURE.md
+		.github\copilot-instructions.md = .github\copilot-instructions.md
+		docs\DEVICE-LINKING.md = docs\DEVICE-LINKING.md
+		INSTALLATION.md = INSTALLATION.md
+		QUICKSTART.md = QUICKSTART.md
+		README.md = README.md
+		docs\STATUS-AND-ROADMAP.md = docs\STATUS-AND-ROADMAP.md
+		todo.md = todo.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Testing", "Testing", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ScreenBux.Service.Tests", "tests\ScreenBux.Service.Tests\ScreenBux.Service.Tests.csproj", "{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -99,6 +115,18 @@ Global
 		{1C4CFA45-95A0-445A-BF39-7C0D6A58A8D1}.Release|x64.Build.0 = Release|Any CPU
 		{1C4CFA45-95A0-445A-BF39-7C0D6A58A8D1}.Release|x86.ActiveCfg = Release|Any CPU
 		{1C4CFA45-95A0-445A-BF39-7C0D6A58A8D1}.Release|x86.Build.0 = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|x64.Build.0 = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Debug|x86.Build.0 = Debug|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|x64.ActiveCfg = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|x64.Build.0 = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|x86.ActiveCfg = Release|Any CPU
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -110,5 +138,9 @@ Global
 		{A622CA74-DD59-4156-90E5-8C245492FA64} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{45B419FD-A4EA-4B2A-9E46-0545111A2CA8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{1C4CFA45-95A0-445A-BF39-7C0D6A58A8D1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{D4A5797C-9A56-4C5C-A901-95610AD9FA1C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AA1C8297-21A4-46A9-BF02-42DCB6075FC4}
 	EndGlobalSection
 EndGlobal
