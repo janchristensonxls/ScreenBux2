@@ -188,6 +188,12 @@ public class NamedPipeServerService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Handles a foreground process/window report from the Agent (the only reliable source
+    /// of foreground-window/title information, since this Service - when running as a real
+    /// Windows Service - runs in Session 0 and cannot see the interactive user's desktop).
+    /// This is the sole place where WindowTitleRegex rules are meaningfully evaluated.
+    /// </summary>
     private async Task<object> HandleProcessReportAsync(ProcessReportMessage? message)
     {
         if (message?.Process == null)
@@ -199,20 +205,36 @@ public class NamedPipeServerService : BackgroundService
             };
         }
 
-        _logger.LogInformation("Process reported: {ProcessName} (PID: {ProcessId})",
-            message.Process.ProcessName, message.Process.ProcessId);
+        _logger.LogInformation("Process reported: {ProcessName} (PID: {ProcessId}, Title: {WindowTitle})",
+            message.Process.ProcessName, message.Process.ProcessId, message.Process.WindowTitle);
 
-        // Check if process should be blocked
-        if (_policyService.ShouldBlockProcess(message.Process))
+        var rule = _policyService.GetMatchingRule(message.Process, isForegroundWindow: true);
+        var shouldBlock = rule != null || _policyService.ShouldBlockProcess(message.Process, isForegroundWindow: true);
+
+        if (shouldBlock)
         {
-            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy, requesting closure",
-                message.Process.ProcessName, message.Process.ProcessId);
+            var reason = rule?.Name ?? "Application blocked by parental control policy";
 
-            // Send close command back
+            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), requesting closure",
+                message.Process.ProcessName, message.Process.ProcessId, reason);
+
+            _processKiller.NotifyRemoteEnforcementAttempt(message.Process.ProcessId, message.Process.ProcessName, reason);
+
+            if (_processKiller.IsDryRun)
+            {
+                return new CommandResponse
+                {
+                    Success = true,
+                    Message = $"[DRY-RUN] Would close process, reason: {reason}"
+                };
+            }
+
+            // Send close command back - the Agent performs the actual close, since it runs
+            // in the interactive session and can access the window.
             return new CloseProcessCommand
             {
                 ProcessId = message.Process.ProcessId,
-                Reason = "Application blocked by parental control policy"
+                Reason = reason
             };
         }
 

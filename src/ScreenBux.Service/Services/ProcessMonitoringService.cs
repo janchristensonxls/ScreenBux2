@@ -4,7 +4,18 @@ using ScreenBux.Shared.Models;
 namespace ScreenBux.Service.Services;
 
 /// <summary>
-/// Service for monitoring processes and enforcing policy rules.
+/// Service for monitoring background (non-interactive-focused) processes and enforcing
+/// policy rules against process-name-only matches (i.e. rules with no WindowTitleRegex,
+/// or the ProcessNameRegex branch of rules that also have one).
+///
+/// Foreground/window-title enforcement is NOT done here. A real Windows Service runs in
+/// Session 0 on a non-interactive window station and cannot see the interactive user's
+/// desktop/windows (GetForegroundWindow, EnumWindows, etc. are window-station scoped), so
+/// title-based rules can never be evaluated correctly from this process. That
+/// responsibility belongs to ScreenBux.Agent, which runs inside the user's session, detects
+/// the real foreground window/title, and reports it to this Service over the Named Pipe
+/// (see NamedPipeServerService.HandleProcessReportAsync). This loop only catches
+/// process-name matches for processes the Agent hasn't (yet) reported as foreground.
 /// </summary>
 public class ProcessMonitoringService : BackgroundService
 {
@@ -12,7 +23,6 @@ public class ProcessMonitoringService : BackgroundService
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
     private readonly PolicySyncService _policySync;
-    private readonly ForegroundWindowDetector _foregroundWindowDetector;
 
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
@@ -24,7 +34,6 @@ public class ProcessMonitoringService : BackgroundService
         _policyService = policyService;
         _processKiller = processKiller;
         _policySync = policySync;
-        _foregroundWindowDetector = new ForegroundWindowDetector();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -59,16 +68,9 @@ public class ProcessMonitoringService : BackgroundService
         // which throws Win32Exception for every protected/system process we can't open -
         // producing a flood of first-chance exceptions. Only resolve it when it can matter.
         var resolveExecutablePath = !config.Rules.Any(r => r.Enabled) && config.Policies.Count > 0;
-        var dbgProcesses = Process.GetProcesses().Select(p => new { p.MainWindowTitle, p.Id, p.ProcessName }).ToList();
-
 
         foreach (var process in Process.GetProcesses())
         {
-
-            if(process.ProcessName.Contains("blox"))
-            {
-                var dbg = 56;
-            }
             if (stoppingToken.IsCancellationRequested)
             {
                 return;
@@ -80,7 +82,9 @@ public class ProcessMonitoringService : BackgroundService
                 continue;
             }
 
-            var rule = _policyService.GetMatchingRule(processInfo, false);
+            // isForegroundWindow: false - this loop has no reliable window-title data for
+            // any of these processes, so only ProcessNameRegex/name-based matching applies.
+            var rule = _policyService.GetMatchingRule(processInfo, isForegroundWindow: false);
             if (rule != null)
             {
                 if (handledProcesses.Add(processInfo.ProcessId))
@@ -91,25 +95,9 @@ public class ProcessMonitoringService : BackgroundService
                 continue;
             }
 
-            if (_policyService.ShouldBlockProcess(processInfo, false) && handledProcesses.Add(processInfo.ProcessId))
+            if (_policyService.ShouldBlockProcess(processInfo, isForegroundWindow: false) && handledProcesses.Add(processInfo.ProcessId))
             {
                 await CloseProcessAsync(processInfo, "Legacy policy");
-            }
-        }
-
-        var foregroundProcess = _foregroundWindowDetector.GetForegroundProcessInfo();
-        if (foregroundProcess != null)
-        {
-            var rule = _policyService.GetMatchingRule(foregroundProcess, true);
-            if (rule != null && handledProcesses.Add(foregroundProcess.ProcessId))
-            {
-                await CloseProcessAsync(foregroundProcess, rule.Name);
-                return;
-            }
-
-            if (_policyService.ShouldBlockProcess(foregroundProcess, true) && handledProcesses.Add(foregroundProcess.ProcessId))
-            {
-                await CloseProcessAsync(foregroundProcess, "Legacy policy");
             }
         }
     }

@@ -22,7 +22,11 @@ public class ProcessKillerService
         _configuration = configuration;
     }
 
-    private bool IsDryRun => _configuration.GetValue<bool>("Enforcement:DryRun");
+    /// <summary>
+    /// True when enforcement should be observed/logged but must not actually terminate anything -
+    /// either locally (this process) or remotely (instructing the Agent to close a process).
+    /// </summary>
+    public bool IsDryRun => _configuration.GetValue<bool>("Enforcement:DryRun");
 
     /// <summary>
     /// Kills a process and all its child processes
@@ -186,5 +190,31 @@ public class ProcessKillerService
             Action = action,
             DryRun = dryRun
         });
+    }
+
+    /// <summary>
+    /// Records/raises an enforcement attempt that is actually carried out remotely by the
+    /// Agent (which closes the process in its own interactive session) rather than by this
+    /// Service directly. Use this from the Named Pipe handler when instructing the Agent to
+    /// close a foreground-detected process, so dry-run observability and the
+    /// ProcessEnforcementAttempted event stay consistent regardless of which side performs
+    /// the actual close.
+    /// </summary>
+    public void NotifyRemoteEnforcementAttempt(int processId, string processName, string? reason)
+    {
+        if (IsDryRun)
+        {
+            _logger.LogInformation(
+                "[DRY-RUN] Would instruct Agent to close process {ProcessName} (PID: {ProcessId}). Reason: {Reason}",
+                processName, processId, reason ?? "(none)");
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Instructing Agent to close process {ProcessName} (PID: {ProcessId}). Reason: {Reason}",
+                processName, processId, reason ?? "(none)");
+        }
+
+        RaiseEnforcementEvent(processId, processName, reason, "RemoteClose", IsDryRun);
     }
 }

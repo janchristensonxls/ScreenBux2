@@ -40,6 +40,48 @@ cases the event fires with the correct `Reason`/`Action`/`DryRun`), and
   response) so it's obvious when the Service is running in dry-run vs. live
   mode without checking `appsettings.json`.
 
+## 0.1 Service-side foreground-window detection relic — RESOLVED
+
+**Was:** `ProcessMonitoringService` held its own `ForegroundWindowDetector`
+instance and called `GetMatchingRule(foregroundProcess, true)` against
+whatever `GetForegroundWindow()` returned inside the Service process itself.
+This never worked correctly once the Service runs as a real installed Windows
+Service, because Session 0 services run on a non-interactive window station
+and cannot see the interactive user's desktop — `foregroundProcess` was
+effectively always `null` in that scenario (confirmed via debugging: the field
+returned the debugger's own view, not the user's).
+
+**Fixed:**
+- Removed the Service-side `ForegroundWindowDetector` field/usage and the
+  leftover debug code (`dbgProcesses`, the `"blox"` breakpoint hook) from
+  `ProcessMonitoringService`. Its bulk `Process.GetProcesses()` loop now always
+  passes `isForegroundWindow: false`, so it only ever matches `ProcessNameRegex`
+  / legacy name-based policy — an honest reflection of what it can actually see.
+- Deleted `src/ScreenBux.Service/Services/ForegroundWindowDetector.cs` (it had
+  zero remaining references).
+- `NamedPipeServerService.HandleProcessReportAsync` — which receives the
+  Agent's real, interactive-session foreground process/window report — is now
+  the sole place `WindowTitleRegex` rules are evaluated
+  (`GetMatchingRule(message.Process, isForegroundWindow: true)`), and it now
+  respects `Enforcement:DryRun` and reports the actual matching rule's name as
+  the reason, instead of always instructing the Agent to close with a generic
+  message.
+- `ProcessKillerService` gained a public `IsDryRun` property and a
+  `NotifyRemoteEnforcementAttempt(...)` method so the pipe-driven remote-close
+  path (where the Agent, not the Service, performs the actual close) still
+  raises the same `ProcessEnforcementAttempted` event/dry-run semantics as the
+  local kill paths, keeping `PolicyViolationLoggerService` and future
+  subscribers consistent regardless of which side executes the close.
+
+**Not yet done / consider next:**
+- No automated test yet covers `NamedPipeServerService.HandleProcessReportAsync`
+  directly (dry-run behavior, rule-name propagation). Existing tests only cover
+  `ProcessKillerService`/`PolicyViolationLoggerService` in isolation.
+- The Agent-reported `ProcessInfo.WindowTitle` currently only reflects a single
+  foreground window per poll interval; if title-rule matching needs to see
+  background/non-foreground windows too, additional Agent-side reporting would
+  be needed.
+
 ## 1. Device redemption silently re-parents an already-linked device
 
 **Where:** `DevicesController.Redeem` (`src/ScreenBux.WebServer/Controllers/DevicesController.cs`)

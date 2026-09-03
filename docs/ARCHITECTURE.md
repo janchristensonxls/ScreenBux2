@@ -25,15 +25,29 @@ Solution file: `ScreenBux2.sln`.
 ## Data flow (current reality)
 
 1. **Agent → Service** (Named Pipe `ScreenBuxServicePipe`): Agent sends
-   `ProcessReportMessage` (with optional `DeviceId`); Service replies with
-   `CloseProcessCommand` / `CommandResponse`. Message contracts implement
-   `Contracts.INamedPipeMessage` (`MessageType` discriminator), defined in
-   `ScreenBux.Shared/Messages/NamedPipeMessages.cs`.
+   `ProcessReportMessage` (with optional `DeviceId`), containing the real
+   foreground process **and** its window title as seen in the interactive user
+   session; Service replies with `CloseProcessCommand` / `CommandResponse`.
+   Message contracts implement `Contracts.INamedPipeMessage` (`MessageType`
+   discriminator), defined in `ScreenBux.Shared/Messages/NamedPipeMessages.cs`.
+   This is the **only** place `WindowTitleRegex` rules are evaluated
+   (`NamedPipeServerService.HandleProcessReportAsync` calls
+   `PolicyService.GetMatchingRule(..., isForegroundWindow: true)`), because a
+   real Windows Service runs in Session 0 on a non-interactive window station
+   and cannot see the interactive user's desktop/windows. The Service decides
+   via `PolicyService`/`ProcessKillerService` (including dry-run) and, if
+   blocked, replies with a `CloseProcessCommand`; the **Agent** performs the
+   actual close in its own session.
 2. **Service enforcement loop** (`ProcessMonitoringService`, a `BackgroundService`):
-   every `CheckIntervalSeconds`, enumerates `Process.GetProcesses()` **and**
-   the current foreground window, matches against policy via `PolicyService`,
-   and calls `ProcessKillerService` to close matches. This runs independently
-   of what the Agent reports.
+   every `CheckIntervalSeconds`, enumerates `Process.GetProcesses()` and matches
+   against policy via `PolicyService` using `isForegroundWindow: false` — i.e.
+   only `ProcessNameRegex`/legacy name-based matches, never window-title rules.
+   This runs independently of what the Agent reports and exists to catch
+   name-matched processes even when they're not in the foreground. There is no
+   Service-side foreground/window-title detection (a prior
+   `ForegroundWindowDetector` in this project was removed as non-functional
+   dead code — Session 0 services cannot call `GetForegroundWindow` against the
+   interactive desktop).
 3. **Device identity & linking**:
    - `DeviceIdentityService` generates a random `DeviceId` + `MachineKey` on
 	 first run and persists them to `device.json` next to the local policy
