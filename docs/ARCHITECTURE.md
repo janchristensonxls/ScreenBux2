@@ -27,17 +27,22 @@ Solution file: `ScreenBux2.sln`.
 1. **Agent → Service** (Named Pipe `ScreenBuxServicePipe`): Agent sends
    `ProcessReportMessage` (with optional `DeviceId`), containing the real
    foreground process **and** its window title as seen in the interactive user
-   session; Service replies with `CloseProcessCommand` / `CommandResponse`.
-   Message contracts implement `Contracts.INamedPipeMessage` (`MessageType`
-   discriminator), defined in `ScreenBux.Shared/Messages/NamedPipeMessages.cs`.
-   This is the **only** place `WindowTitleRegex` rules are evaluated
-   (`NamedPipeServerService.HandleProcessReportAsync` calls
-   `PolicyService.GetMatchingRule(..., isForegroundWindow: true)`), because a
-   real Windows Service runs in Session 0 on a non-interactive window station
-   and cannot see the interactive user's desktop/windows. The Service decides
-   via `PolicyService`/`ProcessKillerService` (including dry-run) and, if
-   blocked, replies with a `CloseProcessCommand`; the **Agent** performs the
-   actual close in its own session.
+   session; Service replies with `CommandResponse` (or, only as a fallback,
+   `CloseProcessCommand`). Message contracts implement
+   `Contracts.INamedPipeMessage` (`MessageType` discriminator), defined in
+   `ScreenBux.Shared/Messages/NamedPipeMessages.cs`. This is the **only** place
+   `WindowTitleRegex` rules are evaluated (`NamedPipeServerService.HandleProcessReportAsync`
+   calls `PolicyService.GetMatchingRule(..., isForegroundWindow: true)`),
+   because a real Windows Service runs in Session 0 on a non-interactive
+   window station and cannot see the interactive user's desktop/windows. The
+   Service decides via `PolicyService`, then **enforces directly itself** via
+   `ProcessKillerService.TryCloseProcessAsync` (Windows processes are
+   machine-global, so the Service can open a handle to the reported PID
+   without going through the Agent) — this lets enforcement benefit from
+   whatever elevated rights the Service runs with. Only if that Service-side
+   attempt fails (e.g. access denied on a protected/admin-launched process)
+   does the Service reply with `CloseProcessCommand`, asking the Agent to try
+   a best-effort graceful `CloseMainWindow()` in its own session as a fallback.
 2. **Service enforcement loop** (`ProcessMonitoringService`, a `BackgroundService`):
    every `CheckIntervalSeconds`, enumerates `Process.GetProcesses()` and matches
    against policy via `PolicyService` using `isForegroundWindow: false` — i.e.

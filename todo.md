@@ -66,12 +66,6 @@ returned the debugger's own view, not the user's).
   respects `Enforcement:DryRun` and reports the actual matching rule's name as
   the reason, instead of always instructing the Agent to close with a generic
   message.
-- `ProcessKillerService` gained a public `IsDryRun` property and a
-  `NotifyRemoteEnforcementAttempt(...)` method so the pipe-driven remote-close
-  path (where the Agent, not the Service, performs the actual close) still
-  raises the same `ProcessEnforcementAttempted` event/dry-run semantics as the
-  local kill paths, keeping `PolicyViolationLoggerService` and future
-  subscribers consistent regardless of which side executes the close.
 
 **Not yet done / consider next:**
 - No automated test yet covers `NamedPipeServerService.HandleProcessReportAsync`
@@ -81,6 +75,48 @@ returned the debugger's own view, not the user's).
   foreground window per poll interval; if title-rule matching needs to see
   background/non-foreground windows too, additional Agent-side reporting would
   be needed.
+
+## 0.2 Enforcement moved to the Service; kill-tree stub replaced — RESOLVED
+
+**Was (two related weaknesses carried over from the predecessor app):**
+1. Enforcement of Agent-reported (foreground/title) violations was done by
+   telling the *Agent* to close the process, in the Agent's own normal
+   user-session token — no benefit from the Service's elevated rights (e.g.
+   LocalSystem when installed as a real Windows Service), so admin-launched or
+   otherwise protected processes could resist termination exactly like in the
+   old app.
+2. `ProcessKillerService.KillProcessTreeAsync`'s child-process enumeration
+   (`GetChildProcesses`) was a stub that always returned an empty list — it
+   never actually killed a process tree, just the single reported PID. For
+   multi-process apps (e.g. Chromium-based browsers like Avast Browser, which
+   spawn renderer/GPU child processes per tab), killing only the main/window
+   process could leave orphaned children running, or fail to take down the
+   app if the reported PID wasn't the true top-level owner.
+
+**Fixed:**
+- `NamedPipeServerService.HandleProcessReportAsync` now enforces directly via
+  `ProcessKillerService.TryCloseProcessAsync` on the Service side instead of
+  returning a `CloseProcessCommand` as the primary path. Windows processes are
+  machine-global, so the Service can open a handle to the reported PID
+  directly without needing the Agent as a proxy. Only if the Service's own
+  attempt fails (e.g. access denied on a protected process) does it fall back
+  to asking the Agent to try a graceful, in-session `CloseMainWindow()` — a
+  legitimate UI action that doesn't require elevation, unlike forceful kill.
+- Removed the now-obsolete `ProcessKillerService.NotifyRemoteEnforcementAttempt`
+  helper (it existed only to support the old Agent-does-the-killing path).
+- Replaced the stubbed `GetChildProcesses`/manual child-kill loop with the
+  built-in `Process.Kill(entireProcessTree: true)` overload (.NET 5+), which
+  correctly walks the real process snapshot to find and kill descendants. Used
+  both by `ProcessKillerService.KillProcessTreeAsync` (Service-side) and the
+  Agent's `MonitoringService.TryCloseProcessAsync` fallback path.
+
+**Not yet done / consider next:**
+- `Process.Kill(true)` is best-effort per-process — if a child is itself
+  protected/elevated beyond the caller's rights, that one kill fails silently
+  while siblings still get attempted. Worth adding a `taskkill /PID {pid} /T /F`
+  fallback as a last resort if this turns out to be needed in practice.
+- No automated test yet covers `NamedPipeServerService.HandleProcessReportAsync`'s
+  Service-side enforcement + Agent fallback branching.
 
 ## 1. Device redemption silently re-parents an already-linked device
 

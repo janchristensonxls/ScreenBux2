@@ -193,6 +193,16 @@ public class NamedPipeServerService : BackgroundService
     /// of foreground-window/title information, since this Service - when running as a real
     /// Windows Service - runs in Session 0 and cannot see the interactive user's desktop).
     /// This is the sole place where WindowTitleRegex rules are meaningfully evaluated.
+    ///
+    /// Enforcement itself is performed here, by the Service, via <see cref="ProcessKillerService"/> -
+    /// not by asking the Agent to close the process. Windows processes are machine-global,
+    /// so the Service can open a handle to the reported PID directly; doing the kill here lets
+    /// enforcement benefit from whatever elevated rights the Service runs with (e.g. LocalSystem
+    /// when installed as a real Windows Service), which the Agent's normal user-session token may
+    /// lack for admin-launched or otherwise protected processes. The Agent is only asked to act
+    /// as a fallback for a graceful, UI-level close (WM_CLOSE via CloseMainWindow) if the
+    /// Service's own attempt fails - that's a legitimate user-session action that doesn't need
+    /// elevation, unlike forceful termination.
     /// </summary>
     private async Task<object> HandleProcessReportAsync(ProcessReportMessage? message)
     {
@@ -215,22 +225,30 @@ public class NamedPipeServerService : BackgroundService
         {
             var reason = rule?.Name ?? "Application blocked by parental control policy";
 
-            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), requesting closure",
+            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), enforcing closure",
                 message.Process.ProcessName, message.Process.ProcessId, reason);
 
-            _processKiller.NotifyRemoteEnforcementAttempt(message.Process.ProcessId, message.Process.ProcessName, reason);
+            var closed = await _processKiller.TryCloseProcessAsync(message.Process.ProcessId, reason);
 
-            if (_processKiller.IsDryRun)
+            if (closed)
             {
                 return new CommandResponse
                 {
                     Success = true,
-                    Message = $"[DRY-RUN] Would close process, reason: {reason}"
+                    Message = _processKiller.IsDryRun
+                        ? $"[DRY-RUN] Would close process, reason: {reason}"
+                        : $"Process closed by Service, reason: {reason}"
                 };
             }
 
-            // Send close command back - the Agent performs the actual close, since it runs
-            // in the interactive session and can access the window.
+            // The Service couldn't terminate it directly (e.g. access denied / protected
+            // process). Fall back to asking the Agent to try a graceful, in-session close -
+            // it can't forcefully kill a protected process either, but CloseMainWindow() is
+            // a normal UI action that doesn't require elevation and may still succeed.
+            _logger.LogWarning(
+                "Service-side enforcement failed for process {ProcessName} (PID: {ProcessId}); falling back to Agent-side graceful close",
+                message.Process.ProcessName, message.Process.ProcessId);
+
             return new CloseProcessCommand
             {
                 ProcessId = message.Process.ProcessId,

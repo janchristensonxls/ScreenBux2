@@ -55,19 +55,7 @@ public class ProcessKillerService
                 processId, process.ProcessName);
             RaiseEnforcementEvent(processId, process.ProcessName, reason, "KillTree", dryRun: false);
 
-            // Get all child processes
-            var childProcesses = GetChildProcesses(processId);
-
-            // Kill children first
-            foreach (var childPid in childProcesses)
-            {
-                await KillSingleProcessAsync(childPid);
-            }
-
-            // Kill the parent process
-            await KillSingleProcessAsync(processId);
-
-            return true;
+            return await KillSingleProcessAsync(processId, killEntireTree: true);
         }
         catch (Exception ex)
         {
@@ -76,14 +64,22 @@ public class ProcessKillerService
         }
     }
 
-    private async Task<bool> KillSingleProcessAsync(int processId)
+    /// <summary>
+    /// Kills a single process. When <paramref name="killEntireTree"/> is true, uses the
+    /// built-in Process.Kill(entireProcessTree: true) overload (.NET 5+), which walks the
+    /// real parent/child process snapshot on Windows and kills descendants too - this is
+    /// what actually makes a "kill tree" call correct, e.g. for multi-process browsers
+    /// (Chromium-based apps like Avast Browser spawn renderer/GPU child processes) where
+    /// killing only the main window's PID can otherwise leave orphaned children running.
+    /// </summary>
+    private async Task<bool> KillSingleProcessAsync(int processId, bool killEntireTree = false)
     {
         try
         {
             var process = Process.GetProcessById(processId);
             if (process != null && !process.HasExited)
             {
-                process.Kill();
+                process.Kill(killEntireTree);
                 var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await process.WaitForExitAsync(cts.Token);
                 _logger.LogInformation("Process {ProcessId} killed successfully", processId);
@@ -101,30 +97,6 @@ public class ProcessKillerService
             _logger.LogError(ex, "Error killing process {ProcessId}", processId);
             return false;
         }
-    }
-
-    private List<int> GetChildProcesses(int parentId)
-    {
-        var children = new List<int>();
-        
-        try
-        {
-            // This is a simplified implementation. On Windows, you'd use WMI or similar
-            // to get the process tree. For cross-platform compatibility, we're using a basic approach.
-            var allProcesses = Process.GetProcesses();
-            
-            // This is a placeholder - in a real implementation, you'd need to query
-            // the parent process ID for each process using platform-specific APIs
-            // For now, we'll just return an empty list and rely on the OS to clean up children
-            
-            _logger.LogDebug("Getting child processes for PID {ParentId}", parentId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting child processes for PID {ParentId}", parentId);
-        }
-
-        return children;
     }
 
     /// <summary>
@@ -190,31 +162,5 @@ public class ProcessKillerService
             Action = action,
             DryRun = dryRun
         });
-    }
-
-    /// <summary>
-    /// Records/raises an enforcement attempt that is actually carried out remotely by the
-    /// Agent (which closes the process in its own interactive session) rather than by this
-    /// Service directly. Use this from the Named Pipe handler when instructing the Agent to
-    /// close a foreground-detected process, so dry-run observability and the
-    /// ProcessEnforcementAttempted event stay consistent regardless of which side performs
-    /// the actual close.
-    /// </summary>
-    public void NotifyRemoteEnforcementAttempt(int processId, string processName, string? reason)
-    {
-        if (IsDryRun)
-        {
-            _logger.LogInformation(
-                "[DRY-RUN] Would instruct Agent to close process {ProcessName} (PID: {ProcessId}). Reason: {Reason}",
-                processName, processId, reason ?? "(none)");
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Instructing Agent to close process {ProcessName} (PID: {ProcessId}). Reason: {Reason}",
-                processName, processId, reason ?? "(none)");
-        }
-
-        RaiseEnforcementEvent(processId, processName, reason, "RemoteClose", IsDryRun);
     }
 }

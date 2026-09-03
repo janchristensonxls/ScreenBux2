@@ -66,7 +66,9 @@ public class MonitoringService
 
             var response = await _pipeClient.SendMessageAsync<object>(reportMessage);
 
-            // Check if we received a close command
+            // A close command means the Service's own (elevated) enforcement attempt failed -
+            // this is a fallback ask for a best-effort graceful/local close, not the primary
+            // enforcement path.
             if (response is CloseProcessCommand closeCommand)
             {
                 RaiseStatusChanged($"Received close command for PID {closeCommand.ProcessId}: {closeCommand.Reason}");
@@ -86,6 +88,13 @@ public class MonitoringService
         }
     }
 
+    /// <summary>
+    /// Fallback path used only when the Service's own (elevated) enforcement attempt fails
+    /// (e.g. access denied on a protected/admin-launched process). This performs a
+    /// best-effort graceful close in the Agent's own user-session token; CloseMainWindow()
+    /// doesn't require elevation, but a forceful Kill() here is subject to the same rights
+    /// limitations the Service already tried and failed with.
+    /// </summary>
     private async Task TryCloseProcessAsync(int processId)
     {
         try
@@ -100,8 +109,11 @@ public class MonitoringService
                 }
                 else
                 {
-                    // If graceful close fails, kill the process
-                    process.Kill();
+                    // If graceful close fails, kill the whole process tree (parent + all
+                    // descendants) rather than just this PID - important for multi-process
+                    // apps like Chromium-based browsers, where the window-owning process may
+                    // otherwise leave child/helper processes running.
+                    process.Kill(entireProcessTree: true);
                     RaiseStatusChanged($"Killed process {processId}");
                 }
             }
