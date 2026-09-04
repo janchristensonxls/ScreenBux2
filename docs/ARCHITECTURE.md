@@ -96,20 +96,48 @@ Solution file: `ScreenBux2.sln`.
 - `DeviceLinkCode` — a short (8-char, ambiguity-free alphabet), 15-minute-lived
   code a parent generates and a device redeems once. One-time use
   (`RedeemedAt`/`RedeemedByDeviceId`).
-- `PolicyDocument` — a policy scoped to `AccountId` + optionally
-  `ChildProfileId`/`DeviceId`, storing serialized `PolicyConfiguration` JSON.
-  `EfPolicyStore` currently only reads/writes the **account-level, unscoped**
-  document (`ChildProfileId == null && DeviceId == null`) from
-  `GetPolicyAsync`/`SavePolicyAsync`; `GetDevicePolicyAsync` looks for a
-  device-specific document first (falls back — see file for the rest of the
-  method) but nothing in the UI currently creates per-device or per-child
-  policy documents.
+- `PolicyDocument` — a cached **effective** policy scoped to `AccountId` +
+  optionally `ChildProfileId`/`DeviceId`, storing serialized
+  `PolicyConfiguration` JSON. `EfPolicyStore` currently only reads/writes the
+  **account-level, unscoped** document (`ChildProfileId == null && DeviceId ==
+  null`) from `GetPolicyAsync`/`SavePolicyAsync`; `GetDevicePolicyAsync` looks
+  for a device-specific document first (falls back — see file for the rest of
+  the method) but nothing in the UI currently creates per-device or per-child
+  policy documents. `PolicyDocument.ActivePolicyProfileId` optionally points at
+  the `PolicyProfile` currently "active" (see Policy profiles/modes below);
+  when null, `PolicyJson` stands on its own (e.g. legacy raw-JSON edits that
+  never went through a profile).
+- `PolicyProfile` — a **named, reusable policy variant** ("mode") a parent
+  authors once and can switch between, e.g. "Normal", "School", "Open",
+  "Sleep". Scoped to `AccountId` (optionally `ChildProfileId`), stores its own
+  serialized `PolicyConfiguration` JSON. Selecting a profile as active
+  (`POST /api/policy/profiles/{id}/activate`) copies its JSON into the
+  account's `PolicyDocument.PolicyJson` and broadcasts `PolicyUpdated`, so the
+  Service/Agent runtime path is completely unaware profiles exist — it only
+  ever reads the cached effective policy, same as before this feature existed.
+  Editing the currently-active profile also refreshes the cache. New accounts
+  get four built-in profiles seeded on first access to `GET
+  /api/policy/profiles` (`EfPolicyStore.SeedDefaultProfilesAsync`): "Normal",
+  "Open" (a normal, permissive default — not a special/dangerous rule set),
+  "School", and "Sleep" (a single `Always`-condition rule with
+  `Action = Sleep`, the built-in strict-lockout mode). There is currently no
+  scheduling — mode switches are manual only (parent clicks a mode button in
+  `Policy.razor`).
 
 ### Policy matching — two parallel rule systems (legacy debt)
 `PolicyConfiguration` still holds **two** independent rule systems:
 - `Rules: List<PolicyRule>` — the **primary/intended** model: regex on
   `ProcessNameRegex` and/or `WindowTitleRegex`. This is the "forbid apps by
-  regex" feature and is what the UI and defaults use.
+  regex" feature and is what the UI and defaults use. Each rule also carries a
+  `ConditionKind` (`ProcessMatch` — the default, evaluated per detected
+  process; or `Always` — evaluated once per policy tick, independent of any
+  process, used for whole-session actions) and an `Action`
+  (`CloseProcess` — the default/original implicit behavior; `KillProcessTree`;
+  `Sleep`; `Hibernate`). `Always`-condition rules are handled separately by
+  `ProcessMonitoringService.EnforceAlwaysRules`, gated on
+  `PolicyService.HasSyncedSinceStartup` (see Sleep/Hibernate note below) —
+  they short-circuit the rest of that tick's per-process enforcement since the
+  device is about to suspend.
 - `Policies: List<AppPolicy>` — a **legacy** model: name/path match +
   `PolicyAction` (Allow/Block/TimeRestricted) + `AllowedTimeWindows` +
   `MaxUsageMinutesPerDay`.

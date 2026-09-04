@@ -23,6 +23,8 @@ public class AppDbContext : IdentityDbContext<Account>
 
     public DbSet<PolicyDocument> PolicyDocuments => Set<PolicyDocument>();
 
+    public DbSet<PolicyProfile> PolicyProfiles => Set<PolicyProfile>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -60,6 +62,24 @@ public class AppDbContext : IdentityDbContext<Account>
             entity.HasOne(p => p.Account)
                 .WithMany(a => a.PolicyDocuments)
                 .HasForeignKey(p => p.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.ActivePolicyProfile)
+                .WithMany()
+                .HasForeignKey(p => p.ActivePolicyProfileId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<PolicyProfile>(entity =>
+        {
+            entity.HasOne(p => p.Account)
+                .WithMany(a => a.PolicyProfiles)
+                .HasForeignKey(p => p.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.ChildProfile)
+                .WithMany()
+                .HasForeignKey(p => p.ChildProfileId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

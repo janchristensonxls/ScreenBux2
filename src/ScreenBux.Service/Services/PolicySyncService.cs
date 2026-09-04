@@ -47,6 +47,7 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogInformation("Policy update received from SignalR");
             await _policyService.UpdatePolicyAsync(policy);
+            _policyService.MarkSyncedSinceStartup();
         });
 
         _hubConnection.Reconnecting += error =>

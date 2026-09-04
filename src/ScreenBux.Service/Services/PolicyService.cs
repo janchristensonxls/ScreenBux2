@@ -15,6 +15,17 @@ public class PolicyService
     private readonly string _policyFilePath;
     private DateTime? _lastWriteTimeUtc;
 
+    /// <summary>
+    /// True once the Service has successfully synced policy from the server at least once
+    /// since process startup (via either the REST poll or the SignalR push). Used to gate
+    /// device-wide power actions (Sleep/Hibernate) so a stale cached policy.json left over
+    /// from before a reboot can never fire a lockout action before the real current mode is
+    /// confirmed from the server.
+    /// </summary>
+    public bool HasSyncedSinceStartup { get; private set; }
+
+    public void MarkSyncedSinceStartup() => HasSyncedSinceStartup = true;
+
     public PolicyService(ILogger<PolicyService> logger, IConfiguration configuration)
     {
         _logger = logger;
@@ -147,7 +158,7 @@ public class PolicyService
 
     public PolicyRule? GetMatchingRule(ProcessInfo processInfo, bool isForegroundWindow)
     {
-        foreach (var rule in _configuration.Rules.Where(rule => rule.Enabled))
+        foreach (var rule in _configuration.Rules.Where(rule => rule.Enabled && rule.ConditionKind == PolicyConditionKind.ProcessMatch))
         {
             if (IsRegexMatch(rule.ProcessNameRegex, processInfo.ProcessName))
             {
@@ -162,6 +173,13 @@ public class PolicyService
 
         return null;
     }
+
+    /// <summary>
+    /// Returns enabled rules that always apply (not tied to a specific process match), e.g. a
+    /// "Sleep" lockout mode. Callers should evaluate these once per policy tick.
+    /// </summary>
+    public IReadOnlyList<PolicyRule> GetAlwaysRules() =>
+        _configuration.Rules.Where(rule => rule.Enabled && rule.ConditionKind == PolicyConditionKind.Always).ToList();
 
     private bool IsRegexMatch(string? pattern, string input)
     {

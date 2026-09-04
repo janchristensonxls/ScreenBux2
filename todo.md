@@ -4,6 +4,60 @@ Running list of known design gaps and improvement ideas. Not all of these are
 bugs — some are deliberate simplifications made during early development that
 should be revisited before this is used by real families.
 
+## Policy profiles/modes (Normal/School/Open/Sleep) — status and follow-ups
+
+Implemented: a `PolicyProfile` entity/table (per account, optionally per
+`ChildProfileId`) holds named, independently-editable policy variants.
+`PolicyDocument` gained `ActivePolicyProfileId` and continues to be the single
+cached effective policy the Service/Agent runtime path reads — profiles are
+invisible to that path by design. `EfPolicyStore`/`IPolicyStore` got
+`GetProfilesAsync` (seeds four built-ins: Normal, Open, School, Sleep, on
+first access), `CreateProfileAsync`, `UpdateProfileAsync` (refreshes the cache
+if the edited profile is active), `DeleteProfileAsync` (refuses to delete the
+active profile), and `SetActiveProfileAsync` (switches + refreshes cache +
+caller broadcasts `PolicyUpdated`). New `PolicyController` endpoints:
+`GET/POST /api/policy/profiles`, `PUT/DELETE /api/policy/profiles/{id}`,
+`POST /api/policy/profiles/{id}/activate`. `Policy.razor` got a simple mode
+button-group above the existing raw-JSON editor.
+
+`PolicyRule` gained `ConditionKind` (`ProcessMatch` default / `Always`) and
+`Action` (`CloseProcess` default / `KillProcessTree` / `Sleep` / `Hibernate`).
+The built-in "Sleep" profile is a single `Always`+`Sleep` rule — the intended
+replacement for a blanket "Blocked" concept, since forcing every process closed
+is unsafe/incomplete compared to actually locking the machine.
+`ProcessMonitoringService.EnforceAlwaysRules` evaluates `Always` rules once per
+tick (short-circuiting normal per-process enforcement that tick when a power
+action fires) via the new `PowerActionService` (`SetSuspendState` P/Invoke;
+`Hibernate()` falls back to `Sleep()` on failure/unsupported hardware).
+
+**Safety gate**: `PolicyService.HasSyncedSinceStartup` must be true (set by
+either `DevicePolicySyncService`'s REST poll or `PolicySyncService`'s SignalR
+push succeeding at least once) before `Always`/power-action rules are allowed
+to fire. This exists specifically so a stale cached `policy.json` left over
+from before a reboot can't put the machine back to sleep/hibernate based on
+last night's mode before the Service has confirmed the real current mode with
+the server. Regular `CloseProcess`/`KillProcessTree` rules are **not** gated
+this way — they still run against the (possibly stale) cached policy
+immediately, same as before this feature, since there's no reasonable
+"offline" fallback for that and closing an app is much lower-stakes than
+suspending the whole machine.
+
+Deliberately **out of scope for this pass**: scheduling (time-of-day/day-of-
+week automatic mode switching) — modes are switched manually only, from
+`Policy.razor`. Also out of scope: per-child/per-device profile scoping in the
+UI (the schema supports `ChildProfileId` on `PolicyProfile`, but the
+controller/UI only operate on the account-wide profile list today, consistent
+with the existing `PolicyDocument` scoping gap noted elsewhere in this file).
+
+Follow-ups worth doing next:
+- A friendlier profile editor in `Policy.razor` (today it's still raw JSON,
+  same as before — only the mode-switch buttons are new).
+- Tests for `EnforceAlwaysRules`/`HasSyncedSinceStartup` gating and
+  `PowerActionService` fallback behavior in `ScreenBux.Service.Tests`.
+- Consider whether `DeleteProfileAsync`'s "refuse to delete the active
+  profile" behavior should surface a clearer error/confirmation in the UI
+  instead of a generic 400.
+
 ## 0. Enforcement dry-run mode — status and follow-ups
 
 **Implemented:** `ProcessKillerService` now reads `Enforcement:DryRun` from

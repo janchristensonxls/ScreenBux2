@@ -16,4 +16,6 @@ public class Account : IdentityUser
     public ICollection<Device> Devices { get; set; } = new List<Device>();
 
     public ICollection<PolicyDocument> PolicyDocuments { get; set; } = new List<PolicyDocument>();
+
+    public ICollection<PolicyProfile> PolicyProfiles { get; set; } = new List<PolicyProfile>();
 }

@@ -21,18 +21,21 @@ public class DevicePolicySyncService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly DeviceIdentityService _deviceIdentity;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly PolicyService _policyService;
     private readonly string _policyFilePath;
 
     public DevicePolicySyncService(
         ILogger<DevicePolicySyncService> logger,
         IConfiguration configuration,
         DeviceIdentityService deviceIdentity,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        PolicyService policyService)
     {
         _logger = logger;
         _configuration = configuration;
         _deviceIdentity = deviceIdentity;
         _httpClientFactory = httpClientFactory;
+        _policyService = policyService;
         _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
     }
 
@@ -168,6 +171,7 @@ public class DevicePolicySyncService : BackgroundService
 
         PolicyStorage.EnsurePolicyDirectory(_policyFilePath);
         await File.WriteAllTextAsync(_policyFilePath, JsonSerializer.Serialize(policy, WriteOptions), cancellationToken);
+        _policyService.MarkSyncedSinceStartup();
         _logger.LogInformation("Updated local policy cache from server for device {DeviceId}.", state.DeviceId);
     }
 

@@ -10,6 +10,28 @@
 
 <div class="card mb-3">
     <div class="card-body">
+        <h5 class="card-title">Mode</h5>
+        @if (_profiles.Count == 0)
+        {
+            <p class="text-muted">No profiles yet.</p>
+        }
+        else
+        {
+            <div class="btn-group" role="group">
+                @foreach (var profile in _profiles)
+                {
+                    <button class="btn @(profile.IsActive ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => ActivateProfileAsync(profile.Id)">
+                        @profile.Name
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
         <h5 class="card-title">Policy JSON</h5>
         <textarea class="form-control" rows="16" @bind="_policyJson"></textarea>
         <div class="mt-3">
@@ -27,10 +49,39 @@
 @code {
     private string _policyJson = string.Empty;
     private string _statusMessage = string.Empty;
+    private List<PolicyProfileDto> _profiles = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadPolicyAsync();
+        await LoadProfilesAsync();
+    }
+
+    private async Task LoadProfilesAsync()
+    {
+        try
+        {
+            _profiles = await PolicyApiService.GetProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to load profiles: {ex.Message}";
+        }
+    }
+
+    private async Task ActivateProfileAsync(Guid profileId)
+    {
+        try
+        {
+            await PolicyApiService.ActivateProfileAsync(profileId);
+            _statusMessage = "Mode switched.";
+            await LoadPolicyAsync();
+            await LoadProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Failed to switch mode: {ex.Message}";
+        }
     }
 
     private async Task LoadPolicyAsync()

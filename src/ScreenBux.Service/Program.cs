@@ -14,6 +14,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<DeviceIdentityService>();
 builder.Services.AddSingleton<PolicyService>();
 builder.Services.AddSingleton<ProcessKillerService>();
+builder.Services.AddSingleton<PowerActionService>();
 builder.Services.AddHostedService<PolicyViolationLoggerService>();
 builder.Services.AddSingleton<PolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>());

@@ -30,4 +30,27 @@ public class PolicyApiService
         var response = await _httpClient.PutAsJsonAsync("api/policy", policy);
         response.EnsureSuccessStatusCode();
     }
+
+    public async Task<List<PolicyProfileDto>> GetProfilesAsync()
+    {
+        var profiles = await _httpClient.GetFromJsonAsync<List<PolicyProfileDto>>("api/policy/profiles");
+        return profiles ?? new List<PolicyProfileDto>();
+    }
+
+    public async Task<PolicyProfileDto?> UpdateProfileAsync(Guid profileId, string name, PolicyConfiguration policy)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/policy/profiles/{profileId}", new PolicyProfileDto
+        {
+            Name = name,
+            Policy = policy
+        });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PolicyProfileDto>();
+    }
+
+    public async Task ActivateProfileAsync(Guid profileId)
+    {
+        var response = await _httpClient.PostAsync($"api/policy/profiles/{profileId}/activate", null);
+        response.EnsureSuccessStatusCode();
+    }
 }

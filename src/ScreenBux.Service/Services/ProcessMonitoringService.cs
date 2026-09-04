@@ -23,17 +23,20 @@ public class ProcessMonitoringService : BackgroundService
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
     private readonly PolicySyncService _policySync;
+    private readonly PowerActionService _powerAction;
 
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
         ProcessKillerService processKiller,
-        PolicySyncService policySync)
+        PolicySyncService policySync,
+        PowerActionService powerAction)
     {
         _logger = logger;
         _policyService = policyService;
         _processKiller = processKiller;
         _policySync = policySync;
+        _powerAction = powerAction;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -49,7 +52,10 @@ public class ProcessMonitoringService : BackgroundService
             var config = _policyService.GetConfiguration();
             if (config.EnableMonitoring)
             {
-                await EnforcePoliciesAsync(config, stoppingToken);
+                if (!EnforceAlwaysRules())
+                {
+                    await EnforcePoliciesAsync(config, stoppingToken);
+                }
             }
 
             var delaySeconds = Math.Max(1, config.CheckIntervalSeconds);
@@ -57,6 +63,48 @@ public class ProcessMonitoringService : BackgroundService
         }
 
         _logger.LogInformation("Process monitoring service stopping at: {time}", DateTimeOffset.Now);
+    }
+
+    /// <summary>
+    /// Evaluates "Always" condition rules (e.g. a "Sleep" lockout mode), which apply to the
+    /// whole session rather than a specific process. Gated on <see cref="PolicyService.HasSyncedSinceStartup"/>
+    /// so a stale cached policy.json left over from before a reboot can never trigger a
+    /// power action before the real current mode has been confirmed with the server.
+    /// Returns true if a power action was executed (short-circuiting further per-process
+    /// enforcement for this tick, since the device is about to suspend).
+    /// </summary>
+    private bool EnforceAlwaysRules()
+    {
+        var alwaysRules = _policyService.GetAlwaysRules();
+        if (alwaysRules.Count == 0)
+        {
+            return false;
+        }
+
+        if (!_policyService.HasSyncedSinceStartup)
+        {
+            _logger.LogDebug("Skipping Always-condition rules until policy has synced with the server since startup.");
+            return false;
+        }
+
+        var rule = alwaysRules.FirstOrDefault(r => r.Action is PolicyRuleAction.Sleep or PolicyRuleAction.Hibernate);
+        if (rule is null)
+        {
+            return false;
+        }
+
+        _logger.LogWarning("Policy rule {RuleName} triggered a device-wide {Action} action", rule.Name, rule.Action);
+
+        if (rule.Action == PolicyRuleAction.Hibernate)
+        {
+            _powerAction.Hibernate();
+        }
+        else
+        {
+            _powerAction.Sleep();
+        }
+
+        return true;
     }
 
     private async Task EnforcePoliciesAsync(PolicyConfiguration config, CancellationToken stoppingToken)
@@ -89,7 +137,7 @@ public class ProcessMonitoringService : BackgroundService
             {
                 if (handledProcesses.Add(processInfo.ProcessId))
                 {
-                    await CloseProcessAsync(processInfo, rule.Name);
+                    await EnforceRuleAsync(processInfo, rule);
                 }
 
                 continue;
@@ -100,6 +148,23 @@ public class ProcessMonitoringService : BackgroundService
                 await CloseProcessAsync(processInfo, "Legacy policy");
             }
         }
+    }
+
+    private async Task EnforceRuleAsync(ProcessInfo processInfo, PolicyRule rule)
+    {
+        if (rule.Action == PolicyRuleAction.KillProcessTree)
+        {
+            _logger.LogWarning(
+                "Process {ProcessName} (PID: {ProcessId}) matched rule {RuleName}, killing process tree",
+                processInfo.ProcessName, processInfo.ProcessId, rule.Name);
+
+            await _processKiller.KillProcessTreeAsync(processInfo.ProcessId, rule.Name);
+            processInfo.DetectedAt = DateTime.UtcNow;
+            await _policySync.SendProcessDetectionAsync(processInfo);
+            return;
+        }
+
+        await CloseProcessAsync(processInfo, rule.Name);
     }
 
     private async Task CloseProcessAsync(ProcessInfo processInfo, string ruleName)

@@ -79,4 +79,92 @@ public class PolicyController : ControllerBase
         _logger.LogInformation("Policy reload requested");
         return Ok(new { message = "Policy reload requested" });
     }
+
+    [HttpGet("profiles")]
+    public async Task<ActionResult<IReadOnlyList<PolicyProfileDto>>> GetProfiles(CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var profiles = await _policyStore.GetProfilesAsync(accountId, cancellationToken);
+        return Ok(profiles);
+    }
+
+    [HttpPost("profiles")]
+    public async Task<ActionResult<PolicyProfileDto>> CreateProfile([FromBody] PolicyProfileDto request, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var profile = await _policyStore.CreateProfileAsync(accountId, request.Name, request.Policy, cancellationToken);
+        return Ok(profile);
+    }
+
+    [HttpPut("profiles/{profileId}")]
+    public async Task<ActionResult<PolicyProfileDto>> UpdateProfile(Guid profileId, [FromBody] PolicyProfileDto request, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var profile = await _policyStore.UpdateProfileAsync(accountId, profileId, request.Name, request.Policy, cancellationToken);
+        if (profile is null)
+        {
+            return NotFound();
+        }
+
+        if (profile.IsActive)
+        {
+            await _hubContext.Clients.Group(accountId).SendAsync("PolicyUpdated", profile.Policy, cancellationToken);
+        }
+
+        return Ok(profile);
+    }
+
+    [HttpDelete("profiles/{profileId}")]
+    public async Task<ActionResult> DeleteProfile(Guid profileId, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var deleted = await _policyStore.DeleteProfileAsync(accountId, profileId, cancellationToken);
+        if (!deleted)
+        {
+            return BadRequest(new { message = "Profile not found or is currently active" });
+        }
+
+        return Ok(new { message = "Profile deleted" });
+    }
+
+    [HttpPost("profiles/{profileId}/activate")]
+    public async Task<ActionResult<PolicyConfiguration>> ActivateProfile(Guid profileId, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var policy = await _policyStore.SetActiveProfileAsync(accountId, profileId, cancellationToken);
+        if (policy is null)
+        {
+            return NotFound();
+        }
+
+        await _hubContext.Clients.Group(accountId).SendAsync("PolicyUpdated", policy, cancellationToken);
+        _logger.LogInformation("Profile {ProfileId} activated for account {AccountId}", profileId, accountId);
+
+        return Ok(policy);
+    }
 }

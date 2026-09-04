@@ -15,18 +15,21 @@ public class NamedPipeServerService : BackgroundService
     private readonly PolicyService _policyService;
     private readonly ProcessKillerService _processKiller;
     private readonly DevicePolicySyncService _devicePolicySync;
+    private readonly PowerActionService _powerAction;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
         ILogger<NamedPipeServerService> logger,
         PolicyService policyService,
         ProcessKillerService processKiller,
-        DevicePolicySyncService devicePolicySync)
+        DevicePolicySyncService devicePolicySync,
+        PowerActionService powerAction)
     {
         _logger = logger;
         _policyService = policyService;
         _processKiller = processKiller;
         _devicePolicySync = devicePolicySync;
+        _powerAction = powerAction;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -224,9 +227,22 @@ public class NamedPipeServerService : BackgroundService
         if (shouldBlock)
         {
             var reason = rule?.Name ?? "Application blocked by parental control policy";
+            var action = rule?.Action ?? PolicyRuleAction.CloseProcess;
 
-            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), enforcing closure",
-                message.Process.ProcessName, message.Process.ProcessId, reason);
+            _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), enforcing {Action}",
+                message.Process.ProcessName, message.Process.ProcessId, reason, action);
+
+            if (action == PolicyRuleAction.KillProcessTree)
+            {
+                var killed = await _processKiller.KillProcessTreeAsync(message.Process.ProcessId, reason);
+                return new CommandResponse
+                {
+                    Success = killed,
+                    Message = _processKiller.IsDryRun
+                        ? $"[DRY-RUN] Would kill process tree, reason: {reason}"
+                        : killed ? $"Process tree killed by Service, reason: {reason}" : "Failed to kill process tree"
+                };
+            }
 
             var closed = await _processKiller.TryCloseProcessAsync(message.Process.ProcessId, reason);
 
