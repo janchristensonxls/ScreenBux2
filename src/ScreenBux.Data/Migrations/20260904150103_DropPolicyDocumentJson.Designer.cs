@@ -12,8 +12,8 @@ using ScreenBux.Data;
 namespace ScreenBux.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260904084929_AddPolicyProfiles")]
-    partial class AddPolicyProfiles
+    [Migration("20260904150103_DropPolicyDocumentJson")]
+    partial class DropPolicyDocumentJson
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -344,10 +344,6 @@ namespace ScreenBux.Data.Migrations
                     b.Property<Guid?>("DeviceId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("PolicyJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -498,7 +494,7 @@ namespace ScreenBux.Data.Migrations
                     b.HasOne("ScreenBux.Data.Entities.PolicyProfile", "ActivePolicyProfile")
                         .WithMany()
                         .HasForeignKey("ActivePolicyProfileId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Account");
 
@@ -516,7 +512,7 @@ namespace ScreenBux.Data.Migrations
                     b.HasOne("ScreenBux.Data.Entities.ChildProfile", "ChildProfile")
                         .WithMany()
                         .HasForeignKey("ChildProfileId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Account");
 

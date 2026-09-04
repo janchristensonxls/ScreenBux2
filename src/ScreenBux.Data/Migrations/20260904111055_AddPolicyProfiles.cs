@@ -43,7 +43,7 @@ namespace ScreenBux.Data.Migrations
                         column: x => x.ChildProfileId,
                         principalTable: "ChildProfiles",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -67,7 +67,7 @@ namespace ScreenBux.Data.Migrations
                 column: "ActivePolicyProfileId",
                 principalTable: "PolicyProfiles",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                onDelete: ReferentialAction.Restrict);
         }
 
         /// <inheritdoc />

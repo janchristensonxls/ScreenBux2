@@ -14,8 +14,10 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     public AppDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseSqlServer(
-            "Server=(localdb)\\MSSQLLocalDB;Database=ScreenBux;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=False");
+
+        //optionsBuilder.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScreenBux;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=False");
+        
+        optionsBuilder.UseSqlServer("Data Source=.;Initial Catalog=ScreenBux2;Persist Security Info=False;App=ScreenBux2;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=False");
 
         return new AppDbContext(optionsBuilder.Options);
     }

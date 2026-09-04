@@ -7,15 +7,22 @@ should be revisited before this is used by real families.
 ## Policy profiles/modes (Normal/School/Open/Sleep) — status and follow-ups
 
 Implemented: a `PolicyProfile` entity/table (per account, optionally per
-`ChildProfileId`) holds named, independently-editable policy variants.
-`PolicyDocument` gained `ActivePolicyProfileId` and continues to be the single
-cached effective policy the Service/Agent runtime path reads — profiles are
-invisible to that path by design. `EfPolicyStore`/`IPolicyStore` got
-`GetProfilesAsync` (seeds four built-ins: Normal, Open, School, Sleep, on
-first access), `CreateProfileAsync`, `UpdateProfileAsync` (refreshes the cache
-if the edited profile is active), `DeleteProfileAsync` (refuses to delete the
-active profile), and `SetActiveProfileAsync` (switches + refreshes cache +
-caller broadcasts `PolicyUpdated`). New `PolicyController` endpoints:
+`ChildProfileId`) holds named, independently-editable policy variants, and is
+the **single source of truth** for policy JSON. `PolicyDocument` is a pure
+pointer (`ActivePolicyProfileId`) with no policy content of its own — it just
+records which profile is currently active for the Service/Agent runtime path;
+profiles are otherwise invisible to that path by design. `EfPolicyStore`/
+`IPolicyStore` got `GetProfilesAsync` (seeds four built-ins: Normal, Open,
+School, Sleep, on first access), `CreateProfileAsync`, `UpdateProfileAsync`,
+`DeleteProfileAsync` (refuses to delete the active profile), and
+`SetActiveProfileAsync` (repoints the active profile + caller broadcasts
+`PolicyUpdated`). The raw-JSON "Save policy" path (`PUT /api/policy`) edits
+the currently active profile directly via `GetOrCreateActiveProfileAsync`, so
+it can never desync from the profile system — this replaced an earlier design
+where `PolicyDocument` cached its own copy of the JSON, which could drift out
+of sync with the active profile (fixed via the `DropPolicyDocumentJson`
+migration, including a data migration that materializes a "Normal" profile
+from any pre-existing cached JSON). New `PolicyController` endpoints:
 `GET/POST /api/policy/profiles`, `PUT/DELETE /api/policy/profiles/{id}`,
 `POST /api/policy/profiles/{id}/activate`. `Policy.razor` got a simple mode
 button-group above the existing raw-JSON editor.

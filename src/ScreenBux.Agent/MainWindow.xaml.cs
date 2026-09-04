@@ -160,6 +160,7 @@ public partial class MainWindow : Window
     private void RefreshLinkPanel()
     {
         var linked = PolicyStorage.IsDeviceLinked();
+        //todo! Just for testing, we will always show the link panel until we have a proper UI for linked devices.
         LinkDevicePanel.Visibility = linked ? Visibility.Collapsed : Visibility.Visible;
         if (linked)
         {

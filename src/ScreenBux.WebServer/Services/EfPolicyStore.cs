@@ -8,8 +8,12 @@ using ScreenBux.Shared.Utilities;
 namespace ScreenBux.WebServer.Services;
 
 /// <summary>
-/// EF Core-backed <see cref="IPolicyStore"/>. Stores each account's policy as serialized
-/// <see cref="PolicyConfiguration"/> JSON in a <see cref="PolicyDocument"/> row.
+/// EF Core-backed <see cref="IPolicyStore"/>. Each account has a single unscoped
+/// <see cref="PolicyDocument"/> that points at the currently active <see cref="PolicyProfile"/>
+/// ("mode"). <see cref="PolicyProfile.PolicyJson"/> is the *only* place policy JSON is stored -
+/// the raw "Save policy" editor, per-profile edits, and profile activation all read/write
+/// through the single active profile row, so there is no separate cache that can drift out of
+/// sync.
 /// </summary>
 public class EfPolicyStore : IPolicyStore
 {
@@ -28,44 +32,16 @@ public class EfPolicyStore : IPolicyStore
 
     public async Task<PolicyConfiguration> GetPolicyAsync(string accountId, CancellationToken cancellationToken = default)
     {
-        var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (document is not null)
-        {
-            return Deserialize(document.PolicyJson);
-        }
-
-        // First access: seed from legacy policy.json when available so nothing is lost.
-        var seeded = LoadLegacyPolicyOrDefault();
-        await SavePolicyAsync(accountId, seeded, cancellationToken);
-        return seeded;
+        var profile = await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
+        return Deserialize(profile.PolicyJson);
     }
 
     public async Task SavePolicyAsync(string accountId, PolicyConfiguration policy, CancellationToken cancellationToken = default)
     {
-        var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
-            .FirstOrDefaultAsync(cancellationToken);
+        var profile = await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
 
-        var json = JsonSerializer.Serialize(policy, SerializerOptions);
-
-        if (document is null)
-        {
-            document = new PolicyDocument
-            {
-                AccountId = accountId,
-                PolicyJson = json,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _db.PolicyDocuments.Add(document);
-        }
-        else
-        {
-            document.PolicyJson = json;
-            document.UpdatedAt = DateTime.UtcNow;
-        }
+        profile.PolicyJson = JsonSerializer.Serialize(policy, SerializerOptions);
+        profile.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(cancellationToken);
     }
@@ -76,9 +52,16 @@ public class EfPolicyStore : IPolicyStore
             .Where(p => p.AccountId == accountId && p.DeviceId == deviceId)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (deviceDoc is not null)
+        if (deviceDoc?.ActivePolicyProfileId is Guid deviceProfileId)
         {
-            return Deserialize(deviceDoc.PolicyJson);
+            var deviceProfile = await _db.PolicyProfiles
+                .Where(p => p.AccountId == accountId && p.Id == deviceProfileId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (deviceProfile is not null)
+            {
+                return Deserialize(deviceProfile.PolicyJson);
+            }
         }
 
         return await GetPolicyAsync(accountId, cancellationToken);
@@ -142,11 +125,6 @@ public class EfPolicyStore : IPolicyStore
             .FirstOrDefaultAsync(cancellationToken);
 
         var isActive = document?.ActivePolicyProfileId == profileId;
-        if (isActive && document is not null)
-        {
-            document.PolicyJson = profile.PolicyJson;
-            document.UpdatedAt = DateTime.UtcNow;
-        }
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -204,17 +182,71 @@ public class EfPolicyStore : IPolicyStore
         }
 
         document.ActivePolicyProfileId = profile.Id;
-        document.PolicyJson = profile.PolicyJson;
         document.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Deserialize(document.PolicyJson);
+        return Deserialize(profile.PolicyJson);
+    }
+
+    /// <summary>
+    /// Resolves the <see cref="PolicyProfile"/> that is currently active for the account's
+    /// unscoped <see cref="PolicyDocument"/>, creating a default "Normal" profile and its
+    /// pointing document if the account has never had one (first access, or an account that
+    /// predates the profile feature). This is the single entry point every read/write path
+    /// goes through, so there is exactly one profile row being edited at any time.
+    /// </summary>
+    private async Task<PolicyProfile> GetOrCreateActiveProfileAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var document = await _db.PolicyDocuments
+            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (document?.ActivePolicyProfileId is Guid activeProfileId)
+        {
+            var activeProfile = await _db.PolicyProfiles
+                .Where(p => p.AccountId == accountId && p.Id == activeProfileId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (activeProfile is not null)
+            {
+                return activeProfile;
+            }
+        }
+
+        // No document, or it points at a profile that no longer exists: seed defaults (or
+        // reuse existing profiles if any), then activate the first "Normal" one.
+        var profiles = await _db.PolicyProfiles
+            .Where(p => p.AccountId == accountId)
+            .ToListAsync(cancellationToken);
+
+        if (profiles.Count == 0)
+        {
+            profiles = await SeedDefaultProfilesAsync(accountId, cancellationToken);
+        }
+
+        var defaultProfile = profiles.FirstOrDefault(p => p.Name == "Normal") ?? profiles[0];
+
+        if (document is null)
+        {
+            document = new PolicyDocument
+            {
+                AccountId = accountId
+            };
+            _db.PolicyDocuments.Add(document);
+        }
+
+        document.ActivePolicyProfileId = defaultProfile.Id;
+        document.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return defaultProfile;
     }
 
     private async Task<List<PolicyProfile>> SeedDefaultProfilesAsync(string accountId, CancellationToken cancellationToken)
     {
-        var normal = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
+        var normal = LoadLegacyPolicyOrDefault();
         var open = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
         var school = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
         var sleep = new PolicyConfiguration
@@ -257,7 +289,6 @@ public class EfPolicyStore : IPolicyStore
         Policy = Deserialize(profile.PolicyJson),
         UpdatedAt = profile.UpdatedAt
     };
-
 
     private PolicyConfiguration LoadLegacyPolicyOrDefault()
     {

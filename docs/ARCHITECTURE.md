@@ -16,7 +16,7 @@ Solution file: `ScreenBux2.sln`.
 | Project | Type | Responsibility |
 |---|---|---|
 | `src/ScreenBux.Shared` | classlib | DTOs/models (`PolicyConfiguration`, `PolicyRule`, `AppPolicy`, `ProcessInfo`, auth/device DTOs), named-pipe message contracts, `PolicyStorage` path helper. Referenced by every other project. |
-| `src/ScreenBux.Data` | classlib | EF Core `AppDbContext` (SQL Server) + entities: `Account` (ASP.NET Core Identity user), `ChildProfile`, `Device`, `DeviceLinkCode`, `PolicyDocument`. Owns migrations. Referenced by `ScreenBux.WebServer` only. |
+| `src/ScreenBux.Data` | classlib | EF Core `AppDbContext` (SQL Server) + entities: `Account` (ASP.NET Core Identity user), `ChildProfile`, `Device`, `DeviceLinkCode`, `PolicyDocument`, `PolicyProfile`. Owns migrations. Referenced by `ScreenBux.WebServer` only. |
 | `src/ScreenBux.Service` | Worker / Windows Service | The enforcement engine running on the controlled PC. Scans processes, matches policy, closes/kills matching processes. Hosts a Named Pipe server for the Agent. Generates/persists a local device identity, redeems a link code to bind to a parent account, and syncs policy from the server (both pull via REST and push via SignalR). |
 | `src/ScreenBux.Agent` | WPF (`net8.0-windows`) | Desktop app running in the user's interactive session. Detects the foreground window (P/Invoke on `user32.dll`) and reports it to the Service over Named Pipes. |
 | `src/ScreenBux.WebServer` | ASP.NET Core Web API + SignalR | REST controllers (`AccountController`, `DevicesController`, `PolicyController`) + `MonitoringHub` at `/monitoringHub`. Backed by EF Core/SQL Server via `ScreenBux.Data`. Issues JWTs for both parent accounts and devices. |
@@ -96,33 +96,35 @@ Solution file: `ScreenBux2.sln`.
 - `DeviceLinkCode` — a short (8-char, ambiguity-free alphabet), 15-minute-lived
   code a parent generates and a device redeems once. One-time use
   (`RedeemedAt`/`RedeemedByDeviceId`).
-- `PolicyDocument` — a cached **effective** policy scoped to `AccountId` +
-  optionally `ChildProfileId`/`DeviceId`, storing serialized
-  `PolicyConfiguration` JSON. `EfPolicyStore` currently only reads/writes the
+- `PolicyDocument` — a pure **pointer**, scoped to `AccountId` + optionally
+  `ChildProfileId`/`DeviceId`, that records which `PolicyProfile` is currently
+  "active" for that scope via `ActivePolicyProfileId`. It stores **no policy
+  JSON of its own** — `EfPolicyStore` currently only reads/writes the
   **account-level, unscoped** document (`ChildProfileId == null && DeviceId ==
   null`) from `GetPolicyAsync`/`SavePolicyAsync`; `GetDevicePolicyAsync` looks
   for a device-specific document first (falls back — see file for the rest of
   the method) but nothing in the UI currently creates per-device or per-child
-  policy documents. `PolicyDocument.ActivePolicyProfileId` optionally points at
-  the `PolicyProfile` currently "active" (see Policy profiles/modes below);
-  when null, `PolicyJson` stands on its own (e.g. legacy raw-JSON edits that
-  never went through a profile).
+  policy documents.
 - `PolicyProfile` — a **named, reusable policy variant** ("mode") a parent
   authors once and can switch between, e.g. "Normal", "School", "Open",
   "Sleep". Scoped to `AccountId` (optionally `ChildProfileId`), stores its own
-  serialized `PolicyConfiguration` JSON. Selecting a profile as active
-  (`POST /api/policy/profiles/{id}/activate`) copies its JSON into the
-  account's `PolicyDocument.PolicyJson` and broadcasts `PolicyUpdated`, so the
-  Service/Agent runtime path is completely unaware profiles exist — it only
-  ever reads the cached effective policy, same as before this feature existed.
-  Editing the currently-active profile also refreshes the cache. New accounts
-  get four built-in profiles seeded on first access to `GET
-  /api/policy/profiles` (`EfPolicyStore.SeedDefaultProfilesAsync`): "Normal",
-  "Open" (a normal, permissive default — not a special/dangerous rule set),
-  "School", and "Sleep" (a single `Always`-condition rule with
-  `Action = Sleep`, the built-in strict-lockout mode). There is currently no
-  scheduling — mode switches are manual only (parent clicks a mode button in
-  `Policy.razor`).
+  serialized `PolicyConfiguration` JSON. This is the **single source of
+  truth** for policy content — `PolicyDocument` never holds a copy of it.
+  Selecting a profile as active (`POST /api/policy/profiles/{id}/activate`)
+  simply repoints the account's `PolicyDocument.ActivePolicyProfileId` at it
+  and broadcasts `PolicyUpdated` with the profile's deserialized content, so
+  the Service/Agent runtime path is completely unaware profiles exist — it
+  only ever receives/caches the effective `PolicyConfiguration`, same as
+  before this feature existed. The raw "Save policy" JSON editor
+  (`PUT /api/policy`) edits the content of whichever profile is currently
+  active (`EfPolicyStore.GetOrCreateActiveProfileAsync`), so it can never
+  drift from the profile system. New accounts get four built-in profiles
+  seeded on first access to `GET /api/policy/profiles` or `GET /api/policy`
+  (`EfPolicyStore.SeedDefaultProfilesAsync`): "Normal", "Open" (a normal,
+  permissive default — not a special/dangerous rule set), "School", and
+  "Sleep" (a single `Always`-condition rule with `Action = Sleep`, the
+  built-in strict-lockout mode). There is currently no scheduling — mode
+  switches are manual only (parent clicks a mode button in `Policy.razor`).
 
 ### Policy matching — two parallel rule systems (legacy debt)
 `PolicyConfiguration` still holds **two** independent rule systems:
@@ -160,13 +162,13 @@ anywhere in the codebase.
   `PolicyStorage.GetDefaultPolicyPath()` (`%CommonApplicationData%\ScreenBux\policy.json`)
   via `PolicyService`. This is the file the enforcement loop actually consults.
 - **`ScreenBux.WebServer`** persists policy in **SQL Server** via
-  `EfPolicyStore`/`PolicyDocument` (EF Core, `ScreenBux.Data`). On first
-  read for an account with no `PolicyDocument`, `EfPolicyStore` seeds itself
-  from the **local legacy `policy.json` on the server's own machine**
-  (`LoadLegacyPolicyOrDefault`) — this only makes sense if the WebServer and a
-  Service happen to be co-located; it is not a real per-account seed. This is
-  a remnant of the pre-accounts single-machine design and should not be
-  trusted for a real deployment.
+  `EfPolicyStore`/`PolicyDocument`/`PolicyProfile` (EF Core, `ScreenBux.Data`).
+  On first read for an account with no active profile, `EfPolicyStore` seeds a
+  default "Normal" `PolicyProfile` from the **local legacy `policy.json` on
+  the server's own machine** (`LoadLegacyPolicyOrDefault`) — this only makes
+  sense if the WebServer and a Service happen to be co-located; it is not a
+  real per-account seed. This is a remnant of the pre-accounts single-machine
+  design and should not be trusted for a real deployment.
 - The Service never talks to SQL Server directly; it only ever sees policy via
   REST (`DevicePolicySyncService`) or SignalR (`PolicySyncService`), then
   writes to its own local `policy.json`.
@@ -216,11 +218,16 @@ files are empty — no CI to satisfy yet.
 - **Two rule systems, one wins silently** — see "Policy matching" above.
   Adding features to `AppPolicy`/time-window enforcement will have no visible
   effect unless `Rules` is also empty for that policy.
-- **Two policy stores** — the WebServer's SQL-backed `PolicyDocument` and the
-  Service's local `policy.json` are bridged only through
-  REST pull / SignalR push. If you change the `PolicyConfiguration` shape,
-  update both serialization paths and consider migration/back-compat for
-  already-linked devices' cached `policy.json`.
+- **Two policy stores** — the WebServer's SQL-backed `PolicyProfile`/`PolicyDocument`
+  and the Service's local `policy.json` are bridged only through REST pull /
+  SignalR push. If you change the `PolicyConfiguration` shape, update both
+  serialization paths and consider migration/back-compat for already-linked
+  devices' cached `policy.json`. (The previous in-process gap — where the raw
+  `PUT api/policy` editor wrote a separate `PolicyDocument.PolicyJson` cache
+  that could drift from the active `PolicyProfile` — has been fixed:
+  `PolicyDocument` is now a pure pointer with no JSON of its own; all reads and
+  writes resolve through the single active `PolicyProfile` row via
+  `EfPolicyStore.GetOrCreateActiveProfileAsync`.)
 - **Legacy-seed heuristic in `EfPolicyStore`** reads a local file on the
   WebServer's own machine as a fallback default — likely wrong/unused in any
   real (non-co-located) deployment; don't assume it does per-account seeding.

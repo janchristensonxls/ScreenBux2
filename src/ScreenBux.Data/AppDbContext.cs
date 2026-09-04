@@ -67,7 +67,7 @@ public class AppDbContext : IdentityDbContext<Account>
             entity.HasOne(p => p.ActivePolicyProfile)
                 .WithMany()
                 .HasForeignKey(p => p.ActivePolicyProfileId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PolicyProfile>(entity =>
@@ -80,7 +80,7 @@ public class AppDbContext : IdentityDbContext<Account>
             entity.HasOne(p => p.ChildProfile)
                 .WithMany()
                 .HasForeignKey(p => p.ChildProfileId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
