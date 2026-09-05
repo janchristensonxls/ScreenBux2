@@ -22,6 +22,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{878D0619-8
 		docs\ARCHITECTURE.md = docs\ARCHITECTURE.md
 		.github\copilot-instructions.md = .github\copilot-instructions.md
 		docs\DEVICE-LINKING.md = docs\DEVICE-LINKING.md
+		docs\flows.md = docs\flows.md
 		INSTALLATION.md = INSTALLATION.md
 		QUICKSTART.md = QUICKSTART.md
 		README.md = README.md
