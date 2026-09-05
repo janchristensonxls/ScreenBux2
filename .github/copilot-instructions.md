@@ -8,7 +8,7 @@ and watch activity in real time. Target framework: **.NET 8**. Solution: `Screen
 > [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Keep that file in sync when you change
 > data flow, add a project, or close/discover a gap — this file stays short on purpose.
 
-## The six projects (and who talks to whom)
+## The seven projects (and who talks to whom)
 
 | Project | Type | Responsibility |
 |---|---|---|
@@ -18,6 +18,7 @@ and watch activity in real time. Target framework: **.NET 8**. Solution: `Screen
 | `src/ScreenBux.Agent` | WPF (`net8.0-windows`) | Desktop app in the user session. Detects the foreground window and reports it to the Service over Named Pipes. |
 | `src/ScreenBux.WebServer` | ASP.NET Core Web API + SignalR (`net8.0`) | REST `AccountController` (register/login, JWT), `DevicesController` (link codes, device tokens, per-device policy), `PolicyController` (account policy CRUD) + `MonitoringHub` at `/monitoringHub`. Backed by SQL Server via `ScreenBux.Data`. |
 | `src/ScreenBux.WebClient` | Blazor Server (`net8.0`) | Parent control panel. JWT-based auth, REST + SignalR client. |
+| `src/ScreenBux.Updater` | Worker / Windows Service (`net8.0`) | Always-elevated auto-updater for the Service and Agent: polls `GET api/updates/latest`, downloads packages, stops/replaces/restarts the Service, and closes/replaces/relaunches the Agent in the active session. |
 
 ### Data flow (current reality)
 1. **Agent → Service** (Named Pipe `ScreenBuxServicePipe`): `ProcessReportMessage` in, `CloseProcessCommand`/`CommandResponse` back.

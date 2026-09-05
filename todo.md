@@ -4,6 +4,34 @@ Running list of known design gaps and improvement ideas. Not all of these are
 bugs — some are deliberate simplifications made during early development that
 should be revisited before this is used by real families.
 
+## Auto-update (Service + Agent) — status and follow-ups
+
+Implemented: a new `ScreenBux.Updater` Windows Service (always elevated) polls
+`GET api/updates/latest` on the WebServer (`UpdatesController`, anonymous,
+backed by `IUpdateManifestStore`/`StaticUpdateManifestStore`, a config-driven
+placeholder reading the `Updates` section of `appsettings.json`) and, when a
+newer version is published, downloads the update zip and applies it:
+`ServiceUpdater` stops/replaces/restarts the "ScreenBux Parental Control
+Service" Windows Service; `AgentUpdater` closes the running Agent (graceful
+`CloseMainWindow` with a `Kill` fallback), replaces its files, and relaunches
+it in the active interactive session via `SessionLauncher` (P/Invoke
+`WTSGetActiveConsoleSessionId`/`WTSQueryUserToken`/`DuplicateTokenEx`/
+`CreateProcessAsUser`). See `docs/flows.md` section 5 and
+`docs/ARCHITECTURE.md`'s "Auto-update" section for the full flow.
+
+Known follow-ups / not done in v1:
+- `StaticUpdateManifestStore` is a placeholder — there's no real release
+  feed/CI pipeline that publishes update packages or a database-backed
+  manifest yet.
+- No install-time provisioning of `Service:InstallDirectory`,
+  `Agent:InstallDirectory`, `Agent:ExecutablePath`, or the `*:InstalledVersionFile`
+  settings in `ScreenBux.Updater/appsettings.json` — currently manual/placeholder paths.
+- No package integrity verification (the `Sha256` field on `ComponentUpdateInfo`
+  is defined but never checked before applying an update).
+- No rollback if a component fails to start after an update is applied.
+- `ScreenBux.Updater` itself has no auto-update mechanism (it would need to be
+  updated out-of-band, e.g. via the same installer that provisions it).
+
 ## Device time grants ("bonus time") — status and follow-ups
 
 Implemented: a `DeviceGrant` entity/table (unique per `DeviceId`) holds a

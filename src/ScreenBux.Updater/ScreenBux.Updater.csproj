@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<Nullable>enable</Nullable>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<UserSecretsId>dotnet-ScreenBux.Updater-6f1b9c3e-3a4d-4e6a-9a3a-3f2f7a5b1c9d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+	<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.9" />
+	<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
+	<PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<ProjectReference Include="..\ScreenBux.Shared\ScreenBux.Shared.csproj" />
+  </ItemGroup>
+</Project>

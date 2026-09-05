@@ -21,6 +21,7 @@ Solution file: `ScreenBux2.sln`.
 | `src/ScreenBux.Agent` | WPF (`net8.0-windows`) | Desktop app running in the user's interactive session. Detects the foreground window (P/Invoke on `user32.dll`) and reports it to the Service over Named Pipes. |
 | `src/ScreenBux.WebServer` | ASP.NET Core Web API + SignalR | REST controllers (`AccountController`, `DevicesController`, `PolicyController`) + `MonitoringHub` at `/monitoringHub`. Backed by EF Core/SQL Server via `ScreenBux.Data`. Issues JWTs for both parent accounts and devices. |
 | `src/ScreenBux.WebClient` | Blazor Server | Parent control panel. Talks to WebServer over REST (via typed API services) and SignalR, using a JWT stored/managed client-side. |
+| `src/ScreenBux.Updater` | Worker / Windows Service | Always-elevated auto-updater for the Service and Agent (see "Auto-update" section below). Polls the WebServer's update manifest, downloads packages, and drives file replacement/relaunch for both components since neither can safely update itself while running. |
 
 ## Data flow (current reality)
 
@@ -288,6 +289,47 @@ files are empty — no CI to satisfy yet.
   clients, but check whether the Service actually invokes an
   equivalent server-to-clients broadcast for live "process detected" events
   before assuming the WebClient monitoring page is fully wired end-to-end.
+
+## Auto-update
+
+A dedicated `src/ScreenBux.Updater` Windows Service (installed to always run
+elevated, e.g. LocalSystem) owns updating **both** the Service and the Agent,
+rather than either component updating itself:
+
+- **Manifest**: `UpdatesController` (`GET api/updates/latest`, anonymous) on
+  the WebServer returns an `UpdateManifestDto` (`ScreenBux.Shared/Models/Updates`)
+  with a `ComponentUpdateInfo` (version, download URL, optional SHA-256) for
+  each of `Service` and `Agent`. Backed today by `StaticUpdateManifestStore`,
+  a placeholder `IUpdateManifestStore` implementation reading the `Updates`
+  section of `appsettings.json` — swap in a release-feed/CI/database-backed
+  store later without touching the controller or DTOs.
+- **Polling**: `UpdateCheckService` (a `BackgroundService` in
+  `ScreenBux.Updater`) polls the manifest on `CheckIntervalMinutes`, compares
+  against a locally-tracked installed version file per component (there is no
+  version registry on the server side — only this machine knows what's
+  actually on disk), downloads the update zip when newer, and applies it.
+- **Applying an update**:
+  - `ServiceUpdater` stops the "ScreenBux Parental Control Service" Windows
+    Service (`System.ServiceProcess.ServiceController`), extracts the zip over
+    the install directory, and restarts it.
+  - `AgentUpdater` finds any running `ScreenBux.Agent` process, asks it to
+    close gracefully (`CloseMainWindow` with a timeout, falling back to
+    `Kill`), extracts the zip over the install directory, then relaunches the
+    Agent via `SessionLauncher`.
+  - `SessionLauncher` P/Invokes `WTSGetActiveConsoleSessionId` /
+    `WTSQueryUserToken` / `DuplicateTokenEx` / `CreateEnvironmentBlock` /
+    `CreateProcessAsUser` to start the Agent in the active interactive
+    session from the Updater's Session-0 service process — this is why the
+    Updater must run elevated. If there is no interactive session yet (or the
+    launch otherwise fails), it logs and returns `false`; the caller treats
+    that as "try again later" rather than fatal.
+- **Why a separate service**: neither the Service nor the Agent can safely
+  stop/replace/restart its own running executable; a third, always-on,
+  elevated process is required to do that from the outside.
+- **Not yet implemented**: an install-time step that provisions
+  `Service:InstallDirectory`/`Agent:InstallDirectory`/`Agent:ExecutablePath`/
+  the `*:InstalledVersionFile` settings and the real (non-`Static`) manifest
+  store/CI pipeline that publishes update packages.
 
 ## Suggested next steps for contributors / agents
 

@@ -50,6 +50,7 @@ builder.Services.AddSingleton(tokenValidationParameters);
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IPolicyStore, EfPolicyStore>();
 builder.Services.AddScoped<IGrantStore, EfGrantStore>();
+builder.Services.AddSingleton<IUpdateManifestStore, StaticUpdateManifestStore>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

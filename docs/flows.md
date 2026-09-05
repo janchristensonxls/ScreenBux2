@@ -258,9 +258,47 @@ the WebServer, the same way it keeps enforcing stale cached policy.
 
 ---
 
+## 5. Auto-update (Service + Agent, driven by a third elevated process)
+
+```
+ScreenBux.Updater (Windows Service, always elevated, e.g. LocalSystem)
+	UpdateCheckService.ExecuteAsync()                          src/ScreenBux.Updater/Services/UpdateCheckService.cs
+		loop every CheckIntervalMinutes:
+			GET api/updates/latest                             src/ScreenBux.WebServer/Controllers/UpdatesController.cs (anonymous)
+				IUpdateManifestStore.GetLatestManifest()        src/ScreenBux.WebServer/Services/StaticUpdateManifestStore.cs (config-backed placeholder)
+			compare manifest.Service/Agent.Version against a local *.version file
+			  (there is no server-side "installed version" registry - only this
+			  machine knows what's actually on disk)
+			if newer -> download zip -> apply:
+
+Applying a Service update:
+	ServiceUpdater.ApplyUpdate(zip, installDir)                src/ScreenBux.Updater/Services/ServiceUpdater.cs
+		ServiceController.Stop() "ScreenBux Parental Control Service"
+		ZipFile.ExtractToDirectory(zip, installDir, overwrite: true)
+		ServiceController.Start()
+
+Applying an Agent update:
+	AgentUpdater.ApplyUpdate(zip, installDir, exePath)          src/ScreenBux.Updater/Services/AgentUpdater.cs
+		Process.GetProcessesByName("ScreenBux.Agent")
+			CloseMainWindow() + WaitForExit(timeout), else Kill()
+		ZipFile.ExtractToDirectory(zip, installDir, overwrite: true)
+		SessionLauncher.TryStartInActiveSession(exePath)         src/ScreenBux.Updater/Services/SessionLauncher.cs
+			WTSGetActiveConsoleSessionId -> WTSQueryUserToken -> DuplicateTokenEx
+			-> CreateEnvironmentBlock -> CreateProcessAsUser
+			(no interactive session yet, or any P/Invoke failure -> logs + returns
+			 false; caller just tries again on the next check interval)
+```
+
+Why a third process instead of self-update: neither the Service nor the Agent can safely
+stop/replace/restart its own running executable, so the always-on, always-elevated Updater
+does it from the outside. Config keys (`Service:InstallDirectory`, `Agent:InstallDirectory`,
+`Agent:ExecutablePath`, `*:InstalledVersionFile`) live in `ScreenBux.Updater/appsettings.json`
+and are placeholders until a real install step provisions them per machine.
+
+---
 
 
-These were discovered while writing this document and are the most likely explanations for
+These were discovered while writing this document
 "switching modes / saving a policy doesn't affect behavior as expected":
 
 1. **`WindowTitleRegex` rules only ever match via the Agent's foreground report, never during
