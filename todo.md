@@ -4,6 +4,36 @@ Running list of known design gaps and improvement ideas. Not all of these are
 bugs — some are deliberate simplifications made during early development that
 should be revisited before this is used by real families.
 
+## Device time grants ("bonus time") — status and follow-ups
+
+Implemented: a `DeviceGrant` entity/table (unique per `DeviceId`) holds a
+single `ExpiresAtUtc` timestamp; while in the future, ALL enforcement on that
+device is paused (both rule systems and Always/power-action rules), regardless
+of the currently active policy profile/mode. WebServer (`IGrantStore`/
+`EfGrantStore`) is authoritative; `DevicesController` exposes
+`GET/PUT api/devices/{id}/grant` and `POST api/devices/{id}/grant/add`, and
+broadcasts `GrantUpdated` over SignalR the same way policy changes broadcast
+`PolicyUpdated`. The Service caches the expiry locally (`GrantService`,
+`grant.json`) via the same two sync paths as policy (REST poll in
+`DevicePolicySyncService`, SignalR push in `PolicySyncService`), so an active
+grant keeps being honored even while disconnected from the server.
+`ProcessMonitoringService` and `NamedPipeServerService` both check
+`GrantService.IsGrantActive` before evaluating any rule. The Agent renders a
+live countdown via a new `GrantStatusRequest`/`GrantStatusResponse` pipe
+message pair; the WebClient's `LinkDevice.razor` shows a live per-device
+countdown (polled every 5s) with quick add/clear controls, backed by
+`GrantApiService`.
+
+Known follow-ups / not done in v1:
+- No cap on grant duration or on how far `AddMinutesAsync` can push the expiry.
+- No audit trail of who granted/cleared time or when.
+- Grants are not scoped per `ChildProfileId`, only per `Device` — a child with
+  multiple devices needs bonus time granted separately on each.
+- The WebClient countdown polls REST every 5s per device rather than relying
+  solely on the `GrantUpdated` SignalR push, since that only fires on writes,
+  not on the passage of time; a dedicated lightweight timer endpoint could
+  reduce this if it becomes a load concern.
+
 ## Policy profiles/modes (Normal/School/Open/Sleep) — status and follow-ups
 
 Implemented: a `PolicyProfile` entity/table (per account, optionally per

@@ -28,6 +28,8 @@
                     Width="120" Height="30" Margin="0,0,10,0" Click="StopButton_Click" IsEnabled="False"/>
             <TextBlock x:Name="ServiceStatusText" VerticalAlignment="Center" 
                        Margin="10,0,0,0" Text="Service: Unknown" FontWeight="Bold"/>
+            <TextBlock x:Name="GrantStatusText" VerticalAlignment="Center" 
+                       Margin="15,0,0,0" Text="" FontWeight="Bold" Foreground="DarkOrange"/>
         </StackPanel>
 
         <!-- Link Device Panel -->

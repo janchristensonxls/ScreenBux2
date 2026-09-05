@@ -13,6 +13,7 @@ builder.Services.AddWindowsService(options =>
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<DeviceIdentityService>();
 builder.Services.AddSingleton<PolicyService>();
+builder.Services.AddSingleton<GrantService>();
 builder.Services.AddSingleton<ProcessKillerService>();
 builder.Services.AddSingleton<PowerActionService>();
 builder.Services.AddHostedService<PolicyViolationLoggerService>();

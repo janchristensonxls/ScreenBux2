@@ -49,6 +49,7 @@ var tokenValidationParameters = new TokenValidationParameters
 builder.Services.AddSingleton(tokenValidationParameters);
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IPolicyStore, EfPolicyStore>();
+builder.Services.AddScoped<IGrantStore, EfGrantStore>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

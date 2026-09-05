@@ -25,6 +25,8 @@ public class AppDbContext : IdentityDbContext<Account>
 
     public DbSet<PolicyProfile> PolicyProfiles => Set<PolicyProfile>();
 
+    public DbSet<DeviceGrant> DeviceGrants => Set<DeviceGrant>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -81,6 +83,16 @@ public class AppDbContext : IdentityDbContext<Account>
                 .WithMany()
                 .HasForeignKey(p => p.ChildProfileId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<DeviceGrant>(entity =>
+        {
+            entity.HasIndex(g => g.DeviceId).IsUnique();
+
+            entity.HasOne(g => g.Device)
+                .WithOne()
+                .HasForeignKey<DeviceGrant>(g => g.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

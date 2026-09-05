@@ -67,6 +67,30 @@ public partial class MainWindow : Window
     private async void ServiceStatusTimer_Tick(object? sender, EventArgs e)
     {
         await CheckServiceStatusAsync();
+        await CheckGrantStatusAsync();
+    }
+
+    private async Task CheckGrantStatusAsync()
+    {
+        try
+        {
+            var response = await _pipeClient.SendMessageAsync<ScreenBux.Shared.Messages.GrantStatusResponse>(
+                new ScreenBux.Shared.Messages.GrantStatusRequest());
+
+            if (response?.ExpiresAtUtc is DateTime expiresAtUtc && expiresAtUtc > DateTime.UtcNow)
+            {
+                var remaining = expiresAtUtc - DateTime.UtcNow;
+                GrantStatusText.Text = $"Bonus time active: {remaining:hh\\:mm\\:ss} remaining";
+            }
+            else
+            {
+                GrantStatusText.Text = string.Empty;
+            }
+        }
+        catch
+        {
+            // Best-effort; leave the previous text on transient failure.
+        }
     }
 
     private async Task CheckServiceStatusAsync()

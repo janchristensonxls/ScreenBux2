@@ -21,6 +21,7 @@ public class ProcessMonitoringService : BackgroundService
 {
     private readonly ILogger<ProcessMonitoringService> _logger;
     private readonly PolicyService _policyService;
+    private readonly GrantService _grantService;
     private readonly ProcessKillerService _processKiller;
     private readonly PolicySyncService _policySync;
     private readonly PowerActionService _powerAction;
@@ -28,12 +29,14 @@ public class ProcessMonitoringService : BackgroundService
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
+        GrantService grantService,
         ProcessKillerService processKiller,
         PolicySyncService policySync,
         PowerActionService powerAction)
     {
         _logger = logger;
         _policyService = policyService;
+        _grantService = grantService;
         _processKiller = processKiller;
         _policySync = policySync;
         _powerAction = powerAction;
@@ -44,6 +47,7 @@ public class ProcessMonitoringService : BackgroundService
         _logger.LogInformation("Process monitoring service started at: {time}", DateTimeOffset.Now);
 
         await _policyService.LoadPolicyAsync();
+        await _grantService.LoadGrantAsync();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -52,7 +56,11 @@ public class ProcessMonitoringService : BackgroundService
             var config = _policyService.GetConfiguration();
             if (config.EnableMonitoring)
             {
-                if (!EnforceAlwaysRules())
+                if (_grantService.IsGrantActive)
+                {
+                    _logger.LogDebug("Skipping enforcement; a time grant is active until {ExpiresAtUtc}.", _grantService.ExpiresAtUtc);
+                }
+                else if (!EnforceAlwaysRules())
                 {
                     await EnforcePoliciesAsync(config, stoppingToken);
                 }

@@ -1,6 +1,8 @@
 @page "/link-device"
 @attribute [Authorize]
+@implements IDisposable
 @inject DevicesApiService DevicesApi
+@inject GrantApiService GrantApi
 
 <PageTitle>Link a device</PageTitle>
 
@@ -38,7 +40,7 @@ else
 {
     <table class="table">
         <thead>
-            <tr><th>Name</th><th>Linked</th><th>Last seen</th></tr>
+            <tr><th>Name</th><th>Linked</th><th>Last seen</th><th>Bonus time</th></tr>
         </thead>
         <tbody>
             @foreach (var device in _devices)
@@ -47,6 +49,20 @@ else
                     <td>@device.Name</td>
                     <td>@device.LinkedAt.ToLocalTime().ToString("g")</td>
                     <td>@(device.LastSeenAt?.ToLocalTime().ToString("g") ?? "—")</td>
+                    <td>
+                        @{
+                            var remaining = GetRemaining(device.Id);
+                        }
+                        @if (remaining is TimeSpan ts)
+                        {
+                            <span class="badge bg-warning text-dark me-2">@ts.ToString(@"hh\:mm\:ss")</span>
+                        }
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" @onclick="() => AddMinutesAsync(device.Id, 15)">+15m</button>
+                            <button class="btn btn-outline-secondary" @onclick="() => AddMinutesAsync(device.Id, 30)">+30m</button>
+                            <button class="btn btn-outline-danger" @onclick="() => ClearGrantAsync(device.Id)">Clear</button>
+                        </div>
+                    </td>
                 </tr>
             }
         </tbody>
@@ -56,10 +72,82 @@ else
 @code {
     private ScreenBux.Shared.Models.Devices.LinkCodeResponse? _code;
     private List<ScreenBux.Shared.Models.Devices.DeviceDto>? _devices;
+    private readonly Dictionary<Guid, DateTime?> _grantExpiries = new();
+    private System.Threading.Timer? _countdownTimer;
     private bool _busy;
     private string? _error;
 
-    protected override async Task OnInitializedAsync() => await RefreshDevicesAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshDevicesAsync();
+        await RefreshGrantsAsync();
+
+        _countdownTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshGrantsAsync();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private TimeSpan? GetRemaining(Guid deviceId)
+    {
+        if (_grantExpiries.TryGetValue(deviceId, out var expiresAtUtc) && expiresAtUtc is DateTime expires && expires > DateTime.UtcNow)
+        {
+            return expires - DateTime.UtcNow;
+        }
+
+        return null;
+    }
+
+    private async Task RefreshGrantsAsync()
+    {
+        if (_devices is null)
+        {
+            return;
+        }
+
+        foreach (var device in _devices)
+        {
+            try
+            {
+                var grant = await GrantApi.GetGrantAsync(device.Id);
+                _grantExpiries[device.Id] = grant?.ExpiresAtUtc;
+            }
+            catch
+            {
+                // Best-effort; keep previous value on transient failure.
+            }
+        }
+    }
+
+    private async Task AddMinutesAsync(Guid deviceId, int minutes)
+    {
+        try
+        {
+            var grant = await GrantApi.AddMinutesAsync(deviceId, minutes);
+            _grantExpiries[deviceId] = grant?.ExpiresAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not adjust bonus time: {ex.Message}";
+        }
+    }
+
+    private async Task ClearGrantAsync(Guid deviceId)
+    {
+        try
+        {
+            var grant = await GrantApi.ClearGrantAsync(deviceId);
+            _grantExpiries[deviceId] = grant?.ExpiresAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not clear bonus time: {ex.Message}";
+        }
+    }
 
     private async Task GenerateAsync()
     {
@@ -85,10 +173,16 @@ else
         try
         {
             _devices = (await DevicesApi.ListDevicesAsync()).ToList();
+            await RefreshGrantsAsync();
         }
         catch (Exception ex)
         {
             _error = $"Could not load devices: {ex.Message}";
         }
+    }
+
+    public void Dispose()
+    {
+        _countdownTimer?.Dispose();
     }
 }

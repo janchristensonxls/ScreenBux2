@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ScreenBux.Data;
 using ScreenBux.Data.Entities;
 using ScreenBux.Shared.Models;
 using ScreenBux.Shared.Models.Devices;
+using ScreenBux.WebServer.Hubs;
 using ScreenBux.WebServer.Services;
 
 namespace ScreenBux.WebServer.Controllers;
@@ -22,17 +24,23 @@ public class DevicesController : ControllerBase
     private readonly AppDbContext _db;
     private readonly JwtTokenService _tokenService;
     private readonly IPolicyStore _policyStore;
+    private readonly IGrantStore _grantStore;
+    private readonly IHubContext<MonitoringHub> _hubContext;
 
     public DevicesController(
         ILogger<DevicesController> logger,
         AppDbContext db,
         JwtTokenService tokenService,
-        IPolicyStore policyStore)
+        IPolicyStore policyStore,
+        IGrantStore grantStore,
+        IHubContext<MonitoringHub> hubContext)
     {
         _logger = logger;
         _db = db;
         _tokenService = tokenService;
         _policyStore = policyStore;
+        _grantStore = grantStore;
+        _hubContext = hubContext;
     }
 
     /// <summary>Parent generates a short link code to enter on a device.</summary>
@@ -178,6 +186,82 @@ public class DevicesController : ControllerBase
 
         var policy = await _policyStore.GetDevicePolicyAsync(id, accountId, cancellationToken);
         return Ok(policy);
+    }
+
+    /// <summary>Device (or parent) fetches the current grant status for a specific device.</summary>
+    [HttpGet("{id:guid}/grant")]
+    [Authorize]
+    public async Task<ActionResult<GrantDto>> GetDeviceGrant(Guid id, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        // A device token may only read its own grant.
+        var callerDeviceId = User.GetDeviceId();
+        if (callerDeviceId is not null && callerDeviceId != id)
+        {
+            return Forbid();
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == id && d.AccountId == accountId, cancellationToken);
+        if (!deviceExists)
+        {
+            return NotFound();
+        }
+
+        var grant = await _grantStore.GetGrantAsync(id, accountId, cancellationToken);
+        return Ok(grant);
+    }
+
+    /// <summary>Parent sets (or clears, with a null/past value) the absolute grant expiry for a device.</summary>
+    [HttpPut("{id:guid}/grant")]
+    [Authorize]
+    public async Task<ActionResult<GrantDto>> SetDeviceGrant(Guid id, [FromBody] SetGrantRequest request, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == id && d.AccountId == accountId, cancellationToken);
+        if (!deviceExists)
+        {
+            return NotFound();
+        }
+
+        var grant = await _grantStore.SetGrantAsync(id, accountId, request.ExpiresAtUtc, cancellationToken);
+        await _hubContext.Clients.Group(accountId).SendAsync("GrantUpdated", grant, cancellationToken);
+
+        _logger.LogInformation("Device {DeviceId} grant set to expire at {ExpiresAtUtc}", id, request.ExpiresAtUtc);
+        return Ok(grant);
+    }
+
+    /// <summary>Parent adds (or subtracts, with a negative value) minutes to a device's grant.</summary>
+    [HttpPost("{id:guid}/grant/add")]
+    [Authorize]
+    public async Task<ActionResult<GrantDto>> AddDeviceGrantMinutes(Guid id, [FromBody] AddGrantMinutesRequest request, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == id && d.AccountId == accountId, cancellationToken);
+        if (!deviceExists)
+        {
+            return NotFound();
+        }
+
+        var grant = await _grantStore.AddMinutesAsync(id, accountId, request.Minutes, cancellationToken);
+        await _hubContext.Clients.Group(accountId).SendAsync("GrantUpdated", grant, cancellationToken);
+
+        _logger.LogInformation("Device {DeviceId} grant adjusted by {Minutes} minutes", id, request.Minutes);
+        return Ok(grant);
     }
 
     private static string GenerateCode()

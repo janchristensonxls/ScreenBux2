@@ -22,6 +22,7 @@ public class DevicePolicySyncService : BackgroundService
     private readonly DeviceIdentityService _deviceIdentity;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly PolicyService _policyService;
+    private readonly GrantService _grantService;
     private readonly string _policyFilePath;
 
     public DevicePolicySyncService(
@@ -29,13 +30,15 @@ public class DevicePolicySyncService : BackgroundService
         IConfiguration configuration,
         DeviceIdentityService deviceIdentity,
         IHttpClientFactory httpClientFactory,
-        PolicyService policyService)
+        PolicyService policyService,
+        GrantService grantService)
     {
         _logger = logger;
         _configuration = configuration;
         _deviceIdentity = deviceIdentity;
         _httpClientFactory = httpClientFactory;
         _policyService = policyService;
+        _grantService = grantService;
         _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
     }
 
@@ -56,6 +59,7 @@ public class DevicePolicySyncService : BackgroundService
             {
                 await EnsureLinkedAsync(serverBaseUrl, stoppingToken);
                 await FetchPolicyAsync(serverBaseUrl, stoppingToken);
+                await FetchGrantAsync(serverBaseUrl, stoppingToken);
             }
             catch (Exception ex)
             {
@@ -173,6 +177,33 @@ public class DevicePolicySyncService : BackgroundService
         await File.WriteAllTextAsync(_policyFilePath, JsonSerializer.Serialize(policy, WriteOptions), cancellationToken);
         _policyService.MarkSyncedSinceStartup();
         _logger.LogInformation("Updated local policy cache from server for device {DeviceId}.", state.DeviceId);
+    }
+
+    private async Task FetchGrantAsync(string serverBaseUrl, CancellationToken cancellationToken)
+    {
+        var state = _deviceIdentity.GetOrCreate();
+        if (!state.IsLinked)
+        {
+            return;
+        }
+
+        var client = CreateClient(serverBaseUrl);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
+
+        using var response = await client.GetAsync($"api/devices/{state.DeviceId}/grant", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Grant fetch failed ({Status}).", (int)response.StatusCode);
+            return;
+        }
+
+        var grant = await response.Content.ReadFromJsonAsync<GrantDto>(cancellationToken);
+        if (grant is null)
+        {
+            return;
+        }
+
+        await _grantService.UpdateGrantAsync(grant.ExpiresAtUtc);
     }
 
     private HttpClient CreateClient(string serverBaseUrl)

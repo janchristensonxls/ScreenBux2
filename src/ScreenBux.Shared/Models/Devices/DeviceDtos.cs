@@ -31,3 +31,15 @@ public class DeviceDto
     public DateTime LinkedAt { get; set; }
     public DateTime? LastSeenAt { get; set; }
 }
+
+/// <summary>Request to set (or clear, with a null/past value) a device's grant expiry.</summary>
+public class SetGrantRequest
+{
+    public DateTime? ExpiresAtUtc { get; set; }
+}
+
+/// <summary>Request to add (or subtract, with a negative value) minutes to a device's grant.</summary>
+public class AddGrantMinutesRequest
+{
+    public int Minutes { get; set; }
+}

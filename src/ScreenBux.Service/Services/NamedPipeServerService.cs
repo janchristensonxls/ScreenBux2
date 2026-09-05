@@ -13,6 +13,7 @@ public class NamedPipeServerService : BackgroundService
 {
     private readonly ILogger<NamedPipeServerService> _logger;
     private readonly PolicyService _policyService;
+    private readonly GrantService _grantService;
     private readonly ProcessKillerService _processKiller;
     private readonly DevicePolicySyncService _devicePolicySync;
     private readonly PowerActionService _powerAction;
@@ -21,12 +22,14 @@ public class NamedPipeServerService : BackgroundService
     public NamedPipeServerService(
         ILogger<NamedPipeServerService> logger,
         PolicyService policyService,
+        GrantService grantService,
         ProcessKillerService processKiller,
         DevicePolicySyncService devicePolicySync,
         PowerActionService powerAction)
     {
         _logger = logger;
         _policyService = policyService;
+        _grantService = grantService;
         _processKiller = processKiller;
         _devicePolicySync = devicePolicySync;
         _powerAction = powerAction;
@@ -38,6 +41,7 @@ public class NamedPipeServerService : BackgroundService
 
         // Load policy at startup
         await _policyService.LoadPolicyAsync();
+        await _grantService.LoadGrantAsync();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -171,6 +175,9 @@ public class NamedPipeServerService : BackgroundService
                     var linkRequest = JsonSerializer.Deserialize<LinkDeviceRequest>(messageJson);
                     return await HandleLinkDeviceAsync(linkRequest);
 
+                case "GrantStatusRequest":
+                    return new GrantStatusResponse { ExpiresAtUtc = _grantService.ExpiresAtUtc };
+
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
                     return new CommandResponse
@@ -220,6 +227,15 @@ public class NamedPipeServerService : BackgroundService
 
         _logger.LogInformation("Process reported: {ProcessName} (PID: {ProcessId}, Title: {WindowTitle})",
             message.Process.ProcessName, message.Process.ProcessId, message.Process.WindowTitle);
+
+        if (_grantService.IsGrantActive)
+        {
+            return new CommandResponse
+            {
+                Success = true,
+                Message = "Time grant active; enforcement paused"
+            };
+        }
 
         var rule = _policyService.GetMatchingRule(message.Process, isForegroundWindow: true);
         var shouldBlock = rule != null || _policyService.ShouldBlockProcess(message.Process, isForegroundWindow: true);

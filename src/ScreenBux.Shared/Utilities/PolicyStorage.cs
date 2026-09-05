@@ -24,6 +24,17 @@ public static class PolicyStorage
     }
 
     /// <summary>
+    /// Returns the path to the locally cached grant state file (grant.json) stored next to
+    /// policy.json.
+    /// </summary>
+    public static string GetDefaultGrantPath()
+    {
+        var policyPath = GetDefaultPolicyPath();
+        var directory = Path.GetDirectoryName(policyPath) ?? AppContext.BaseDirectory;
+        return Path.Combine(directory, "grant.json");
+    }
+
+    /// <summary>
     /// Returns true if this device has already been linked to a parent account,
     /// by checking whether device.json exists and contains a non-empty DeviceToken.
     /// </summary>

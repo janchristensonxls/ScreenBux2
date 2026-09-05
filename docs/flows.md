@@ -219,7 +219,46 @@ against `rule.WindowTitleRegex`).
 
 ---
 
-## Known Issues / Logical Flaws Found While Tracing These Flows
+## 4. Device time grants ("bonus time" that pauses all enforcement)
+
+```
+Parent (WebClient LinkDevice.razor)
+	AddMinutesAsync / ClearGrantAsync / SetGrantAsync            src/ScreenBux.WebClient/Services/GrantApiService.cs
+	-> PUT/POST api/devices/{id}/grant[/add]                     src/ScreenBux.WebServer/Controllers/DevicesController.cs
+		EfGrantStore.SetGrantAsync / AddMinutesAsync           src/ScreenBux.WebServer/Services/EfGrantStore.cs
+			writes DeviceGrant.ExpiresAtUtc (1 row per device, unique on DeviceId)
+		-> hubContext.Clients.Group(accountId).SendAsync("GrantUpdated", grant)
+
+Service side (kept in sync exactly like policy, two parallel paths):
+	DevicePolicySyncService polls GET api/devices/{id}/grant every cycle       src/ScreenBux.Service/Services/DevicePolicySyncService.cs
+	PolicySyncService listens for the SignalR "GrantUpdated" push             src/ScreenBux.Service/Services/PolicySyncService.cs
+	Both call GrantService.UpdateGrantAsync(expiresAtUtc), which persists to
+	local grant.json next to policy.json                                     src/ScreenBux.Service/Services/GrantService.cs
+
+Enforcement gate (checked BEFORE any rule evaluation, so a grant pauses
+everything - regular Rules, legacy AppPolicy, and Always/power-action rules alike):
+	ProcessMonitoringService.ExecuteAsync: if (_grantService.IsGrantActive) skip tick's enforcement
+	NamedPipeServerService.HandleProcessReportAsync: if (_grantService.IsGrantActive) return success without blocking
+
+Agent countdown:
+	MainWindow polls GrantStatusRequest/GrantStatusResponse over the named pipe
+	every 5s (piggybacked on the existing service-status timer) and renders
+	"Bonus time active: HH:MM:SS remaining".
+
+WebClient countdown:
+	LinkDevice.razor polls GrantApiService.GetGrantAsync per device every 5s
+	via a System.Threading.Timer, independent of the SignalR GrantUpdated event
+	(which only fires on a write, not a tick).
+```
+
+`IsGrantActive` is always the stateless comparison `ExpiresAtUtc > DateTime.UtcNow`
+evaluated from whatever the Service's local `grant.json` currently says - the
+Service keeps honoring an active grant even while completely disconnected from
+the WebServer, the same way it keeps enforcing stale cached policy.
+
+---
+
+
 
 These were discovered while writing this document and are the most likely explanations for
 "switching modes / saving a policy doesn't affect behavior as expected":

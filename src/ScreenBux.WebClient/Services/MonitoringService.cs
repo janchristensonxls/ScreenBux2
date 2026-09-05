@@ -11,6 +11,7 @@ public class MonitoringService : IAsyncDisposable
 
     public event EventHandler<ProcessInfo>? ProcessDetected;
     public event EventHandler<PolicyConfiguration>? PolicyUpdated;
+    public event EventHandler<GrantDto>? GrantUpdated;
     public event EventHandler<string>? StatusReceived;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
@@ -46,6 +47,12 @@ public class MonitoringService : IAsyncDisposable
         {
             _logger.LogInformation("Policy updated");
             PolicyUpdated?.Invoke(this, config);
+        });
+
+        _hubConnection.On<GrantDto>("GrantUpdated", (grant) =>
+        {
+            _logger.LogInformation("Grant updated for device {DeviceId}", grant.DeviceId);
+            GrantUpdated?.Invoke(this, grant);
         });
 
         _hubConnection.On<object>("ReceiveStatus", (status) =>

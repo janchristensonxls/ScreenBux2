@@ -80,3 +80,24 @@ public class LinkDeviceResponse : Contracts.INamedPipeMessage
     public string Message { get; set; } = string.Empty;
     public Guid? DeviceId { get; set; }
 }
+
+/// <summary>
+/// Sent from Agent to Service to ask whether a time grant is currently pausing enforcement,
+/// and if so when it expires, so the Agent can render a live countdown.
+/// </summary>
+public class GrantStatusRequest : Contracts.INamedPipeMessage
+{
+    public string MessageType => "GrantStatusRequest";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Response with the Service's locally cached grant status.
+/// </summary>
+public class GrantStatusResponse : Contracts.INamedPipeMessage
+{
+    public string MessageType => "GrantStatusResponse";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public DateTime? ExpiresAtUtc { get; set; }
+}
+

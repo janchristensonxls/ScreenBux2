@@ -157,8 +157,44 @@ flood of `Win32Exception`s for protected/system processes. Net effect: the
 devices are declared but never enforced** — there is no usage accumulation
 anywhere in the codebase.
 
+### Device time grants (temporary enforcement pause)
+
+Independent of the mode/profile system above, a parent can grant a device a
+temporary "bonus time" window that pauses **all** enforcement (regular
+`Rules`, the legacy `AppPolicy` path, and `Always`-condition power actions
+alike) until an absolute expiry, regardless of whichever policy profile is
+currently active. This is modeled as a single `DeviceGrant` row per device
+(`ScreenBux.Data.Entities.DeviceGrant`, unique on `DeviceId`) holding only an
+`ExpiresAtUtc` timestamp — "is a grant active" is always the stateless check
+`ExpiresAtUtc > DateTime.UtcNow`; there is no separate flag or decrementing
+counter to keep in sync.
+
+- **WebServer** (`IGrantStore`/`EfGrantStore`) is the sole authoritative
+  writer. `DevicesController` exposes `GET/PUT api/devices/{id}/grant` and
+  `POST api/devices/{id}/grant/add` (relative minute adjustment, clamped to
+  never go negative), and broadcasts a `GrantUpdated` SignalR event to the
+  account's `MonitoringHub` group on every write — the same pattern
+  `PolicyController` uses for `PolicyUpdated`.
+- **Service** (`GrantService`) caches the expiry locally in `grant.json`
+  (next to `policy.json`), kept in sync the same two ways policy is:
+  `DevicePolicySyncService` polls `GET .../grant` each cycle, and
+  `PolicySyncService` listens for the `GrantUpdated` SignalR push.
+  `ProcessMonitoringService.ExecuteAsync` checks `GrantService.IsGrantActive`
+  before running `EnforceAlwaysRules`/`EnforcePoliciesAsync`, and
+  `NamedPipeServerService.HandleProcessReportAsync` does the same before
+  acting on an Agent-reported foreground process — so the grant keeps being
+  honored purely from the local cache even while disconnected from the
+  server, exactly like the existing policy cache.
+- **Agent** can ask the Service for the live status via a
+  `GrantStatusRequest`/`GrantStatusResponse` named-pipe message pair, and
+  renders a countdown in `MainWindow`.
+- **WebClient** (`GrantApiService`) reads/writes grants over REST and also
+  listens for the `GrantUpdated` SignalR event; `LinkDevice.razor` shows a
+  live per-device countdown (refreshed every 5 seconds) with quick
+  add/clear controls.
+
 ### Persistence split (important — two different stores for policy)
-- **`ScreenBux.Service`** still reads/writes policy as a **flat JSON file** at
+
   `PolicyStorage.GetDefaultPolicyPath()` (`%CommonApplicationData%\ScreenBux\policy.json`)
   via `PolicyService`. This is the file the enforcement loop actually consults.
 - **`ScreenBux.WebServer`** persists policy in **SQL Server** via

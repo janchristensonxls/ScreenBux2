@@ -12,6 +12,7 @@ public class PolicySyncService : BackgroundService
     private readonly ILogger<PolicySyncService> _logger;
     private readonly IConfiguration _configuration;
     private readonly PolicyService _policyService;
+    private readonly GrantService _grantService;
     private readonly DeviceIdentityService _deviceIdentity;
     private HubConnection? _hubConnection;
 
@@ -19,11 +20,13 @@ public class PolicySyncService : BackgroundService
         ILogger<PolicySyncService> logger,
         IConfiguration configuration,
         PolicyService policyService,
+        GrantService grantService,
         DeviceIdentityService deviceIdentity)
     {
         _logger = logger;
         _configuration = configuration;
         _policyService = policyService;
+        _grantService = grantService;
         _deviceIdentity = deviceIdentity;
     }
 
@@ -48,6 +51,12 @@ public class PolicySyncService : BackgroundService
             _logger.LogInformation("Policy update received from SignalR");
             await _policyService.UpdatePolicyAsync(policy);
             _policyService.MarkSyncedSinceStartup();
+        });
+
+        _hubConnection.On<GrantDto>("GrantUpdated", async grant =>
+        {
+            _logger.LogInformation("Grant update received from SignalR; expires at {ExpiresAtUtc}", grant.ExpiresAtUtc);
+            await _grantService.UpdateGrantAsync(grant.ExpiresAtUtc);
         });
 
         _hubConnection.Reconnecting += error =>
