@@ -47,6 +47,32 @@ Known follow-ups / not done in v1:
 - `ScreenBux.Updater` itself has no auto-update mechanism (it would need to be
   updated out-of-band, e.g. via the same installer that provisions it).
 
+## Agent watchdog (window-title enforcement resilience) — status and follow-ups
+
+Implemented: `AgentWatchdogService` in `ScreenBux.Service` periodically checks
+for a running `ScreenBux.Agent` process and relaunches it into the active
+console session (via the shared `SessionLauncher`, moved to
+`ScreenBux.Shared.Services` so both `ScreenBux.Service` and
+`ScreenBux.Updater` can use it) if it isn't running, closing the gap where a
+user could simply end the Agent process to blind window-title enforcement
+while leaving process-name enforcement (`ProcessMonitoringService`) intact.
+
+Known limitations / not addressed:
+- Detection is presence-based (`Process.GetProcessesByName`), not a
+  heartbeat/liveness check — an Agent that's running but hung/deadlocked and
+  no longer reporting would not currently be detected or relaunched.
+- No tamper resistance: a user could rename/delete `ScreenBux.Agent.exe`, or
+  run as a local admin and kill the Service itself, to defeat this. True
+  tamper-resistance (e.g. a protected/system-only install location, ACL
+  hardening) is out of scope for now.
+- Relaunch interval (`AgentWatchdog:CheckIntervalSeconds`, default 15s) leaves
+  a window during which title-based enforcement is blind; not tuned/load
+  tested for very low values.
+- Depends on `Agent:ExecutablePath` being correctly configured in the
+  Service's `appsettings.json` — this is not currently synchronized
+  automatically with the Agent's actual install location as configured for
+  `ScreenBux.Updater`.
+
 ## Device time grants ("bonus time") — status and follow-ups
 
 Implemented: a `DeviceGrant` entity/table (unique per `DeviceId`) holds a

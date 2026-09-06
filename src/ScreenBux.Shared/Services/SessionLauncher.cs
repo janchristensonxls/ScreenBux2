@@ -1,17 +1,20 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
 
-namespace ScreenBux.Updater.Services;
+namespace ScreenBux.Shared.Services;
 
 /// <summary>
 /// Launches a process into the currently active interactive user session from a Session-0
-/// service process. Used to relaunch the Agent after it has been updated on disk, since the
-/// Updater service itself runs in Session 0 and has no desktop of its own.
+/// service process. Originally built for ScreenBux.Updater (to relaunch the Agent after it
+/// has been updated on disk, since the Updater service runs in Session 0 and has no desktop
+/// of its own); also used by ScreenBux.Service's AgentWatchdogService to relaunch the Agent
+/// if it is not running/reporting while a user is logged in.
 ///
 /// Handles the edge cases that make this "just some technicalities": no interactive session
 /// logged in yet (returns false, caller should retry later), and using the *active console*
-/// session rather than an arbitrary disconnected/RDP session so the Agent lands in front of
-/// whoever is actually sitting at the machine.
+/// session rather than an arbitrary disconnected/RDP session so the launched process lands in
+/// front of whoever is actually sitting at the machine.
 /// </summary>
 public class SessionLauncher
 {

@@ -1,5 +1,6 @@
 using ScreenBux.Service;
 using ScreenBux.Service.Services;
+using ScreenBux.Shared.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -23,6 +24,8 @@ builder.Services.AddSingleton<DevicePolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DevicePolicySyncService>());
 builder.Services.AddHostedService<NamedPipeServerService>();
 builder.Services.AddHostedService<ProcessMonitoringService>();
+builder.Services.AddSingleton<SessionLauncher>();
+builder.Services.AddHostedService<AgentWatchdogService>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

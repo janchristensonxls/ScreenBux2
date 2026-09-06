@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using ScreenBux.Shared.Services;
 
 namespace ScreenBux.Updater.Services;
 

@@ -1,3 +1,4 @@
+using ScreenBux.Shared.Services;
 using ScreenBux.Updater.Services;
 
 // Invoked directly (not via the Windows Service Control Manager) by installers/uninstallers

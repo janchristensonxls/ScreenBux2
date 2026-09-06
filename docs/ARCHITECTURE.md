@@ -17,7 +17,7 @@ Solution file: `ScreenBux2.sln`.
 |---|---|---|
 | `src/ScreenBux.Shared` | classlib | DTOs/models (`PolicyConfiguration`, `PolicyRule`, `AppPolicy`, `ProcessInfo`, auth/device DTOs), named-pipe message contracts, `PolicyStorage` path helper. Referenced by every other project. |
 | `src/ScreenBux.Data` | classlib | EF Core `AppDbContext` (SQL Server) + entities: `Account` (ASP.NET Core Identity user), `ChildProfile`, `Device`, `DeviceLinkCode`, `PolicyDocument`, `PolicyProfile`. Owns migrations. Referenced by `ScreenBux.WebServer` only. |
-| `src/ScreenBux.Service` | Worker / Windows Service | The enforcement engine running on the controlled PC. Scans processes, matches policy, closes/kills matching processes. Hosts a Named Pipe server for the Agent. Generates/persists a local device identity, redeems a link code to bind to a parent account, and syncs policy from the server (both pull via REST and push via SignalR). |
+| `src/ScreenBux.Service` | Worker / Windows Service | The enforcement engine running on the controlled PC. Scans processes, matches policy, closes/kills matching processes. Hosts a Named Pipe server for the Agent. Generates/persists a local device identity, redeems a link code to bind to a parent account, and syncs policy from the server (both pull via REST and push via SignalR). Also runs `AgentWatchdogService`, which relaunches the Agent into the active console session if it isn't running (see "Agent watchdog" note under Data flow item 1). |
 | `src/ScreenBux.Agent` | WPF (`net8.0-windows`) | Desktop app running in the user's interactive session. Detects the foreground window (P/Invoke on `user32.dll`) and reports it to the Service over Named Pipes. |
 | `src/ScreenBux.WebServer` | ASP.NET Core Web API + SignalR | REST controllers (`AccountController`, `DevicesController`, `PolicyController`) + `MonitoringHub` at `/monitoringHub`. Backed by EF Core/SQL Server via `ScreenBux.Data`. Issues JWTs for both parent accounts and devices. |
 | `src/ScreenBux.WebClient` | Blazor Server | Parent control panel. Talks to WebServer over REST (via typed API services) and SignalR, using a JWT stored/managed client-side. |
@@ -44,6 +44,17 @@ Solution file: `ScreenBux2.sln`.
    attempt fails (e.g. access denied on a protected/admin-launched process)
    does the Service reply with `CloseProcessCommand`, asking the Agent to try
    a best-effort graceful `CloseMainWindow()` in its own session as a fallback.
+   **Agent watchdog**: because window-title enforcement depends entirely on the
+   Agent being alive and reporting, a user simply ending the Agent process
+   (Task Manager, `taskkill`, etc.) would otherwise blind that enforcement path
+   silently. `AgentWatchdogService` (in `ScreenBux.Service`) periodically checks
+   for a running `ScreenBux.Agent` process and, if none is found, relaunches
+   `Agent:ExecutablePath` into the active console session via the shared
+   `SessionLauncher` (`ScreenBux.Shared.Services`, the same
+   WTSQueryUserToken/CreateProcessAsUser technique `ScreenBux.Updater` uses to
+   relaunch the Agent after an update) — a no-op if there's no interactive
+   session yet. This is a mitigation, not a hard guarantee (e.g. deleting the
+   Agent's executable would defeat it).
 2. **Service enforcement loop** (`ProcessMonitoringService`, a `BackgroundService`):
    every `CheckIntervalSeconds`, enumerates `Process.GetProcesses()` and matches
    against policy via `PolicyService` using `isForegroundWindow: false` — i.e.
