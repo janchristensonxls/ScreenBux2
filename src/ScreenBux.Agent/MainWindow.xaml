@@ -6,7 +6,9 @@
         xmlns:local="clr-namespace:ScreenBux.Agent"
         mc:Ignorable="d"
         Title="ScreenBux Agent" Height="580" Width="700"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        WindowState="Minimized" ShowInTaskbar="False"
+        StateChanged="MainWindow_StateChanged">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

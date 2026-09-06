@@ -12,6 +12,8 @@ using System.Windows.Threading;
 using ScreenBux.Agent.Services;
 using ScreenBux.Shared.Models;
 using ScreenBux.Shared.Utilities;
+using Drawing = System.Drawing;
+using Forms = System.Windows.Forms;
 
 namespace ScreenBux.Agent;
 
@@ -24,6 +26,8 @@ public partial class MainWindow : Window
     private readonly NamedPipeClient _pipeClient;
     private readonly DispatcherTimer _serviceStatusTimer;
     private bool _isCheckingService;
+    private Forms.NotifyIcon? _notifyIcon;
+    private bool _isExiting;
 
     public MainWindow()
     {
@@ -39,8 +43,69 @@ public partial class MainWindow : Window
         _monitoringService.StatusChanged += OnStatusChanged;
         _monitoringService.ProcessDetected += OnProcessDetected;
 
+        InitializeNotifyIcon();
+
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
+        Closing += MainWindow_Closing;
+    }
+
+    /// <summary>
+    /// Sets up the system tray ("notification area") icon and its context menu.
+    /// </summary>
+    private void InitializeNotifyIcon()
+    {
+        var icon = Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location)
+                   ?? Drawing.SystemIcons.Application;
+
+        var contextMenu = new Forms.ContextMenuStrip();
+        var showItem = new Forms.ToolStripMenuItem("Show", null, (_, _) => ShowMainWindow());
+        var exitItem = new Forms.ToolStripMenuItem("Exit", null, (_, _) => ExitApplication());
+        contextMenu.Items.Add(showItem);
+        contextMenu.Items.Add(new Forms.ToolStripSeparator());
+        contextMenu.Items.Add(exitItem);
+
+        _notifyIcon = new Forms.NotifyIcon
+        {
+            Icon = icon,
+            Text = "ScreenBux Agent",
+            Visible = true,
+            ContextMenuStrip = contextMenu
+        };
+        _notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
+    }
+
+    private void ShowMainWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        ShowInTaskbar = true;
+        Activate();
+    }
+
+    private void ExitApplication()
+    {
+        _isExiting = true;
+        Close();
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            Hide();
+            ShowInTaskbar = false;
+        }
+    }
+
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_isExiting)
+        {
+            // Minimize to the tray instead of exiting when the user closes the window.
+            e.Cancel = true;
+            WindowState = WindowState.Minimized;
+        }
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -62,6 +127,13 @@ public partial class MainWindow : Window
     {
         _serviceStatusTimer.Stop();
         _monitoringService.Stop();
+
+        if (_notifyIcon is not null)
+        {
+            _notifyIcon.Visible = false;
+            _notifyIcon.Dispose();
+            _notifyIcon = null;
+        }
     }
 
     private async void ServiceStatusTimer_Tick(object? sender, EventArgs e)
@@ -105,7 +177,7 @@ public partial class MainWindow : Window
         {
             var isAvailable = await _pipeClient.IsServiceAvailableAsync();
             ServiceStatusText.Text = isAvailable ? "Service: Connected" : "Service: Disconnected";
-            ServiceStatusText.Foreground = isAvailable ? Brushes.Green : Brushes.Red;
+            ServiceStatusText.Foreground = isAvailable ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Red;
 
             if (!isAvailable)
             {
