@@ -63,43 +63,87 @@ public class UpdateCheckService : BackgroundService
             return;
         }
 
-        await TryApplyComponentUpdateAsync(
-            componentName: "Service",
-            update: manifest.Service,
-            installedVersionPath: _configuration["Service:InstalledVersionFile"],
-            installDirectory: _configuration["Service:InstallDirectory"],
-            apply: async downloadedZipPath =>
-            {
-                var installDirectory = _configuration["Service:InstallDirectory"];
-                var executablePath = _configuration["Service:ExecutablePath"];
-                if (string.IsNullOrEmpty(installDirectory) || string.IsNullOrEmpty(executablePath))
+        // If the Agent needs updating, the Service (and the AgentWatchdogService it hosts) must be
+        // stopped *before* any Agent files are touched - otherwise the watchdog could race the update
+        // and relaunch a half-replaced Agent, or hold its executable locked. The Service update path
+        // already stops/starts the Service around itself, so we only need to add this extra stop/start
+        // around the Agent update specifically.
+        var agentNeedsUpdate = ComponentNeedsUpdate(manifest.Agent, _configuration["Agent:InstalledVersionFile"]);
+        var serviceWasStoppedForAgentUpdate = false;
+
+        if (agentNeedsUpdate)
+        {
+            serviceWasStoppedForAgentUpdate = await Task.Run(() => _serviceUpdater.StopServiceIfRunning(), stoppingToken);
+        }
+
+        try
+        {
+            await TryApplyComponentUpdateAsync(
+                componentName: "Service",
+                update: manifest.Service,
+                installedVersionPath: _configuration["Service:InstalledVersionFile"],
+                installDirectory: _configuration["Service:InstallDirectory"],
+                apply: async downloadedZipPath =>
                 {
-                    _logger.LogWarning("Service:InstallDirectory/Service:ExecutablePath are not configured; skipping Service update/install.");
-                    return false;
-                }
+                    var installDirectory = _configuration["Service:InstallDirectory"];
+                    var executablePath = _configuration["Service:ExecutablePath"];
+                    if (string.IsNullOrEmpty(installDirectory) || string.IsNullOrEmpty(executablePath))
+                    {
+                        _logger.LogWarning("Service:InstallDirectory/Service:ExecutablePath are not configured; skipping Service update/install.");
+                        return false;
+                    }
 
-                return await Task.Run(() => _serviceUpdater.ApplyUpdate(downloadedZipPath, installDirectory, executablePath));
-            },
-            stoppingToken);
+                    return await Task.Run(() => _serviceUpdater.ApplyUpdate(downloadedZipPath, installDirectory, executablePath));
+                },
+                stoppingToken);
 
-        await TryApplyComponentUpdateAsync(
-            componentName: "Agent",
-            update: manifest.Agent,
-            installedVersionPath: _configuration["Agent:InstalledVersionFile"],
-            installDirectory: _configuration["Agent:InstallDirectory"],
-            apply: async downloadedZipPath =>
-            {
-                var installDirectory = _configuration["Agent:InstallDirectory"];
-                var executablePath = _configuration["Agent:ExecutablePath"];
-                if (string.IsNullOrEmpty(installDirectory) || string.IsNullOrEmpty(executablePath))
+            await TryApplyComponentUpdateAsync(
+                componentName: "Agent",
+                update: manifest.Agent,
+                installedVersionPath: _configuration["Agent:InstalledVersionFile"],
+                installDirectory: _configuration["Agent:InstallDirectory"],
+                apply: async downloadedZipPath =>
                 {
-                    _logger.LogWarning("Agent:InstallDirectory/Agent:ExecutablePath are not configured; skipping Agent update.");
-                    return false;
-                }
+                    var installDirectory = _configuration["Agent:InstallDirectory"];
+                    var executablePath = _configuration["Agent:ExecutablePath"];
+                    if (string.IsNullOrEmpty(installDirectory) || string.IsNullOrEmpty(executablePath))
+                    {
+                        _logger.LogWarning("Agent:InstallDirectory/Agent:ExecutablePath are not configured; skipping Agent update.");
+                        return false;
+                    }
 
-                return await Task.Run(() => _agentUpdater.ApplyUpdate(downloadedZipPath, installDirectory, executablePath));
-            },
-            stoppingToken);
+                    return await Task.Run(() => _agentUpdater.ApplyUpdate(downloadedZipPath, installDirectory, executablePath));
+                },
+                stoppingToken);
+        }
+        finally
+        {
+            if (serviceWasStoppedForAgentUpdate)
+            {
+                await Task.Run(() => _serviceUpdater.StartService(), CancellationToken.None);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compares the manifest-reported version for a component against the locally recorded
+    /// installed version, without downloading anything, so callers can decide whether to quiesce
+    /// the Service before Agent file work begins.
+    /// </summary>
+    private bool ComponentNeedsUpdate(ComponentUpdateInfo update, string? installedVersionPath)
+    {
+        if (string.IsNullOrWhiteSpace(update.DownloadUrl))
+        {
+            return false;
+        }
+
+        if (!System.Version.TryParse(update.Version, out var latestVersion))
+        {
+            return false;
+        }
+
+        var installedVersion = ReadInstalledVersion(installedVersionPath);
+        return installedVersion is null || installedVersion < latestVersion;
     }
 
     private async Task TryApplyComponentUpdateAsync(

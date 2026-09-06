@@ -40,6 +40,72 @@ public class ServiceUpdater
     }
 
     /// <summary>
+    /// Stops the "ScreenBux Parental Control Service" if it is installed and currently running,
+    /// and waits for it to fully reach the Stopped state. Used by <see cref="UpdateCheckService"/>
+    /// to quiesce the Service - and, critically, the <c>AgentWatchdogService</c> hosted inside it -
+    /// before any Agent update touches the Agent's files, so the watchdog cannot race the update
+    /// by relaunching a half-replaced Agent. Returns true if the service was installed and running
+    /// (and therefore was actually stopped by this call); returns false if it was not installed or
+    /// was already stopped, in which case the caller should not attempt to restart it afterward.
+    /// </summary>
+    public bool StopServiceIfRunning()
+    {
+        if (!IsServiceInstalled())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var controller = new ServiceController(ServiceName);
+            controller.Refresh();
+            if (controller.Status == ServiceControllerStatus.Stopped)
+            {
+                return false;
+            }
+
+            _logger.LogInformation("Stopping {ServiceName} before Agent update.", ServiceName);
+            controller.Stop();
+            controller.WaitForStatus(ServiceControllerStatus.Stopped, ServiceControlTimeout);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to stop {ServiceName} before Agent update.", ServiceName);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Starts the "ScreenBux Parental Control Service" if it is installed and currently stopped.
+    /// Used to resume the Service (and its Agent watchdog) after <see cref="StopServiceIfRunning"/>
+    /// quiesced it for an Agent update.
+    /// </summary>
+    public void StartService()
+    {
+        if (!IsServiceInstalled())
+        {
+            return;
+        }
+
+        try
+        {
+            using var controller = new ServiceController(ServiceName);
+            controller.Refresh();
+            if (controller.Status != ServiceControllerStatus.Running)
+            {
+                _logger.LogInformation("Starting {ServiceName} after Agent update.", ServiceName);
+                controller.Start();
+                controller.WaitForStatus(ServiceControllerStatus.Running, ServiceControlTimeout);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restart {ServiceName} after Agent update.", ServiceName);
+        }
+    }
+
+    /// <summary>
     /// Stops and unregisters the "ScreenBux Parental Control Service" if it is currently
     /// installed, and deletes <paramref name="installDirectory"/>. Used when uninstalling
     /// <c>ScreenBux.Updater</c> itself, since the Updater is what installed this service in the
