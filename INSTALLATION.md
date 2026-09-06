@@ -74,7 +74,35 @@ cd src/ScreenBux.Agent
 dotnet run
 ```
 
-### 4. Install the Web Server
+### 4. Install the Updater
+
+`ScreenBux.Updater` is an always-elevated Windows Service that installs/updates the Service and
+Agent on this machine (they can't safely replace their own running executables). Two ways to
+install it - see [`installer/README.md`](installer/README.md) for full details:
+
+#### Option A: Quick start (PowerShell)
+
+```powershell
+dotnet publish src\ScreenBux.Updater -c Release -o .\publish\Updater
+.\installer\Install-Updater.ps1 -PublishedOutputPath .\publish\Updater -ServerBaseUrl https://screenbux-api.azurewebsites.net
+```
+
+#### Option B: MSI (WiX)
+
+```powershell
+dotnet publish src\ScreenBux.Updater -c Release -o installer\ScreenBux.Updater.Installer\PublishedOutput
+dotnet build installer\ScreenBux.Updater.Installer -c Release
+msiexec /i installer\ScreenBux.Updater.Installer\bin\x64\Release\ScreenBux.Updater.Installer.msi SERVERBASEURL=https://screenbux-api.azurewebsites.net
+```
+
+> **Uninstall note**: because the Updater - not any package manager - installs the Service and
+> Agent, removing the Updater alone would normally orphan them (left registered/running with no
+> supported way to remove them). Both tools above guard against this: pass
+> `-RemoveManagedComponents` to the PowerShell script, or simply uninstall the MSI (its uninstall
+> automatically cleans up the managed Service and Agent first, unless this is a version upgrade).
+> See the Uninstallation section below.
+
+### 5. Install the Web Server
 
 The Web Server can be hosted using IIS, Kestrel, or run as a standalone application.
 
@@ -102,7 +130,7 @@ The API will be available at:
 - HTTPS: https://localhost:7000
 - HTTP: http://localhost:5000
 
-### 5. Access the Web Client
+### 6. Access the Web Client
 
 The Web Client can be accessed through a web browser.
 
@@ -138,6 +166,23 @@ sc delete ScreenBuxWebServer
 ### Remove Agent from Startup
 
 Remove the shortcut from the Startup folder (`Win + R` → `shell:startup`).
+
+### Remove the Updater (and optionally the Service/Agent it manages)
+
+Because `ScreenBux.Updater` installed the Service and Agent outside of any package manager's
+knowledge, uninstalling it requires explicit cleanup to avoid leaving them orphaned:
+
+```powershell
+# Remove the Updater only (Service/Agent keep running as-is):
+.\installer\Install-Updater.ps1 -Uninstall
+
+# Remove the Updater AND the managed Service and Agent (full removal):
+.\installer\Install-Updater.ps1 -Uninstall -RemoveManagedComponents
+```
+
+If installed via MSI, `msiexec /x` (or Add/Remove Programs) automatically removes the managed
+Service and Agent first via a built-in cleanup step, unless the uninstall is actually part of
+a version upgrade.
 
 ## Troubleshooting
 

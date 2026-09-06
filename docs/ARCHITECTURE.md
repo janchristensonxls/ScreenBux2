@@ -309,13 +309,22 @@ rather than either component updating itself:
   version registry on the server side — only this machine knows what's
   actually on disk), downloads the update zip when newer, and applies it.
 - **Applying an update**:
-  - `ServiceUpdater` stops the "ScreenBux Parental Control Service" Windows
-    Service (`System.ServiceProcess.ServiceController`), extracts the zip over
-    the install directory, and restarts it.
-  - `AgentUpdater` finds any running `ScreenBux.Agent` process, asks it to
-    close gracefully (`CloseMainWindow` with a timeout, falling back to
-    `Kill`), extracts the zip over the install directory, then relaunches the
-    Agent via `SessionLauncher`.
+  - `ServiceUpdater` first checks whether "ScreenBux Parental Control Service"
+    is registered with the SCM (`ServiceController.GetServices()`). If not
+    (fresh machine / first run), it extracts the package to
+    `Service:InstallDirectory` and **registers the service itself** via a
+    `ServiceInstaller` P/Invoke wrapper around `OpenSCManager`/`CreateService`
+    (`System.ServiceProcess.ServiceController` can observe/control existing
+    services but has no API to create one), pointing it at
+    `Service:ExecutablePath`, then starts it. If the service already exists,
+    it instead stops it, extracts the zip over the install directory, and
+    restarts it — the normal update path.
+  - `AgentUpdater` finds any running `ScreenBux.Agent` process (there may be
+    none yet on a fresh install), asks it to close gracefully
+    (`CloseMainWindow` with a timeout, falling back to `Kill`), extracts the
+    zip over the install directory, then relaunches the Agent via
+    `SessionLauncher` either way — this path needs no first-install branch
+    since the Agent isn't a registered service.
   - `SessionLauncher` P/Invokes `WTSGetActiveConsoleSessionId` /
     `WTSQueryUserToken` / `DuplicateTokenEx` / `CreateEnvironmentBlock` /
     `CreateProcessAsUser` to start the Agent in the active interactive
@@ -325,11 +334,36 @@ rather than either component updating itself:
     that as "try again later" rather than fatal.
 - **Why a separate service**: neither the Service nor the Agent can safely
   stop/replace/restart its own running executable; a third, always-on,
-  elevated process is required to do that from the outside.
-- **Not yet implemented**: an install-time step that provisions
-  `Service:InstallDirectory`/`Agent:InstallDirectory`/`Agent:ExecutablePath`/
-  the `*:InstalledVersionFile` settings and the real (non-`Static`) manifest
-  store/CI pipeline that publishes update packages.
+  elevated process is required to do that from the outside. That same
+  process being always-on and elevated is also what lets it perform the
+  *first* install (registering the Service, laying down the Agent) using the
+  exact same download/apply code path as a routine update — "install" is just
+  the first update check that finds nothing on disk yet.
+- **Bootstrap installer (implemented)**: something has to install
+  `ScreenBux.Updater` itself as a service and seed its minimal config
+  (`ServerBaseUrl` at least, plus the `Service`/`Agent` install paths) before
+  it can run its own first update check — the Updater can't provision itself
+  out of nothing. Two bootstrap tools now exist under `installer/` (see
+  [`installer/README.md`](../installer/README.md)): a parameterized PowerShell
+  script (`Install-Updater.ps1`) for quick/manual use, and a WiX v5 MSI
+  project (`ScreenBux.Updater.Installer`, referenced from `ScreenBux2.sln`)
+  for production packaging. Neither needs to know how to install the Service
+  or Agent themselves — that's still entirely the Updater's job at runtime.
+- **Uninstall cleanup (implemented)**: because the Updater — not any package
+  manager — installs the Service and Agent, uninstalling only the Updater
+  would otherwise orphan them (left registered/running with no supported way
+  to remove them). `ScreenBux.Updater` now exposes a
+  `--cleanup-managed-components` console mode (see `Program.cs`) that stops
+  and unregisters the managed Service (`ServiceUpdater.RemoveManagedService`,
+  using `ServiceInstaller.Delete` against the SCM) and stops/removes the
+  managed Agent (`AgentUpdater.RemoveManagedAgent`). Both bootstrap tools
+  invoke this: the PowerShell script via `-Uninstall -RemoveManagedComponents`,
+  and the MSI via a deferred custom action gated to a true removal (not a
+  version upgrade).
+- **Not yet implemented**: the real (non-`Static`) manifest store/CI pipeline
+  that publishes update packages, package integrity verification (the
+  `Sha256` field is defined but never checked), and code signing for the
+  MSI/executables.
 
 ## Suggested next steps for contributors / agents
 

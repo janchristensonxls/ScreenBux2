@@ -1,0 +1,120 @@
+<!--
+  ScreenBux.Updater bootstrap installer.
+
+  Scope: this MSI installs ONLY the ScreenBux.Updater Windows Service itself - the one
+  component that can't install itself. Once running (as LocalSystem), the Updater is
+  responsible for installing/updating the ScreenBux Service and Agent on this machine; this
+  installer does not touch those directly on install.
+
+  On uninstall, a deferred custom action invokes ScreenBux.Updater.exe with the
+  cleanup-managed-components switch BEFORE the Updater's own files are removed, so the Service
+  and Agent it previously installed don't get orphaned (still registered/running with no
+  supported way to remove them). That custom action only runs on a true removal (REMOVE="ALL"
+  AND NOT UPGRADINGPRODUCTCODE), not during an upgrade's remove old version pass.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	 xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="ScreenBux Updater"
+		   Manufacturer="ScreenBux"
+		   Version="1.0.0.0"
+		   UpgradeCode="9f2b6b0c-9d0a-4f2f-8b7a-9c4f7e1a2b3d"
+		   Scope="perMachine">
+
+	<MajorUpgrade DowngradeErrorMessage="A newer version of the ScreenBux Updater is already installed." />
+	<MediaTemplate EmbedCab="yes" />
+
+	<!-- Where the WebServer's update manifest lives. Required; no sensible default across
+		 dev/staging/prod environments. Pass via: msiexec /i ScreenBux.Updater.msi SERVERBASEURL=https://screenbux-api.azurewebsites.net -->
+	<Property Id="SERVERBASEURL" Secure="yes" />
+	<Property Id="CHECKINTERVALMINUTES" Value="60" Secure="yes" />
+	<Property Id="SERVICEINSTALLDIRECTORY" Value="C:\Program Files\ScreenBux\Service" Secure="yes" />
+	<Property Id="SERVICEEXECUTABLEPATH" Value="C:\Program Files\ScreenBux\Service\ScreenBux.Service.exe" Secure="yes" />
+	<Property Id="AGENTINSTALLDIRECTORY" Value="C:\Program Files\ScreenBux\Agent" Secure="yes" />
+	<Property Id="AGENTEXECUTABLEPATH" Value="C:\Program Files\ScreenBux\Agent\ScreenBux.Agent.exe" Secure="yes" />
+
+	<Launch Condition="SERVERBASEURL" Message="SERVERBASEURL must be provided, e.g. msiexec /i ScreenBux.Updater.msi SERVERBASEURL=https://screenbux-api.azurewebsites.net" />
+
+	<StandardDirectory Id="ProgramFiles64Folder">
+	  <Directory Id="ScreenBuxFolder" Name="ScreenBux">
+		<Directory Id="INSTALLFOLDER" Name="Updater" />
+	  </Directory>
+	</StandardDirectory>
+
+	<!-- Harvest the published ScreenBux.Updater output (see wixproj: PublishedOutput\**\*.*)
+		 into INSTALLFOLDER. In a from-scratch WiX v5 project this is normally done with
+		 `wix build` file harvesting (Files/@Include) rather than hand-listing every DLL;
+		 adjust this glob to match your actual publish output layout. -->
+	<ComponentGroup Id="UpdaterFiles" Directory="INSTALLFOLDER">
+	  <Files Include="PublishedOutput\**\*.*">
+		<Exclude Files="PublishedOutput\ScreenBux.Updater.exe" />
+	  </Files>
+	</ComponentGroup>
+
+	<!-- appsettings.Production.json is generated (not harvested) so its values reflect the
+		 MSI properties above. It's copied from a checked-in template at build time and its
+		 placeholders are patched via util:XmlFile at install time. -->
+	<Component Id="UpdaterConfig" Directory="INSTALLFOLDER" Guid="6b6f8e2a-6f0f-4a2a-9c4d-2f5a2b6b0c9e" Bitness="always64">
+	  <File Id="AppSettingsProduction" Source="appsettings.Production.template.json" Name="appsettings.Production.json" KeyPath="yes" />
+	  <util:XmlFile Id="SetServerBaseUrl" File="[#AppSettingsProduction]" Action="setValue"
+					 ElementPath="/config/ServerBaseUrl" Value="[SERVERBASEURL]" SelectionLanguage="XPath" Sequence="1" />
+	</Component>
+
+	<!-- ServiceInstall/ServiceControl must live on the component whose KeyPath is the service
+		 executable - this is the declarative WiX equivalent of what Install-Updater.ps1 does
+		 with sc.exe create, and of ServiceInstaller.Install at runtime for the Service/Agent. -->
+	<Component Id="UpdaterServiceComponent" Directory="INSTALLFOLDER" Guid="3a8c9d1e-2b4f-4c6a-8e1d-7f9b2a3c4d5e" Bitness="always64">
+	  <File Id="UpdaterExecutable" Source="PublishedOutput\ScreenBux.Updater.exe" KeyPath="yes" />
+
+	  <ServiceInstall Id="UpdaterServiceInstall"
+					   Name="ScreenBux Updater"
+					   DisplayName="ScreenBux Updater"
+					   Description="Installs and updates the ScreenBux Service and Agent."
+					   Type="ownProcess"
+					   Start="auto"
+					   Account="LocalSystem"
+					   ErrorControl="normal" />
+
+	  <ServiceControl Id="UpdaterServiceControl"
+					   Name="ScreenBux Updater"
+					   Start="install"
+					   Stop="both"
+					   Remove="uninstall"
+					   Wait="yes" />
+
+	  <!-- Deferred custom action: remove the managed Service/Agent BEFORE this component (and
+		   the Updater executable it depends on) is uninstalled. Gated to a true removal only -
+		   see InstallExecuteSequence below. -->
+	  <util:XmlFile Id="SetCheckInterval" File="[#AppSettingsProduction]" Action="setValue"
+					 ElementPath="/config/CheckIntervalMinutes" Value="[CHECKINTERVALMINUTES]" SelectionLanguage="XPath" Sequence="2" />
+	</Component>
+
+	<SetProperty Id="CleanupManagedComponentsCommand"
+				  Value="&quot;[#UpdaterExecutable]&quot; --cleanup-managed-components"
+				  Before="CleanupManagedComponents" Sequence="execute" />
+
+	<CustomAction Id="CleanupManagedComponents"
+				  ExeCommand="[CleanupManagedComponentsCommand]"
+				  Directory="INSTALLFOLDER"
+				  Execute="deferred"
+				  Impersonate="no"
+				  Return="ignore" />
+
+	<InstallExecuteSequence>
+	  <!-- Runs only when the product is genuinely being removed (REMOVE="ALL"), not as part
+		   of an upgrade's "remove old version" pass (UPGRADINGPRODUCTCODE would be set then) -
+		   an upgrade should leave the managed Service/Agent alone. Must happen before
+		   ServiceControl's own "Remove=uninstall" stops/removes the Updater service, and
+		   before its files are deleted, so [#UpdaterExecutable] still resolves. -->
+	  <Custom Action="CleanupManagedComponents" Before="StopServices"
+			  Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+	</InstallExecuteSequence>
+
+	<Feature Id="Main" Title="ScreenBux Updater" Level="1">
+	  <ComponentGroupRef Id="UpdaterFiles" />
+	  <ComponentRef Id="UpdaterConfig" />
+	  <ComponentRef Id="UpdaterServiceComponent" />
+	</Feature>
+
+  </Package>
+</Wix>

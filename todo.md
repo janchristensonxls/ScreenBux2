@@ -10,25 +10,40 @@ Implemented: a new `ScreenBux.Updater` Windows Service (always elevated) polls
 `GET api/updates/latest` on the WebServer (`UpdatesController`, anonymous,
 backed by `IUpdateManifestStore`/`StaticUpdateManifestStore`, a config-driven
 placeholder reading the `Updates` section of `appsettings.json`) and, when a
-newer version is published, downloads the update zip and applies it:
-`ServiceUpdater` stops/replaces/restarts the "ScreenBux Parental Control
-Service" Windows Service; `AgentUpdater` closes the running Agent (graceful
-`CloseMainWindow` with a `Kill` fallback), replaces its files, and relaunches
-it in the active interactive session via `SessionLauncher` (P/Invoke
-`WTSGetActiveConsoleSessionId`/`WTSQueryUserToken`/`DuplicateTokenEx`/
-`CreateProcessAsUser`). See `docs/flows.md` section 5 and
-`docs/ARCHITECTURE.md`'s "Auto-update" section for the full flow.
+newer version is published, downloads the update zip and applies it.
+`ServiceUpdater` now handles **both** first-time install and update: if
+"ScreenBux Parental Control Service" isn't registered yet, it extracts the
+package and registers + starts the service itself (`ServiceInstaller`,
+P/Invoke `OpenSCManager`/`CreateService`, since `ServiceController` can't
+create services); if already registered, it stops/replaces/restarts it as
+before. `AgentUpdater` closes any running Agent (graceful `CloseMainWindow`
+with a `Kill` fallback — a no-op if there is none yet), replaces its files,
+and relaunches it in the active interactive session via `SessionLauncher`
+(P/Invoke `WTSGetActiveConsoleSessionId`/`WTSQueryUserToken`/`DuplicateTokenEx`/
+`CreateProcessAsUser`) — the same code path serves both a fresh install and a
+routine update. See `docs/flows.md` section 5 and `docs/ARCHITECTURE.md`'s
+"Auto-update" section for the full flow.
 
 Known follow-ups / not done in v1:
 - `StaticUpdateManifestStore` is a placeholder — there's no real release
   feed/CI pipeline that publishes update packages or a database-backed
   manifest yet.
-- No install-time provisioning of `Service:InstallDirectory`,
-  `Agent:InstallDirectory`, `Agent:ExecutablePath`, or the `*:InstalledVersionFile`
-  settings in `ScreenBux.Updater/appsettings.json` — currently manual/placeholder paths.
+- Bootstrap installer implemented: `installer/Install-Updater.ps1` (quick
+  PowerShell script) and `installer/ScreenBux.Updater.Installer` (a WiX v5
+  MSI project, referenced from `ScreenBux2.sln`) both install
+  `ScreenBux.Updater` itself as a service and seed its config
+  (`ServerBaseUrl`, `Service`/`Agent` install directories and executable
+  paths). Both also support removing the Updater plus the Service/Agent it
+  provisioned, via a new `ScreenBux.Updater --cleanup-managed-components`
+  mode (`ServiceUpdater.RemoveManagedService` / `AgentUpdater.RemoveManagedAgent`),
+  so uninstalling doesn't orphan them. See `installer/README.md`. Still
+  outstanding: the MSI patches config via `util:XmlFile` which only
+  understands XML even though the Updater reads JSON — needs a real JSON
+  generation step (custom action) before this is CI/production-ready; no
+  code signing yet either.
 - No package integrity verification (the `Sha256` field on `ComponentUpdateInfo`
   is defined but never checked before applying an update).
-- No rollback if a component fails to start after an update is applied.
+- No rollback if a component fails to start after an update/install is applied.
 - `ScreenBux.Updater` itself has no auto-update mechanism (it would need to be
   updated out-of-band, e.g. via the same installer that provisions it).
 

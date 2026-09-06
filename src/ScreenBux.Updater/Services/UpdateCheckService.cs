@@ -71,13 +71,14 @@ public class UpdateCheckService : BackgroundService
             apply: async downloadedZipPath =>
             {
                 var installDirectory = _configuration["Service:InstallDirectory"];
-                if (string.IsNullOrEmpty(installDirectory))
+                var executablePath = _configuration["Service:ExecutablePath"];
+                if (string.IsNullOrEmpty(installDirectory) || string.IsNullOrEmpty(executablePath))
                 {
-                    _logger.LogWarning("Service:InstallDirectory is not configured; skipping Service update.");
+                    _logger.LogWarning("Service:InstallDirectory/Service:ExecutablePath are not configured; skipping Service update/install.");
                     return false;
                 }
 
-                return await Task.Run(() => _serviceUpdater.ApplyUpdate(downloadedZipPath, installDirectory));
+                return await Task.Run(() => _serviceUpdater.ApplyUpdate(downloadedZipPath, installDirectory, executablePath));
             },
             stoppingToken);
 

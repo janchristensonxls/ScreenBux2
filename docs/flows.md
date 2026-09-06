@@ -271,15 +271,22 @@ ScreenBux.Updater (Windows Service, always elevated, e.g. LocalSystem)
 			  machine knows what's actually on disk)
 			if newer -> download zip -> apply:
 
-Applying a Service update:
-	ServiceUpdater.ApplyUpdate(zip, installDir)                src/ScreenBux.Updater/Services/ServiceUpdater.cs
-		ServiceController.Stop() "ScreenBux Parental Control Service"
-		ZipFile.ExtractToDirectory(zip, installDir, overwrite: true)
-		ServiceController.Start()
+Applying a Service update (or first-time install):
+	ServiceUpdater.ApplyUpdate(zip, installDir, exePath)       src/ScreenBux.Updater/Services/ServiceUpdater.cs
+		IsServiceInstalled() via ServiceController.GetServices()
+		if NOT installed (fresh machine):
+			extract zip to installDir
+			ServiceInstaller.Install(...)                       OpenSCManager -> CreateService (P/Invoke; ServiceController has no create API)
+			ServiceController.Start()
+		if already installed (normal update):
+			ServiceController.Stop() "ScreenBux Parental Control Service"
+			ZipFile.ExtractToDirectory(zip, installDir, overwrite: true)
+			ServiceController.Start()
 
-Applying an Agent update:
+Applying an Agent update (or first-time install - same code path either way,
+since there's no service registration step for the Agent):
 	AgentUpdater.ApplyUpdate(zip, installDir, exePath)          src/ScreenBux.Updater/Services/AgentUpdater.cs
-		Process.GetProcessesByName("ScreenBux.Agent")
+		Process.GetProcessesByName("ScreenBux.Agent")           // empty on a fresh install, nothing to stop
 			CloseMainWindow() + WaitForExit(timeout), else Kill()
 		ZipFile.ExtractToDirectory(zip, installDir, overwrite: true)
 		SessionLauncher.TryStartInActiveSession(exePath)         src/ScreenBux.Updater/Services/SessionLauncher.cs
@@ -291,9 +298,14 @@ Applying an Agent update:
 
 Why a third process instead of self-update: neither the Service nor the Agent can safely
 stop/replace/restart its own running executable, so the always-on, always-elevated Updater
-does it from the outside. Config keys (`Service:InstallDirectory`, `Agent:InstallDirectory`,
-`Agent:ExecutablePath`, `*:InstalledVersionFile`) live in `ScreenBux.Updater/appsettings.json`
-and are placeholders until a real install step provisions them per machine.
+does it from the outside. That same always-elevated process is also what lets it perform the
+*first* install using the exact same download/apply path as a routine update - "install" is
+just the first update check that finds nothing on disk (or no service registered) yet. What
+still needs a traditional bootstrap: something has to install `ScreenBux.Updater` itself as a
+service and seed its minimal config (`ServerBaseUrl`, `Service`/`Agent` install paths and
+`Service:ExecutablePath`/`Agent:ExecutablePath`) in `ScreenBux.Updater/appsettings.json` before
+it can run its own first check - that bootstrap can be a thin MSI/EXE since it no longer needs
+to know how to install the Service or Agent themselves.
 
 ---
 

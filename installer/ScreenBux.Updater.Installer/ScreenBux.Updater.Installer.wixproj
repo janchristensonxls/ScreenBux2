@@ -1,0 +1,26 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+	<OutputType>Package</OutputType>
+	<Platforms>x64</Platforms>
+	<Platform Condition="'$(Platform)' == ''">x64</Platform>
+	<!-- The WiX v5 SDK builds MSIs from .wxs sources without requiring the WiX Toolset Visual
+		 Studio extension - it works via `dotnet build`/`msbuild` alone, once the
+		 WixToolset.Sdk NuGet package is restored (see NuGet.config / PackageReference below). -->
+	<DefineConstants>$(DefineConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<!-- The published ScreenBux.Updater output is expected at this path before building the
+		 MSI - run `dotnet publish ..\..\src\ScreenBux.Updater -c Release -o PublishedOutput`
+		 first (see README.md in this folder). -->
+	<Content Include="PublishedOutput\**\*.*">
+	  <Link>PublishedOutput\%(RecursiveDir)%(Filename)%(Extension)</Link>
+	</Content>
+  </ItemGroup>
+
+</Project>

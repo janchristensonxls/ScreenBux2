@@ -55,6 +55,33 @@ public class AgentUpdater
         }
     }
 
+    /// <summary>
+    /// Stops any running Agent process and removes <paramref name="installDirectory"/>. Used
+    /// when uninstalling <c>ScreenBux.Updater</c> itself, since the Updater is what installed
+    /// the Agent in the first place and nothing else knows to clean it up. Safe to call even
+    /// if the Agent was never installed/is not running (no-op, returns true).
+    /// </summary>
+    public bool RemoveManagedAgent(string? installDirectory)
+    {
+        try
+        {
+            StopRunningAgent();
+
+            if (!string.IsNullOrEmpty(installDirectory) && Directory.Exists(installDirectory))
+            {
+                Directory.Delete(installDirectory, recursive: true);
+                _logger.LogInformation("Removed install directory {InstallDirectory}.", installDirectory);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove Agent.");
+            return false;
+        }
+    }
+
     private void StopRunningAgent()
     {
         var processes = Process.GetProcessesByName(ProcessName);
