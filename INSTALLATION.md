@@ -22,14 +22,17 @@ Service's named pipe (see step 4 below); the Service just needs to already be up
 # Open PowerShell as Administrator
 cd C:\path\to\ScreenBux2\src\ScreenBux.Service\bin\Release\net10.0
 
+# Copy the files to the install directory
+Copy-Item -Path .\* -Destination "C:\Program Files\ScreenBux"
+
 # Create the service
-sc create ScreenBuxService binPath="C:\path\to\ScreenBux.Service.exe" start=auto
+sc.exe create ScreenBuxService binPath="C:\Program Files\ScreenBux\Service\ScreenBux.Service.exe" start=auto displayName="ScreenBux Service"
 
 # Start the service
-sc start ScreenBuxService
+sc.exe start ScreenBuxService
 
 # Check service status
-sc query ScreenBuxService
+sc.exe query ScreenBuxService
 ```
 
 #### Option B: Using .NET CLI (Development)

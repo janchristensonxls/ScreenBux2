@@ -206,15 +206,13 @@ public class SessionLauncher
         TokenImpersonation = 2
     }
 
-    //[StructLayout(LayoutKind.Sequential)]
+    // CharSet.Unicode (plus explicit LPWStr marshalling) matches CreateProcessAsUser's
+    // CharSet.Unicode declaration; without it, the struct's string fields default to ANSI
+    // marshalling and lpDesktop ("winsta0\default") can be read incorrectly by the OS.
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct STARTUPINFO
     {
         public int cb;
-        //public string? lpReserved;
-        //public string? lpDesktop;
-        //public string? lpTitle;
-
         [MarshalAs(UnmanagedType.LPWStr)] public string? lpReserved;
         [MarshalAs(UnmanagedType.LPWStr)] public string? lpDesktop;
         [MarshalAs(UnmanagedType.LPWStr)] public string? lpTitle;
