@@ -9,6 +9,8 @@ namespace ScreenBux.Agent.Services;
 /// </summary>
 public class ForegroundWindowDetector
 {
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
     // Windows API imports
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
@@ -21,6 +23,12 @@ public class ForegroundWindowDetector
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     /// <summary>
     /// Gets information about the current foreground window
@@ -89,5 +97,53 @@ public class ForegroundWindowDetector
         {
             return string.Empty;
         }
+    }
+
+    /// <summary>
+    /// Enumerates all currently visible top-level windows with a non-empty title, one entry
+    /// per window (a process with multiple windows may appear more than once). Used to enrich
+    /// the Service's on-demand process list, since only the Agent - running in the interactive
+    /// session - can see window state; the Service (Session 0) cannot.
+    /// </summary>
+    public List<WindowInfo> GetVisibleWindows()
+    {
+        var windows = new List<WindowInfo>();
+
+        EnumWindows((hwnd, _) =>
+        {
+            try
+            {
+                if (!IsWindowVisible(hwnd))
+                {
+                    return true;
+                }
+
+                var title = GetWindowTitle(hwnd);
+                if (string.IsNullOrEmpty(title))
+                {
+                    return true;
+                }
+
+                GetWindowThreadProcessId(hwnd, out var processId);
+                if (processId == 0)
+                {
+                    return true;
+                }
+
+                windows.Add(new WindowInfo
+                {
+                    ProcessId = (int)processId,
+                    WindowTitle = title
+                });
+            }
+            catch
+            {
+                // Ignore this window and keep enumerating.
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return windows;
     }
 }

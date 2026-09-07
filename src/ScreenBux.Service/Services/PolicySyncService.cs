@@ -16,6 +16,7 @@ public class PolicySyncService : BackgroundService
     private readonly GrantService _grantService;
     private readonly DeviceIdentityService _deviceIdentity;
     private readonly IServiceProvider _serviceProvider;
+    private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private HubConnection? _hubConnection;
 
     public PolicySyncService(
@@ -24,7 +25,8 @@ public class PolicySyncService : BackgroundService
         PolicyService policyService,
         GrantService grantService,
         DeviceIdentityService deviceIdentity,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        PendingWindowListRequestCoordinator windowListCoordinator)
     {
         _logger = logger;
         _configuration = configuration;
@@ -32,6 +34,7 @@ public class PolicySyncService : BackgroundService
         _grantService = grantService;
         _deviceIdentity = deviceIdentity;
         _serviceProvider = serviceProvider;
+        _windowListCoordinator = windowListCoordinator;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -160,6 +163,14 @@ public class PolicySyncService : BackgroundService
     /// rather than a constructor dependency, since ProcessMonitoringService itself depends on
     /// this class (to report detections) and a direct two-way constructor dependency would be
     /// a circular reference.
+    ///
+    /// The base list from <see cref="ProcessMonitoringService.GetCurrentProcesses"/> is already
+    /// restricted to the interactive session, but the Service (running in Session 0) has no way
+    /// to know which of those processes actually have a visible window - only the Agent, which
+    /// runs inside that session, can see that. So a window-list request is registered with
+    /// <see cref="_windowListCoordinator"/> and piggybacked onto the Agent's next poll response
+    /// (see <see cref="NamedPipeServerService"/>); the result is used both to attach real window
+    /// titles and to filter the final list down to windowed, user-facing processes only.
     /// </summary>
     private async Task HandleProcessListRequestedAsync(Guid requestId)
     {
@@ -179,7 +190,47 @@ public class PolicySyncService : BackgroundService
         try
         {
             var processMonitoring = _serviceProvider.GetRequiredService<ProcessMonitoringService>();
-            result.Processes.AddRange(processMonitoring.GetCurrentProcesses());
+
+            // Register the pending request BEFORE doing any other work, so it's visible to the
+            // Agent's very next poll tick as early as possible - GetCurrentProcesses() below can
+            // take a non-trivial amount of time (resolving MainModule.FileName for every process
+            // in the session), and registering after it would risk missing a tick and needlessly
+            // falling back to the unfiltered list.
+            _windowListCoordinator.Register(requestId);
+
+            var candidates = processMonitoring.GetCurrentProcesses();
+
+            // Give the Agent up to a couple of poll ticks to pick up the pending request and
+            // report back, rather than blocking indefinitely if it's not running/connected.
+            var windows = await _windowListCoordinator.WaitAsync(
+                requestId, TimeSpan.FromSeconds(8), CancellationToken.None);
+
+            if (windows != null)
+            {
+                var titlesByProcessId = windows
+                    .GroupBy(w => w.ProcessId)
+                    .ToDictionary(g => g.Key, g => g.First().WindowTitle);
+
+                foreach (var process in candidates)
+                {
+                    if (titlesByProcessId.TryGetValue(process.ProcessId, out var title))
+                    {
+                        process.WindowTitle = title;
+                    }
+                }
+
+                // Only the Agent can tell us which processes have a visible window; without a
+                // response, fall back to showing the (session-filtered) list unfiltered rather
+                // than hiding everything.
+                result.Processes.AddRange(candidates.Where(p => titlesByProcessId.ContainsKey(p.ProcessId)));
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "No window list response from Agent for request {RequestId}; returning unfiltered process list.",
+                    requestId);
+                result.Processes.AddRange(candidates);
+            }
         }
         catch (Exception ex)
         {

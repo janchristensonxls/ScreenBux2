@@ -46,17 +46,22 @@ public class MonitoringService
         try
         {
             var processInfo = _windowDetector.GetForegroundProcessInfo();
-            
+
             if (processInfo == null)
                 return;
 
-            // Only report if the process has changed
-            if (_lastReportedProcess?.ProcessId == processInfo.ProcessId &&
-                _lastReportedProcess?.WindowTitle == processInfo.WindowTitle)
-                return;
+            // Only raise the detected-change event/notify listeners if the process has changed,
+            // but still send the report every tick below - the response to this round-trip is
+            // also how the Service piggybacks an on-demand "get window list" request (polling
+            // model), so we can't skip the pipe call just because the window is unchanged.
+            var isNewDetection = _lastReportedProcess?.ProcessId != processInfo.ProcessId ||
+                _lastReportedProcess?.WindowTitle != processInfo.WindowTitle;
 
-            _lastReportedProcess = processInfo;
-            ProcessDetected?.Invoke(this, processInfo);
+            if (isNewDetection)
+            {
+                _lastReportedProcess = processInfo;
+                ProcessDetected?.Invoke(this, processInfo);
+            }
 
             // Report to service
             var reportMessage = new ProcessReportMessage
@@ -64,7 +69,7 @@ public class MonitoringService
                 Process = processInfo
             };
 
-            var response = await _pipeClient.SendMessageAsync<object>(reportMessage);
+            var response = await _pipeClient.SendMessageForPolymorphicResponseAsync(reportMessage);
 
             // A close command means the Service's own (elevated) enforcement attempt failed -
             // this is a fallback ask for a best-effort graceful/local close, not the primary
@@ -80,11 +85,41 @@ public class MonitoringService
                 {
                     RaiseStatusChanged($"Service response: {cmdResponse.Message}");
                 }
+
+                if (cmdResponse.PendingWindowListRequestId is Guid requestId)
+                {
+                    await ReportWindowListAsync(requestId);
+                }
             }
         }
         catch (Exception ex)
         {
             RaiseStatusChanged($"Error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Enumerates currently visible windows and reports them back to the Service for a
+    /// pending on-demand "get process list" request. Sent as its own transactional pipe
+    /// call (rather than waiting for the next 2s tick) so the parent doesn't wait longer
+    /// than necessary for the result.
+    /// </summary>
+    private async Task ReportWindowListAsync(Guid requestId)
+    {
+        try
+        {
+            var windows = _windowDetector.GetVisibleWindows();
+            var report = new WindowListReportMessage
+            {
+                RequestId = requestId,
+                Windows = windows
+            };
+
+            await _pipeClient.SendMessageAsync<object>(report);
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error reporting window list: {ex.Message}");
         }
     }
 

@@ -20,6 +20,7 @@ public class NamedPipeServerService : BackgroundService
     private readonly DevicePolicySyncService _devicePolicySync;
     private readonly PowerActionService _powerAction;
     private readonly PolicySyncService _policySync;
+    private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
@@ -29,7 +30,8 @@ public class NamedPipeServerService : BackgroundService
         ProcessKillerService processKiller,
         DevicePolicySyncService devicePolicySync,
         PowerActionService powerAction,
-        PolicySyncService policySync)
+        PolicySyncService policySync,
+        PendingWindowListRequestCoordinator windowListCoordinator)
     {
         _logger = logger;
         _policyService = policyService;
@@ -38,6 +40,7 @@ public class NamedPipeServerService : BackgroundService
         _devicePolicySync = devicePolicySync;
         _powerAction = powerAction;
         _policySync = policySync;
+        _windowListCoordinator = windowListCoordinator;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -231,7 +234,8 @@ public class NamedPipeServerService : BackgroundService
             {
                 case "ProcessReport":
                     var reportMessage = JsonSerializer.Deserialize<ProcessReportMessage>(messageJson);
-                    return await HandleProcessReportAsync(reportMessage);
+                    var reportResponse = await HandleProcessReportAsync(reportMessage);
+                    return StampPendingWindowListRequest(reportResponse);
 
                 case "GetPolicy":
                     return HandleGetPolicyRequest();
@@ -242,6 +246,10 @@ public class NamedPipeServerService : BackgroundService
 
                 case "GrantStatusRequest":
                     return new GrantStatusResponse { ExpiresAtUtc = _grantService.ExpiresAtUtc };
+
+                case "WindowListReport":
+                    var windowListReport = JsonSerializer.Deserialize<WindowListReportMessage>(messageJson);
+                    return HandleWindowListReport(windowListReport);
 
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
@@ -388,6 +396,34 @@ public class NamedPipeServerService : BackgroundService
         {
             Configuration = _policyService.GetConfiguration()
         };
+    }
+
+    /// <summary>
+    /// Piggybacks any currently-pending on-demand "get window list" request onto the given
+    /// response, if it's a plain <see cref="CommandResponse"/> (i.e. not a <see cref="CloseProcessCommand"/>
+    /// fallback, which the Agent handles specially and doesn't check for this flag). Avoids
+    /// needing a persistent duplex pipe connection - the Agent already polls every couple of
+    /// seconds via <see cref="ProcessReportMessage"/>, so this rides along on that.
+    /// </summary>
+    private object StampPendingWindowListRequest(object response)
+    {
+        if (response is CommandResponse commandResponse)
+        {
+            commandResponse.PendingWindowListRequestId = _windowListCoordinator.TryGetNextPendingRequestId();
+        }
+
+        return response;
+    }
+
+    private object HandleWindowListReport(WindowListReportMessage? message)
+    {
+        if (message is null)
+        {
+            return new CommandResponse { Success = false, Message = "Invalid window list report" };
+        }
+
+        _windowListCoordinator.Complete(message.RequestId, message.Windows);
+        return new CommandResponse { Success = true };
     }
 
     private async Task<LinkDeviceResponse> HandleLinkDeviceAsync(LinkDeviceRequest? request)

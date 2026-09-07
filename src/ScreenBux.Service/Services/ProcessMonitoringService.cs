@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using ScreenBux.Shared.Models;
 
 namespace ScreenBux.Service.Services;
@@ -224,12 +225,34 @@ public class ProcessMonitoringService : BackgroundService
     /// list" request. Unlike the enforcement loop's <see cref="EnforcePoliciesAsync"/>, this
     /// always resolves the executable path (best-effort) since it's a one-off, user-triggered
     /// call rather than a per-tick hot path shared by every process on the machine.
+    ///
+    /// Restricted to the active interactive console session, which drops Session-0
+    /// services/system processes that are never meaningful to show a parent - typically
+    /// cutting a raw ~500-process enumeration down to a much smaller, relevant set before
+    /// any further window-based enrichment/filtering happens upstream.
     /// </summary>
     public IReadOnlyList<ProcessInfo> GetCurrentProcesses()
     {
+        var activeSessionId = GetActiveConsoleSessionId();
         var processes = new List<ProcessInfo>();
+
         foreach (var process in Process.GetProcesses())
         {
+            if (activeSessionId.HasValue)
+            {
+                try
+                {
+                    if (process.SessionId != activeSessionId.Value)
+                    {
+                        continue;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
             var processInfo = CreateProcessInfo(process, resolveExecutablePath: true);
             if (processInfo != null)
             {
@@ -239,4 +262,25 @@ public class ProcessMonitoringService : BackgroundService
 
         return processes;
     }
+
+    /// <summary>
+    /// Returns the active console session id, or null if it can't be determined (e.g. no
+    /// interactive session logged in) - in which case callers should skip session filtering
+    /// rather than exclude everything.
+    /// </summary>
+    private static uint? GetActiveConsoleSessionId()
+    {
+        try
+        {
+            var sessionId = WTSGetActiveConsoleSessionId();
+            return sessionId == 0xFFFFFFFF ? null : sessionId;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WTSGetActiveConsoleSessionId();
 }

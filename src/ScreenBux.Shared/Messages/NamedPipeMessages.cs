@@ -37,6 +37,28 @@ public class CommandResponse : Contracts.INamedPipeMessage
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public bool Success { get; set; }
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Piggybacks a pending on-demand "get window list" request onto this response, since the
+    /// Agent already polls the Service every couple of seconds via <see cref="ProcessReportMessage"/>.
+    /// When set, the Agent should enumerate its visible windows and reply with a
+    /// <see cref="WindowListReportMessage"/> carrying the same RequestId. Avoids needing a
+    /// persistent duplex pipe connection for this occasional, user-triggered request.
+    /// </summary>
+    public Guid? PendingWindowListRequestId { get; set; }
+}
+
+/// <summary>
+/// Sent from Agent to Service in response to a <see cref="CommandResponse.PendingWindowListRequestId"/>,
+/// carrying the currently visible top-level windows so the Service can enrich/filter its
+/// on-demand process list down to user-facing applications.
+/// </summary>
+public class WindowListReportMessage : Contracts.INamedPipeMessage
+{
+    public string MessageType => "WindowListReport";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public Guid RequestId { get; set; }
+    public List<Models.WindowInfo> Windows { get; set; } = new();
 }
 
 /// <summary>
