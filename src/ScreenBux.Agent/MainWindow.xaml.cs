@@ -27,7 +27,10 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _serviceStatusTimer;
     private bool _isCheckingService;
     private Forms.NotifyIcon? _notifyIcon;
-    private bool _isExiting;
+    private Forms.ToolStripMenuItem? _linkDeviceMenuItem;
+    private Drawing.Icon? _connectedIcon;
+    private Drawing.Icon? _disconnectedIcon;
+    private bool? _lastKnownConnected;
 
     public MainWindow()
     {
@@ -55,24 +58,75 @@ public partial class MainWindow : Window
     /// </summary>
     private void InitializeNotifyIcon()
     {
-        var icon = Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location)
-                   ?? Drawing.SystemIcons.Application;
+        _connectedIcon = LoadIconResource("Assets/tray-connected.ico");
+        _disconnectedIcon = LoadIconResource("Assets/tray-disconnected.ico");
+
+        var fallbackIcon = Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location)
+                            ?? Drawing.SystemIcons.Application;
 
         var contextMenu = new Forms.ContextMenuStrip();
         var showItem = new Forms.ToolStripMenuItem("Show", null, (_, _) => ShowMainWindow());
-        var exitItem = new Forms.ToolStripMenuItem("Exit", null, (_, _) => ExitApplication());
+        _linkDeviceMenuItem = new Forms.ToolStripMenuItem("Link Device...", null, (_, _) => OpenLinkDeviceWindow())
+        {
+            Visible = false
+        };
         contextMenu.Items.Add(showItem);
         contextMenu.Items.Add(new Forms.ToolStripSeparator());
-        contextMenu.Items.Add(exitItem);
+        contextMenu.Items.Add(_linkDeviceMenuItem);
 
         _notifyIcon = new Forms.NotifyIcon
         {
-            Icon = icon,
+            Icon = _disconnectedIcon ?? fallbackIcon,
             Text = "ScreenBux Agent",
             Visible = true,
             ContextMenuStrip = contextMenu
         };
         _notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
+    }
+
+    /// <summary>
+    /// Loads an .ico file that was added to the project as a WPF Resource (pack URI),
+    /// e.g. Assets/tray-connected.ico. Returns null if the resource is missing so the
+    /// caller can fall back to a default icon instead of crashing.
+    /// </summary>
+    private static Drawing.Icon? LoadIconResource(string relativePath)
+    {
+        try
+        {
+            var uri = new Uri($"pack://application:,,,/{relativePath}", UriKind.Absolute);
+            var streamInfo = System.Windows.Application.GetResourceStream(uri);
+            if (streamInfo is null)
+            {
+                return null;
+            }
+
+            using var stream = streamInfo.Stream;
+            return new Drawing.Icon(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Swaps the tray icon to reflect whether the ScreenBux Service is currently reachable.
+    /// </summary>
+    private void UpdateTrayConnectionState(bool isConnected)
+    {
+        if (_notifyIcon is null || _lastKnownConnected == isConnected)
+        {
+            return;
+        }
+
+        _lastKnownConnected = isConnected;
+        var icon = isConnected ? _connectedIcon : _disconnectedIcon;
+        if (icon is not null)
+        {
+            _notifyIcon.Icon = icon;
+        }
+
+        _notifyIcon.Text = isConnected ? "ScreenBux Agent - Connected" : "ScreenBux Agent - Disconnected";
     }
 
     private void ShowMainWindow()
@@ -83,10 +137,18 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    private void ExitApplication()
+    private void OpenLinkDeviceWindow()
     {
-        _isExiting = true;
-        Close();
+        var linkWindow = new LinkDeviceWindow(_pipeClient)
+        {
+            Owner = this
+        };
+        linkWindow.ShowDialog();
+        if (linkWindow.LinkSucceeded)
+        {
+            LogMessage("Device linked successfully.");
+            RefreshLinkedState();
+        }
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -100,25 +162,21 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!_isExiting)
-        {
-            // Minimize to the tray instead of exiting when the user closes the window.
-            e.Cancel = true;
-            WindowState = WindowState.Minimized;
-        }
+        // The agent is always supposed to be running; closing the window just minimizes it to the tray.
+        // A watchdog in the service restarts the process if it is ever actually terminated.
+        e.Cancel = true;
+        WindowState = WindowState.Minimized;
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        RefreshLinkPanel();
+        RefreshLinkedState();
 
         // Check service status
         await CheckServiceStatusAsync();
         _serviceStatusTimer.Start();
 
         _monitoringService.Start();
-        StartButton.IsEnabled = false;
-        StopButton.IsEnabled = true;
         StatusText.Text = "Monitoring active";
         LogMessage("Monitoring started automatically");
     }
@@ -134,6 +192,9 @@ public partial class MainWindow : Window
             _notifyIcon.Dispose();
             _notifyIcon = null;
         }
+
+        _connectedIcon?.Dispose();
+        _disconnectedIcon?.Dispose();
     }
 
     private async void ServiceStatusTimer_Tick(object? sender, EventArgs e)
@@ -178,6 +239,7 @@ public partial class MainWindow : Window
             var isAvailable = await _pipeClient.IsServiceAvailableAsync();
             ServiceStatusText.Text = isAvailable ? "Service: Connected" : "Service: Disconnected";
             ServiceStatusText.Foreground = isAvailable ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Red;
+            UpdateTrayConnectionState(isAvailable);
 
             if (!isAvailable)
             {
@@ -190,79 +252,26 @@ public partial class MainWindow : Window
         }
     }
 
-    private void StartButton_Click(object sender, RoutedEventArgs e)
-    {
-        _monitoringService.Start();
-        StartButton.IsEnabled = false;
-        StopButton.IsEnabled = true;
-        StatusText.Text = "Monitoring active";
-        LogMessage("Monitoring started");
-    }
-
-    private void StopButton_Click(object sender, RoutedEventArgs e)
-    {
-        _monitoringService.Stop();
-        StartButton.IsEnabled = true;
-        StopButton.IsEnabled = false;
-        StatusText.Text = "Monitoring stopped";
-        LogMessage("Monitoring stopped");
-    }
-
-    private async void LinkButton_Click(object sender, RoutedEventArgs e)
-    {
-        var code = LinkCodeTextBox.Text.Trim().ToUpperInvariant();
-        if (code.Length != 8)
-        {
-            LogMessage("Error: Link code must be exactly 8 characters.");
-            return;
-        }
-
-        LinkButton.IsEnabled = false;
-        StatusText.Text = "Linking device...";
-        LogMessage($"Sending link code to service: {code}");
-
-        try
-        {
-            var request = new ScreenBux.Shared.Messages.LinkDeviceRequest { LinkCode = code };
-            var response = await _pipeClient.SendMessageAsync<ScreenBux.Shared.Messages.LinkDeviceResponse>(request);
-
-            if (response is null)
-            {
-                LogMessage("Error: Service did not respond. Ensure the ScreenBux Service is running.");
-                StatusText.Text = "Link failed — service unavailable";
-            }
-            else if (response.Success)
-            {
-                LogMessage($"Device linked successfully! Device ID: {response.DeviceId}");
-                StatusText.Text = "Device linked";
-                LinkCodeTextBox.Clear();
-                RefreshLinkPanel();
-            }
-            else
-            {
-                LogMessage($"Link failed: {response.Message}");
-                StatusText.Text = "Link failed";
-            }
-        }
-        finally
-        {
-            LinkButton.IsEnabled = true;
-        }
-    }
-
     /// <summary>
-    /// Shows the link panel only when this device is not yet linked to a parent account.
+    /// Shows the "not linked" info block in place of the activity log, and toggles the
+    /// "Link Device..." tray menu item, based on whether this device is linked to a parent account.
     /// </summary>
-    private void RefreshLinkPanel()
+    private void RefreshLinkedState()
     {
         var linked = PolicyStorage.IsDeviceLinked();
-        //todo! Just for testing, we will always show the link panel until we have a proper UI for linked devices.
-        LinkDevicePanel.Visibility = linked ? Visibility.Collapsed : Visibility.Visible;
+        NotLinkedPanel.Visibility = linked ? Visibility.Collapsed : Visibility.Visible;
+        LogPanel.Visibility = linked ? Visibility.Visible : Visibility.Collapsed;
+        if (_linkDeviceMenuItem is not null)
+        {
+            _linkDeviceMenuItem.Visible = !linked;
+        }
+
         if (linked)
         {
             LogMessage("Device is linked to a parent account.");
         }
     }
+
 
     private void OnStatusChanged(object? sender, string status)
     {

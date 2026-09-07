@@ -13,4 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\ScreenBux.Shared\ScreenBux.Shared.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\tray-connected.ico" />
+    <Resource Include="Assets\tray-disconnected.ico" />
+  </ItemGroup>
 </Project>

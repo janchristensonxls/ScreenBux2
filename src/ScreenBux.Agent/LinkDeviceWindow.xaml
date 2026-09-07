@@ -1,0 +1,32 @@
+<Window x:Class="ScreenBux.Agent.LinkDeviceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ScreenBux.Agent"
+        mc:Ignorable="d"
+        Title="Link Device to Parent Account" Height="230" Width="420"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        ShowInTaskbar="True" WindowState="Normal">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="Enter the 8-character code shown on the parent's Link Device page:"/>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal">
+            <TextBox x:Name="LinkCodeTextBox" Width="180" Height="30"
+                     VerticalContentAlignment="Center" FontSize="14"
+                     CharacterCasing="Upper" MaxLength="8" Margin="0,0,8,0"
+                     ToolTip="Enter link code from parent portal"/>
+            <Button x:Name="LinkButton" Content="Link This Device" Width="130" Height="30"
+                    Click="LinkButton_Click"/>
+        </StackPanel>
+
+        <TextBlock x:Name="StatusText" Grid.Row="2" Margin="0,12,0,0" TextWrapping="Wrap"/>
+    </Grid>
+</Window>

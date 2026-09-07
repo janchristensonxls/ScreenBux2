@@ -13,7 +13,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -22,55 +21,32 @@
         <TextBlock Grid.Row="0" Text="ScreenBux Parental Control Agent" 
                    FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
 
-        <!-- Control Buttons -->
+        <!-- Status -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button x:Name="StartButton" Content="Start Monitoring" 
-                    Width="120" Height="30" Margin="0,0,10,0" Click="StartButton_Click"/>
-            <Button x:Name="StopButton" Content="Stop Monitoring" 
-                    Width="120" Height="30" Margin="0,0,10,0" Click="StopButton_Click" IsEnabled="False"/>
             <TextBlock x:Name="ServiceStatusText" VerticalAlignment="Center" 
-                       Margin="10,0,0,0" Text="Service: Unknown" FontWeight="Bold"/>
+                       Text="Service: Unknown" FontWeight="Bold"/>
             <TextBlock x:Name="GrantStatusText" VerticalAlignment="Center" 
                        Margin="15,0,0,0" Text="" FontWeight="Bold" Foreground="DarkOrange"/>
         </StackPanel>
 
-        <!-- Link Device Panel -->
-        <GroupBox x:Name="LinkDevicePanel" Grid.Row="2" Header="Link Device to Parent Account" Margin="0,0,0,10">
-            <Grid Margin="5">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+        <!-- Not Linked Info / Activity Log -->
+        <Grid Grid.Row="2">
+            <GroupBox x:Name="NotLinkedPanel" Header="Device Not Linked" Visibility="Collapsed">
+                <TextBlock TextWrapping="Wrap" Margin="10" VerticalAlignment="Top"
+                           Text="This device is not yet linked to a parent account. Right-click the ScreenBux Agent icon in the notification area and choose 'Link Device...' to link it."/>
+            </GroupBox>
 
-                <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
-                           Text="Enter the 8-character code shown on the parent&apos;s Link Device page:"
-                           Margin="0,0,0,5" TextWrapping="Wrap"/>
-
-                <TextBox x:Name="LinkCodeTextBox" Grid.Row="1" Grid.Column="0"
-                         Height="30" VerticalContentAlignment="Center"
-                         FontSize="14" CharacterCasing="Upper" MaxLength="8"
-                         Margin="0,0,8,0" ToolTip="Enter link code from parent portal"/>
-                <Button x:Name="LinkButton" Grid.Row="1" Grid.Column="1"
-                        Content="Link This Device" Width="130" Height="30"
-                        Click="LinkButton_Click"/>
-            </Grid>
-        </GroupBox>
-
-        <!-- Activity Log -->
-        <GroupBox Grid.Row="3" Header="Activity Log" Margin="0,0,0,10">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <TextBox x:Name="LogTextBox" IsReadOnly="True" 
-                         TextWrapping="Wrap" BorderThickness="0"
-                         VerticalScrollBarVisibility="Auto"/>
-            </ScrollViewer>
-        </GroupBox>
+            <GroupBox x:Name="LogPanel" Header="Activity Log">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBox x:Name="LogTextBox" IsReadOnly="True" 
+                             TextWrapping="Wrap" BorderThickness="0"
+                             VerticalScrollBarVisibility="Auto"/>
+                </ScrollViewer>
+            </GroupBox>
+        </Grid>
 
         <!-- Status Bar -->
-        <StatusBar Grid.Row="4">
+        <StatusBar Grid.Row="3">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Ready"/>
             </StatusBarItem>
