@@ -3,20 +3,24 @@
 ## Prerequisites
 
 - Windows 10/11 (for Service and Agent components)
-- .NET 8.0 Runtime or SDK
+- .NET 10 Runtime or SDK
 - Administrator privileges (for installing the Windows Service)
 
 ## Installation Steps
 
 ### 1. Install the Windows Service
 
-The Windows Service must be installed with administrator privileges to monitor and control applications.
+The Windows Service must be installed with administrator privileges to monitor and control
+applications. It should simply be installed and left **running** as a normal Windows Service -
+it does *not* need to be run interactively, and it does not take a link code as a CLI argument
+or startup parameter. Linking happens later, from the Agent's tray icon, over the already-running
+Service's named pipe (see step 4 below); the Service just needs to already be up and listening.
 
 #### Option A: Using SC (Windows Service Control)
 
 ```powershell
 # Open PowerShell as Administrator
-cd C:\path\to\ScreenBux2\src\ScreenBux.Service\bin\Release\net8.0
+cd C:\path\to\ScreenBux2\src\ScreenBux.Service\bin\Release\net10.0
 
 # Create the service
 sc create ScreenBuxService binPath="C:\path\to\ScreenBux.Service.exe" start=auto
@@ -30,7 +34,8 @@ sc query ScreenBuxService
 
 #### Option B: Using .NET CLI (Development)
 
-For development and testing, you can run the service directly:
+For development and testing, you can run the service directly (still no link code needed here -
+just leave it running and use the Agent's tray menu to link once it's up):
 
 ```bash
 cd src/ScreenBux.Service
@@ -39,7 +44,10 @@ dotnet run
 
 ### 2. Configure Policy
 
-Copy and edit the `policy.json` file to define your parental control rules:
+The Service maintains its own local policy cache once linked to an account (see `docs/ARCHITECTURE.md`
+for the two-store policy model) - you do not need to hand-author a `policy.json` up front for a normal
+install. This step is only relevant if you want to seed a policy manually before the Service has ever
+synced with the WebServer:
 
 ```bash
 # Copy the sample policy
@@ -49,17 +57,10 @@ cp policy.json C:\ProgramData\ScreenBux\policy.json
 notepad C:\ProgramData\ScreenBux\policy.json
 ```
 
-Update `appsettings.json` in the Service project to point to your policy file:
-
-```json
-{
-  "PolicyFilePath": "C:\\ProgramData\\ScreenBux\\policy.json"
-}
-```
-
 ### 3. Install the Windows Agent
 
-The Agent should start automatically when a user logs in.
+The Agent runs in the current user's session and lives in the system tray. It should start
+automatically when a user logs in.
 
 #### Option A: Add to Startup (User Mode)
 
@@ -74,7 +75,25 @@ cd src/ScreenBux.Agent
 dotnet run
 ```
 
-### 4. Install the Updater
+### 4. Link the Device
+
+With both the Service (step 1) and Agent (step 3) running, and the WebServer/WebClient reachable,
+generate a link code from the parent's WebClient "Link Device" page (`POST api/devices/linkcode`,
+valid for 15 minutes). Then, on the controlled machine:
+
+1. Right-click the ScreenBux icon in the system tray.
+2. Choose **Link Device...** from the context menu.
+3. Enter the 8-character code and click **Link**.
+
+The Agent sends the code to the already-running, already-elevated Service over the local named
+pipe (`ScreenBuxServicePipe`); the Service redeems it against the WebServer and stores the
+resulting device token in its local `device.json`. No CLI flags, no interactive/elevated run of
+the Service, and no `LinkCode` config entry are needed for this - those were leftovers from an
+earlier design and do not reflect how linking works today. (There *is* a legacy
+`LinkCode`-in-`appsettings.json` fallback for headless auto-linking, but it is inactive unless you
+explicitly add that key.)
+
+### 5. Install the Updater
 
 `ScreenBux.Updater` is an always-elevated Windows Service that installs/updates the Service and
 Agent on this machine (they can't safely replace their own running executables). Two ways to
@@ -102,7 +121,7 @@ msiexec /i installer\ScreenBux.Updater.Installer\bin\x64\Release\ScreenBux.Updat
 > automatically cleans up the managed Service and Agent first, unless this is a version upgrade).
 > See the Uninstallation section below.
 
-### 5. Install the Web Server
+### 6. Install the Web Server
 
 The Web Server can be hosted using IIS, Kestrel, or run as a standalone application.
 
@@ -126,11 +145,12 @@ cd src/ScreenBux.WebServer
 dotnet run
 ```
 
-The API will be available at:
-- HTTPS: https://localhost:7000
-- HTTP: http://localhost:5000
+The API will be available at (per `Properties/launchSettings.json`; a standalone published/hosted
+deployment can use whatever port you configure via `--urls`/`ASPNETCORE_URLS`):
+- HTTPS: https://localhost:44323
+- HTTP: http://localhost:5246
 
-### 6. Access the Web Client
+### 7. Access the Web Client
 
 The Web Client can be accessed through a web browser.
 
@@ -190,7 +210,7 @@ a version upgrade.
 
 1. Check Windows Event Viewer for error messages
 2. Verify the service executable path is correct
-3. Ensure .NET 8.0 runtime is installed
+3. Ensure .NET 10.0 runtime is installed
 4. Check that the service account has appropriate permissions
 
 ### Agent can't connect to Service

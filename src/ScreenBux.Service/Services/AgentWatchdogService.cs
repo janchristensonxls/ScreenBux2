@@ -92,7 +92,10 @@ public class AgentWatchdogService : BackgroundService
             // TryStartInActiveSession is itself a no-op (returns false, logs) when there is no
             // active console session, which is exactly the "only if we have a current active
             // interactive session" behavior we want here - no separate session check needed.
-            _sessionLauncher.TryStartInActiveSession(executablePath);
+            var relaunched = _sessionLauncher.TryStartInActiveSession(executablePath);
+            _logger.LogWarning(
+                "TryStartInActiveSession({Executable}) returned {Result}.",
+                executablePath, relaunched);
         }
         finally
         {

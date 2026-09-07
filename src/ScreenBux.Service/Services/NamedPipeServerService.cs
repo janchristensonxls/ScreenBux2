@@ -1,4 +1,6 @@
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using ScreenBux.Shared.Messages;
@@ -56,12 +58,72 @@ public class NamedPipeServerService : BackgroundService
                     transmissionMode = PipeTransmissionMode.Message;
                 }
 
-                var pipeServer = new NamedPipeServerStream(
-                    PipeName,
-                    PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    transmissionMode,
-                    PipeOptions.Asynchronous);
+                // The Service normally runs elevated (LocalSystem/Administrator via the SCM),
+                // while the Agent runs as an ordinary logged-in user. NamedPipeServerStream's
+                // default ACL only grants access to the creating account (and admins), so
+                // without an explicit, more permissive PipeSecurity here the Agent's
+                // ConnectAsync would be denied at the OS level - surfacing to the Agent only as
+                // a silent timeout/failure, never as a clear "access denied" message anywhere.
+                // Grant read/write to Authenticated Users so a normal user session can connect.
+                NamedPipeServerStream pipeServer;
+                if (OperatingSystem.IsWindows())
+                {
+                    var pipeSecurity = new PipeSecurity();
+
+                    // Grant read/write to Authenticated Users so a normal user session (the
+                    // Agent) can connect, without needing to be an administrator.
+                    var authenticatedUsers = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
+                    pipeSecurity.AddAccessRule(new PipeAccessRule(
+                        authenticatedUsers,
+                        PipeAccessRights.ReadWrite,
+                        AccessControlType.Allow));
+
+                    // A custom PipeSecurity REPLACES the default ACL entirely rather than
+                    // extending it, so the Service's own account (LocalSystem when running as
+                    // a Windows Service, or the interactive admin account when run via `dotnet
+                    // run`) must be explicitly re-granted full control here - otherwise pipe
+                    // creation itself fails with UnauthorizedAccessException, since the
+                    // creating process no longer has rights to its own pipe.
+                    var currentOwner = WindowsIdentity.GetCurrent().User;
+                    if (currentOwner is not null)
+                    {
+                        pipeSecurity.AddAccessRule(new PipeAccessRule(
+                            currentOwner,
+                            PipeAccessRights.FullControl,
+                            AccessControlType.Allow));
+                    }
+
+                    var localSystem = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+                    pipeSecurity.AddAccessRule(new PipeAccessRule(
+                        localSystem,
+                        PipeAccessRights.FullControl,
+                        AccessControlType.Allow));
+
+                    var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+                    pipeSecurity.AddAccessRule(new PipeAccessRule(
+                        administrators,
+                        PipeAccessRights.FullControl,
+                        AccessControlType.Allow));
+
+                    pipeServer = NamedPipeServerStreamAcl.Create(
+                        PipeName,
+                        PipeDirection.InOut,
+                        NamedPipeServerStream.MaxAllowedServerInstances,
+                        transmissionMode,
+                        PipeOptions.Asynchronous,
+                        inBufferSize: 0,
+                        outBufferSize: 0,
+                        pipeSecurity: pipeSecurity);
+                }
+                else
+                {
+                    pipeServer = new NamedPipeServerStream(
+                        PipeName,
+                        PipeDirection.InOut,
+                        NamedPipeServerStream.MaxAllowedServerInstances,
+                        transmissionMode,
+                        PipeOptions.Asynchronous);
+                }
 
                 try
                 {

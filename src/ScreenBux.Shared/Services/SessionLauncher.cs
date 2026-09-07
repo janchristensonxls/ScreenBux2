@@ -34,6 +34,8 @@ public class SessionLauncher
     public bool TryStartInActiveSession(string executablePath, string? arguments = null)
     {
         var consoleSessionId = WTSGetActiveConsoleSessionId();
+        _logger.LogDebug("TryStartInActiveSession: active console session id is {SessionId}.", consoleSessionId);
+
         if (consoleSessionId == 0xFFFFFFFF)
         {
             _logger.LogInformation("No active console session; skipping relaunch of {Executable}.", executablePath);
@@ -65,7 +67,13 @@ public class SessionLauncher
                 var environmentBlock = IntPtr.Zero;
                 try
                 {
-                    CreateEnvironmentBlock(out environmentBlock, primaryTokenHandle, false);
+                    if (!CreateEnvironmentBlock(out environmentBlock, primaryTokenHandle, false))
+                    {
+                        _logger.LogWarning(
+                            "CreateEnvironmentBlock failed for {Executable} (Win32Error={Error}); continuing with a null environment block.",
+                            executablePath, Marshal.GetLastWin32Error());
+                        environmentBlock = IntPtr.Zero;
+                    }
 
                     var startupInfo = new STARTUPINFO
                     {
@@ -94,10 +102,33 @@ public class SessionLauncher
                         return false;
                     }
 
+                    // CreateProcessAsUser succeeding only means the process was spawned - it
+                    // says nothing about whether it stays running (missing runtime, startup
+                    // exception, getting terminated by AV/EDR for the token-impersonation
+                    // technique used here, etc.). Give it a moment and check whether it has
+                    // already exited so that is visible in the log instead of silently
+                    // reporting success for a process that immediately died.
+                    const int PostLaunchCheckDelayMs = 1500;
+                    Thread.Sleep(PostLaunchCheckDelayMs);
+                    if (GetExitCodeProcess(processInformation.hProcess, out var exitCode) && exitCode != STILL_ACTIVE)
+                    {
+                        _logger.LogWarning(
+                            "{Executable} was launched (PID={ProcessId}) but had already exited with code {ExitCode} within {DelayMs}ms of launch.",
+                            executablePath, processInformation.dwProcessId, exitCode, PostLaunchCheckDelayMs);
+                        CloseHandle(processInformation.hProcess);
+                        CloseHandle(processInformation.hThread);
+                        return false;
+                    }
+
                     CloseHandle(processInformation.hProcess);
                     CloseHandle(processInformation.hThread);
-                    _logger.LogInformation("Relaunched {Executable} in session {SessionId}.", executablePath, consoleSessionId);
+                    _logger.LogInformation("Relaunched {Executable} (PID={ProcessId}) in session {SessionId}.", executablePath, processInformation.dwProcessId, consoleSessionId);
                     return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error while relaunching {Executable} in session {SessionId}.", executablePath, consoleSessionId);
+                    return false;
                 }
                 finally
                 {
@@ -198,4 +229,10 @@ public class SessionLauncher
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
+
+    private const uint STILL_ACTIVE = 259;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
 }
