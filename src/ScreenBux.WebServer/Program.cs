@@ -80,7 +80,12 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // Add SignalR
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    // Default is 32 KB, which is too small for an on-demand process list from a device
+    // with hundreds of running processes (ReportProcessList payload). Raise it generously.
+    options.MaximumReceiveMessageSize = 1024 * 1024; // 1 MB
+});
 
 // Add CORS for web client
 builder.Services.AddCors(options =>
