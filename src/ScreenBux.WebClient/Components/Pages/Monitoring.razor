@@ -1,8 +1,10 @@
 @page "/monitoring"
 @attribute [Authorize]
 @using ScreenBux.Shared.Models
+@using ScreenBux.Shared.Models.Devices
 @using ScreenBux.WebClient.Services
 @inject MonitoringService MonitoringService
+@inject DevicesApiService DevicesApiService
 @implements IAsyncDisposable
 
 <PageTitle>Monitoring</PageTitle>
@@ -65,6 +67,55 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Process List</h5>
+        <div class="d-flex align-items-center mb-2">
+            <select class="form-select me-2" style="max-width: 300px;" @bind="_selectedDeviceId">
+                <option value="">-- Select a device --</option>
+                @foreach (var device in _devices)
+                {
+                    <option value="@device.Id">@device.Name</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="RequestProcessList" disabled="@(_isRequestingProcessList || string.IsNullOrEmpty(_selectedDeviceId))">
+                @(_isRequestingProcessList ? "Requesting..." : "Get Process List")
+            </button>
+        </div>
+
+        @if (_processListError is not null)
+        {
+            <p class="text-danger">@_processListError</p>
+        }
+
+        @if (_currentProcessList is not null)
+        {
+            <p class="text-muted">Retrieved @_currentProcessList.Count at @_processListRetrievedAt?.ToLocalTime().ToString("HH:mm:ss")</p>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>PID</th>
+                            <th>Name</th>
+                            <th>Executable Path</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var process in _currentProcessList)
+                        {
+                            <tr>
+                                <td>@process.ProcessId</td>
+                                <td>@process.ProcessName</td>
+                                <td>@process.ExecutablePath</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <h5 class="card-title">Status Messages</h5>
@@ -78,15 +129,36 @@
 </div>
 
 @code {
+    private static readonly TimeSpan ProcessListTimeout = TimeSpan.FromSeconds(15);
+
     private bool _isConnected = false;
     private List<ProcessInfo> _processHistory = new();
     private List<string> _statusMessages = new();
+    private List<DeviceDto> _devices = new();
+    private string _selectedDeviceId = string.Empty;
+    private bool _isRequestingProcessList = false;
+    private string? _processListError;
+    private List<ProcessInfo>? _currentProcessList;
+    private DateTime? _processListRetrievedAt;
+    private Guid? _pendingProcessListRequestId;
+    private CancellationTokenSource? _processListTimeoutCts;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         MonitoringService.ProcessDetected += OnProcessDetected;
         MonitoringService.PolicyUpdated += OnPolicyUpdated;
         MonitoringService.StatusReceived += OnStatusReceived;
+        MonitoringService.ProcessListReceived += OnProcessListReceived;
+
+        try
+        {
+            var devices = await DevicesApiService.ListDevicesAsync();
+            _devices = devices.ToList();
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Error loading devices: {ex.Message}");
+        }
     }
 
     private async Task Connect()
@@ -131,6 +203,57 @@
         AddStatusMessage($"Close request sent for process {processId}");
     }
 
+    private async Task RequestProcessList()
+    {
+        if (!Guid.TryParse(_selectedDeviceId, out var deviceId))
+        {
+            return;
+        }
+
+        _processListTimeoutCts?.Cancel();
+        _processListTimeoutCts = new CancellationTokenSource();
+        var timeoutToken = _processListTimeoutCts.Token;
+
+        _isRequestingProcessList = true;
+        _processListError = null;
+        _currentProcessList = null;
+        StateHasChanged();
+
+        try
+        {
+            _pendingProcessListRequestId = await MonitoringService.RequestProcessListAsync(deviceId);
+            AddStatusMessage($"Process list requested for device {deviceId}");
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(ProcessListTimeout, timeoutToken);
+                    await InvokeAsync(() =>
+                    {
+                        if (_isRequestingProcessList)
+                        {
+                            _isRequestingProcessList = false;
+                            _processListError = "Device did not respond in time.";
+                            StateHasChanged();
+                        }
+                    });
+                }
+                catch (TaskCanceledException)
+                {
+                    // Response arrived before the timeout elapsed; nothing to do.
+                }
+            }, timeoutToken);
+        }
+        catch (Exception ex)
+        {
+            _isRequestingProcessList = false;
+            _processListError = $"Error requesting process list: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
     private void OnProcessDetected(object? sender, ProcessInfo processInfo)
     {
         _processHistory.Insert(0, processInfo);
@@ -150,6 +273,33 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnProcessListReceived(object? sender, ProcessListResult result)
+    {
+        if (_pendingProcessListRequestId != result.RequestId)
+        {
+            // Stale/unexpected result (e.g. a previous request that already timed out); ignore.
+            return;
+        }
+
+        _processListTimeoutCts?.Cancel();
+        _isRequestingProcessList = false;
+
+        if (result.Success)
+        {
+            _currentProcessList = result.Processes;
+            _processListRetrievedAt = DateTime.UtcNow;
+            _processListError = null;
+            AddStatusMessage($"Process list received for device {result.DeviceId} ({result.Processes.Count} processes)");
+        }
+        else
+        {
+            _processListError = result.ErrorMessage ?? "Failed to retrieve process list.";
+            AddStatusMessage($"Process list request failed for device {result.DeviceId}: {_processListError}");
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
     private void AddStatusMessage(string message)
     {
         var timestamp = DateTime.Now.ToString("HH:mm:ss");
@@ -162,8 +312,10 @@
 
     public async ValueTask DisposeAsync()
     {
+        _processListTimeoutCts?.Cancel();
         MonitoringService.ProcessDetected -= OnProcessDetected;
         MonitoringService.PolicyUpdated -= OnPolicyUpdated;
         MonitoringService.StatusReceived -= OnStatusReceived;
+        MonitoringService.ProcessListReceived -= OnProcessListReceived;
     }
 }

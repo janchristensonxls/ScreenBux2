@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 using ScreenBux.Shared.Models;
 
 namespace ScreenBux.Service.Services;
@@ -14,6 +15,7 @@ public class PolicySyncService : BackgroundService
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
     private readonly DeviceIdentityService _deviceIdentity;
+    private readonly IServiceProvider _serviceProvider;
     private HubConnection? _hubConnection;
 
     public PolicySyncService(
@@ -21,13 +23,15 @@ public class PolicySyncService : BackgroundService
         IConfiguration configuration,
         PolicyService policyService,
         GrantService grantService,
-        DeviceIdentityService deviceIdentity)
+        DeviceIdentityService deviceIdentity,
+        IServiceProvider serviceProvider)
     {
         _logger = logger;
         _configuration = configuration;
         _policyService = policyService;
         _grantService = grantService;
         _deviceIdentity = deviceIdentity;
+        _serviceProvider = serviceProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,6 +61,12 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogInformation("Grant update received from SignalR; expires at {ExpiresAtUtc}", grant.ExpiresAtUtc);
             await _grantService.UpdateGrantAsync(grant.ExpiresAtUtc);
+        });
+
+        _hubConnection.On<Guid>("ProcessListRequested", async requestId =>
+        {
+            _logger.LogInformation("Process list requested via SignalR (request {RequestId}).", requestId);
+            await HandleProcessListRequestedAsync(requestId);
         });
 
         _hubConnection.Reconnecting += error =>
@@ -141,6 +151,50 @@ public class PolicySyncService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send process detection to hub");
+        }
+    }
+
+    /// <summary>
+    /// Handles an on-demand "get process list" request pushed from the web server's hub.
+    /// Resolves <see cref="ProcessMonitoringService"/> lazily via <see cref="_serviceProvider"/>
+    /// rather than a constructor dependency, since ProcessMonitoringService itself depends on
+    /// this class (to report detections) and a direct two-way constructor dependency would be
+    /// a circular reference.
+    /// </summary>
+    private async Task HandleProcessListRequestedAsync(Guid requestId)
+    {
+        var connection = _hubConnection;
+        if (connection is not { State: HubConnectionState.Connected })
+        {
+            return;
+        }
+
+        var deviceId = _deviceIdentity.GetOrCreate().DeviceId;
+        var result = new ProcessListResult
+        {
+            RequestId = requestId,
+            DeviceId = deviceId
+        };
+
+        try
+        {
+            var processMonitoring = _serviceProvider.GetRequiredService<ProcessMonitoringService>();
+            result.Processes.AddRange(processMonitoring.GetCurrentProcesses());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to enumerate processes for on-demand process list request {RequestId}.", requestId);
+            result.Success = false;
+            result.ErrorMessage = "Failed to enumerate processes on this device.";
+        }
+
+        try
+        {
+            await connection.InvokeAsync("ReportProcessList", result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send process list result to hub for request {RequestId}.", requestId);
         }
     }
 }

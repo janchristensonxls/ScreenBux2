@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using ScreenBux.Data;
 using ScreenBux.Shared.Models;
 using ScreenBux.WebServer.Services;
 
@@ -12,10 +14,12 @@ namespace ScreenBux.WebServer.Hubs;
 public class MonitoringHub : Hub
 {
     private readonly ILogger<MonitoringHub> _logger;
+    private readonly AppDbContext _db;
 
-    public MonitoringHub(ILogger<MonitoringHub> logger)
+    public MonitoringHub(ILogger<MonitoringHub> logger, AppDbContext db)
     {
         _logger = logger;
+        _db = db;
     }
 
     public override async Task OnConnectedAsync()
@@ -28,8 +32,18 @@ public class MonitoringHub : Hub
             await Groups.AddToGroupAsync(Context.ConnectionId, accountId);
         }
 
-        _logger.LogInformation("Client connected: {ConnectionId} (account {AccountId})",
-            Context.ConnectionId, accountId);
+        // Device-token connections (the Service acting as a SignalR client) additionally join
+        // a per-device group so the server can target exactly one device - e.g. to request an
+        // on-demand process list or screenshot - without fanning the request out to every
+        // device on the account.
+        var deviceId = Context.User?.GetDeviceId();
+        if (deviceId.HasValue)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetDeviceGroupName(deviceId.Value));
+        }
+
+        _logger.LogInformation("Client connected: {ConnectionId} (account {AccountId}, device {DeviceId})",
+            Context.ConnectionId, accountId, deviceId);
         await base.OnConnectedAsync();
     }
 
@@ -41,9 +55,17 @@ public class MonitoringHub : Hub
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, accountId);
         }
 
+        var deviceId = Context.User?.GetDeviceId();
+        if (deviceId.HasValue)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, GetDeviceGroupName(deviceId.Value));
+        }
+
         _logger.LogInformation("Client disconnected: {ConnectionId}", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
+
+    private static string GetDeviceGroupName(Guid deviceId) => $"device:{deviceId}";
 
     /// <summary>
     /// Client requests to get current status
@@ -97,6 +119,46 @@ public class MonitoringHub : Hub
         if (!string.IsNullOrEmpty(accountId))
         {
             await Clients.Group(accountId).SendAsync("PolicyUpdated", config);
+        }
+    }
+
+    /// <summary>
+    /// Called by a WebClient to request an on-demand process list from a specific device.
+    /// Verifies the caller's account actually owns the device before addressing it, then
+    /// forwards the request to that device's Service connection (if any) via its own group.
+    /// The result arrives asynchronously through <see cref="ReportProcessList"/>.
+    /// </summary>
+    public async Task RequestProcessList(Guid deviceId, Guid requestId)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (string.IsNullOrEmpty(accountId))
+        {
+            return;
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == deviceId && d.AccountId == accountId);
+        if (!deviceExists)
+        {
+            _logger.LogWarning("Client {ConnectionId} (account {AccountId}) requested process list for device {DeviceId} it does not own.",
+                Context.ConnectionId, accountId, deviceId);
+            return;
+        }
+
+        _logger.LogInformation("Client {ConnectionId} requested process list for device {DeviceId} (request {RequestId}).",
+            Context.ConnectionId, deviceId, requestId);
+        await Clients.Group(GetDeviceGroupName(deviceId)).SendAsync("ProcessListRequested", requestId);
+    }
+
+    /// <summary>
+    /// Called by the Service (as a SignalR client) to report the result of an on-demand
+    /// process list request back to the owning account's WebClient(s).
+    /// </summary>
+    public async Task ReportProcessList(ProcessListResult result)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            await Clients.Group(accountId).SendAsync("ProcessListReceived", result);
         }
     }
 }

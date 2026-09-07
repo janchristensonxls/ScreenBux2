@@ -218,4 +218,25 @@ public class ProcessMonitoringService : BackgroundService
             return string.Empty;
         }
     }
+
+    /// <summary>
+    /// Enumerates all currently running processes on this device for an on-demand "get process
+    /// list" request. Unlike the enforcement loop's <see cref="EnforcePoliciesAsync"/>, this
+    /// always resolves the executable path (best-effort) since it's a one-off, user-triggered
+    /// call rather than a per-tick hot path shared by every process on the machine.
+    /// </summary>
+    public IReadOnlyList<ProcessInfo> GetCurrentProcesses()
+    {
+        var processes = new List<ProcessInfo>();
+        foreach (var process in Process.GetProcesses())
+        {
+            var processInfo = CreateProcessInfo(process, resolveExecutablePath: true);
+            if (processInfo != null)
+            {
+                processes.Add(processInfo);
+            }
+        }
+
+        return processes;
+    }
 }

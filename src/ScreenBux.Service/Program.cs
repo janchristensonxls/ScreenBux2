@@ -23,7 +23,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>
 builder.Services.AddSingleton<DevicePolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DevicePolicySyncService>());
 builder.Services.AddHostedService<NamedPipeServerService>();
-builder.Services.AddHostedService<ProcessMonitoringService>();
+builder.Services.AddSingleton<ProcessMonitoringService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProcessMonitoringService>());
 builder.Services.AddSingleton<SessionLauncher>();
 builder.Services.AddHostedService<AgentWatchdogService>();
 builder.Services.AddHostedService<Worker>();

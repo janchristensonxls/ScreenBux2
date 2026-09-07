@@ -13,6 +13,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<PolicyConfiguration>? PolicyUpdated;
     public event EventHandler<GrantDto>? GrantUpdated;
     public event EventHandler<string>? StatusReceived;
+    public event EventHandler<ProcessListResult>? ProcessListReceived;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
@@ -60,6 +61,12 @@ public class MonitoringService : IAsyncDisposable
             _logger.LogInformation("Status received");
             StatusReceived?.Invoke(this, status.ToString() ?? "Unknown");
         });
+
+        _hubConnection.On<ProcessListResult>("ProcessListReceived", (result) =>
+        {
+            _logger.LogInformation("Process list received for device {DeviceId} (request {RequestId})", result.DeviceId, result.RequestId);
+            ProcessListReceived?.Invoke(this, result);
+        });
     }
 
     public async Task StartAsync()
@@ -94,6 +101,22 @@ public class MonitoringService : IAsyncDisposable
         {
             await _hubConnection.InvokeAsync("CloseProcess", processId);
         }
+    }
+
+    /// <summary>
+    /// Requests an on-demand process list from the given device. The result arrives
+    /// asynchronously via <see cref="ProcessListReceived"/>, correlated by the returned
+    /// request id. Callers should apply their own timeout since the device may be offline.
+    /// </summary>
+    public async Task<Guid> RequestProcessListAsync(Guid deviceId)
+    {
+        var requestId = Guid.NewGuid();
+        if (_hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.InvokeAsync("RequestProcessList", deviceId, requestId);
+        }
+
+        return requestId;
     }
 
     public bool IsConnected => _hubConnection.State == HubConnectionState.Connected;
