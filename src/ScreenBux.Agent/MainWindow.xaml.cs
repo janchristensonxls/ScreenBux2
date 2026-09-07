@@ -202,6 +202,12 @@ public partial class MainWindow : Window
         _monitoringService.Start();
         StatusText.Text = "Monitoring active";
         LogMessage("Monitoring started automatically");
+
+        // Start hidden in the tray rather than showing the main window on launch. Hiding a
+        // window that was actually shown/laid-out (rather than starting in WindowState.Minimized
+        // before ever being shown) avoids the OS briefly rendering a tiny, content-less window.
+        Hide();
+        ShowInTaskbar = false;
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
