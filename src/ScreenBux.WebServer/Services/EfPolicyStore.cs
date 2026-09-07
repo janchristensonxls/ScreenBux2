@@ -33,7 +33,9 @@ public class EfPolicyStore : IPolicyStore
     public async Task<PolicyConfiguration> GetPolicyAsync(string accountId, CancellationToken cancellationToken = default)
     {
         var profile = await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
-        return Deserialize(profile.PolicyJson);
+        var policy = Deserialize(profile.PolicyJson);
+        policy.Name = profile.Name;
+        return policy;
     }
 
     public async Task SavePolicyAsync(string accountId, PolicyConfiguration policy, CancellationToken cancellationToken = default)
@@ -60,7 +62,9 @@ public class EfPolicyStore : IPolicyStore
 
             if (deviceProfile is not null)
             {
-                return Deserialize(deviceProfile.PolicyJson);
+                var devicePolicy = Deserialize(deviceProfile.PolicyJson);
+                devicePolicy.Name = deviceProfile.Name;
+                return devicePolicy;
             }
         }
 
@@ -186,7 +190,9 @@ public class EfPolicyStore : IPolicyStore
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Deserialize(profile.PolicyJson);
+        var policy = Deserialize(profile.PolicyJson);
+        policy.Name = profile.Name;
+        return policy;
     }
 
     /// <summary>
@@ -279,16 +285,21 @@ public class EfPolicyStore : IPolicyStore
         return profiles;
     }
 
-    private static PolicyProfileDto ToDto(PolicyProfile profile, bool isActive) => new()
+    private static PolicyProfileDto ToDto(PolicyProfile profile, bool isActive)
     {
-        Id = profile.Id,
-        ChildProfileId = profile.ChildProfileId,
-        Name = profile.Name,
-        IsBuiltIn = profile.IsBuiltIn,
-        IsActive = isActive,
-        Policy = Deserialize(profile.PolicyJson),
-        UpdatedAt = profile.UpdatedAt
-    };
+        var policy = Deserialize(profile.PolicyJson);
+        policy.Name = profile.Name;
+        return new()
+        {
+            Id = profile.Id,
+            ChildProfileId = profile.ChildProfileId,
+            Name = profile.Name,
+            IsBuiltIn = profile.IsBuiltIn,
+            IsActive = isActive,
+            Policy = policy,
+            UpdatedAt = profile.UpdatedAt
+        };
+    }
 
     private PolicyConfiguration LoadLegacyPolicyOrDefault()
     {

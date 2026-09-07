@@ -17,6 +17,7 @@ public class NamedPipeServerService : BackgroundService
     private readonly ProcessKillerService _processKiller;
     private readonly DevicePolicySyncService _devicePolicySync;
     private readonly PowerActionService _powerAction;
+    private readonly PolicySyncService _policySync;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
@@ -25,7 +26,8 @@ public class NamedPipeServerService : BackgroundService
         GrantService grantService,
         ProcessKillerService processKiller,
         DevicePolicySyncService devicePolicySync,
-        PowerActionService powerAction)
+        PowerActionService powerAction,
+        PolicySyncService policySync)
     {
         _logger = logger;
         _policyService = policyService;
@@ -33,6 +35,7 @@ public class NamedPipeServerService : BackgroundService
         _processKiller = processKiller;
         _devicePolicySync = devicePolicySync;
         _powerAction = powerAction;
+        _policySync = policySync;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -251,6 +254,11 @@ public class NamedPipeServerService : BackgroundService
             if (action == PolicyRuleAction.KillProcessTree)
             {
                 var killed = await _processKiller.KillProcessTreeAsync(message.Process.ProcessId, reason);
+                if (killed && !_processKiller.IsDryRun)
+                {
+                    await ReportDetectionAsync(message.Process);
+                }
+
                 return new CommandResponse
                 {
                     Success = killed,
@@ -264,6 +272,11 @@ public class NamedPipeServerService : BackgroundService
 
             if (closed)
             {
+                if (!_processKiller.IsDryRun)
+                {
+                    await ReportDetectionAsync(message.Process);
+                }
+
                 return new CommandResponse
                 {
                     Success = true,
@@ -293,6 +306,18 @@ public class NamedPipeServerService : BackgroundService
             Success = true,
             Message = "Process allowed"
         };
+    }
+
+    /// <summary>
+    /// Relays a foreground process closure - reported by the Agent and enforced here by the
+    /// Service - to the monitoring hub, mirroring what <see cref="ProcessMonitoringService"/>
+    /// does for its own background-enumeration kills. Without this, closures triggered via the
+    /// Named Pipe (foreground/window-title matches) never show up in the WebClient monitoring view.
+    /// </summary>
+    private async Task ReportDetectionAsync(ProcessInfo processInfo)
+    {
+        processInfo.DetectedAt = DateTime.UtcNow;
+        await _policySync.SendProcessDetectionAsync(processInfo);
     }
 
     private object HandleGetPolicyRequest()

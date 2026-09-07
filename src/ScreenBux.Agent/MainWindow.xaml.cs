@@ -31,6 +31,8 @@ public partial class MainWindow : Window
     private Drawing.Icon? _connectedIcon;
     private Drawing.Icon? _disconnectedIcon;
     private bool? _lastKnownConnected;
+    private string _trayBaseText = "ScreenBux Agent";
+    private string _grantRemainingText = string.Empty;
 
     public MainWindow()
     {
@@ -114,8 +116,11 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateTrayConnectionState(bool isConnected)
     {
+        _trayBaseText = isConnected ? "ScreenBux Agent - Connected" : "ScreenBux Agent - Disconnected";
+
         if (_notifyIcon is null || _lastKnownConnected == isConnected)
         {
+            RefreshTrayTooltip();
             return;
         }
 
@@ -126,7 +131,25 @@ public partial class MainWindow : Window
             _notifyIcon.Icon = icon;
         }
 
-        _notifyIcon.Text = isConnected ? "ScreenBux Agent - Connected" : "ScreenBux Agent - Disconnected";
+        RefreshTrayTooltip();
+    }
+
+    /// <summary>
+    /// Rebuilds the tray icon's tooltip from the connection state plus any remaining bonus
+    /// time, truncating to NotifyIcon.Text's 63-character limit.
+    /// </summary>
+    private void RefreshTrayTooltip()
+    {
+        if (_notifyIcon is null)
+        {
+            return;
+        }
+
+        var text = string.IsNullOrEmpty(_grantRemainingText)
+            ? _trayBaseText
+            : $"{_trayBaseText}{Environment.NewLine}{_grantRemainingText}";
+
+        _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
     }
 
     private void ShowMainWindow()
@@ -201,6 +224,23 @@ public partial class MainWindow : Window
     {
         await CheckServiceStatusAsync();
         await CheckGrantStatusAsync();
+        await CheckPolicyNameAsync();
+    }
+
+    private async Task CheckPolicyNameAsync()
+    {
+        try
+        {
+            var response = await _pipeClient.SendMessageAsync<ScreenBux.Shared.Messages.PolicyResponse>(
+                new ScreenBux.Shared.Messages.GetPolicyRequest());
+
+            var name = response?.Configuration?.Name;
+            PolicyNameText.Text = string.IsNullOrWhiteSpace(name) ? string.Empty : $"Policy: {name}";
+        }
+        catch
+        {
+            // Best-effort; leave the previous text on transient failure.
+        }
     }
 
     private async Task CheckGrantStatusAsync()
@@ -214,15 +254,21 @@ public partial class MainWindow : Window
             {
                 var remaining = expiresAtUtc - DateTime.UtcNow;
                 GrantStatusText.Text = $"Bonus time active: {remaining:hh\\:mm\\:ss} remaining";
+                _grantRemainingText = $"Bonus time: {remaining:hh\\:mm\\:ss} remaining";
             }
             else
             {
                 GrantStatusText.Text = string.Empty;
+                _grantRemainingText = string.Empty;
             }
         }
         catch
         {
             // Best-effort; leave the previous text on transient failure.
+        }
+        finally
+        {
+            RefreshTrayTooltip();
         }
     }
 

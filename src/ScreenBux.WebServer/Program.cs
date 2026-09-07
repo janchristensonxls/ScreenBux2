@@ -89,7 +89,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                   "https://localhost:7123", "http://localhost:5239",   // WebClient Kestrel (dotnet run)
-                  "https://localhost:44331", "http://localhost:15426")  // WebClient IIS Express
+                  "https://localhost:44331", "http://localhost:15426",   // WebClient IIS Express
+                  "https://sbx-client-a0bshgexhnejbjg9.northeurope-01.azurewebsites.net")  // WebClient Azure
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

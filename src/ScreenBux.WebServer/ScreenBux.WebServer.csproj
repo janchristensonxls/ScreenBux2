@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ScreenBux.WebServer-1e3c6f2a-9b7d-4a5e-8c1f-2d6a9b3e7f01</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
