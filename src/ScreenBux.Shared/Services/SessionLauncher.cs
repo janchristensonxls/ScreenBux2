@@ -72,42 +72,11 @@ public class SessionLauncher
             using (primaryTokenHandle)
             {
                 var environmentBlock = IntPtr.Zero;
-                PROFILEINFO profileInfo = default;
-                var profileLoaded = false;
+                
 
                 try
                 {
-                    // LoadUserProfile is required alongside CreateEnvironmentBlock: without it,
-                    // the target user's HKEY_CURRENT_USER hive is never mapped into the new
-                    // process, which causes GUI frameworks (WPF in the Agent's case) to fail
-                    // during per-user COM/DLL initialization - observed as the process exiting
-                    // almost immediately with STATUS_DLL_INIT_FAILED (0xC0000142). Loading the
-                    // profile first fixes that.
-                    if (!TryGetUserNameFromToken(primaryTokenHandle, out var userName))
-                    {
-                        _logger.LogWarning(
-                            "Could not resolve the user name for the active session's token; proceeding without loading a user profile for {Executable}.",
-                            executablePath);
-                    }
-                    else
-                    {
-                        profileInfo = new PROFILEINFO
-                        {
-                            dwSize = Marshal.SizeOf<PROFILEINFO>(),
-                            lpUserName = userName
-                        };
-
-                        if (!LoadUserProfile(primaryTokenHandle, ref profileInfo))
-                        {
-                            _logger.LogWarning(
-                                "LoadUserProfile failed for user {UserName} (Win32Error={Error}); {Executable} may fail to start correctly without the user's profile loaded.",
-                                userName, Marshal.GetLastWin32Error(), executablePath);
-                        }
-                        else
-                        {
-                            profileLoaded = true;
-                        }
-                    }
+                   
 
                     if (!CreateEnvironmentBlock(out environmentBlock, primaryTokenHandle, false))
                     {
@@ -132,7 +101,7 @@ public class SessionLauncher
                         IntPtr.Zero,
                         IntPtr.Zero,
                         false,
-                        CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE,
+                        CREATE_UNICODE_ENVIRONMENT,
                         environmentBlock,
                         Path.GetDirectoryName(executablePath),
                         ref startupInfo,
@@ -179,10 +148,7 @@ public class SessionLauncher
                         DestroyEnvironmentBlock(environmentBlock);
                     }
 
-                    if (profileLoaded && profileInfo.hProfile != IntPtr.Zero)
-                    {
-                        UnloadUserProfile(primaryTokenHandle, profileInfo.hProfile);
-                    }
+
                 }
             }
         }
@@ -286,48 +252,7 @@ public class SessionLauncher
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
 
-    /// <summary>
-    /// Resolves "DOMAIN\User" (or "MachineName\User" for a local account) for the given token,
-    /// via LookupAccountSid, in the format LoadUserProfile's PROFILEINFO.lpUserName expects.
-    /// </summary>
-    private static bool TryGetUserNameFromToken(SafeAccessTokenHandle tokenHandle, out string userName)
-    {
-        userName = string.Empty;
-        try
-        {
-            var identity = new WindowsIdentity(tokenHandle.DangerousGetHandle());
-            var account = identity.Name; // "DOMAIN\User" or "MachineName\User"
-            if (string.IsNullOrEmpty(account))
-            {
-                return false;
-            }
+    
 
-            var backslashIndex = account.IndexOf('\\');
-            userName = backslashIndex >= 0 ? account[(backslashIndex + 1)..] : account;
-            return !string.IsNullOrEmpty(userName);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct PROFILEINFO
-    {
-        public int dwSize;
-        public int dwFlags;
-        public string lpUserName;
-        public string? lpProfilePath;
-        public string? lpDefaultPath;
-        public string? lpServerName;
-        public string? lpPolicyPath;
-        public IntPtr hProfile;
-    }
-
-    [DllImport("userenv.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool LoadUserProfile(SafeAccessTokenHandle hToken, ref PROFILEINFO lpProfileInfo);
-
-    [DllImport("userenv.dll", SetLastError = true)]
-    private static extern bool UnloadUserProfile(SafeAccessTokenHandle hToken, IntPtr hProfile);
+   
 }
