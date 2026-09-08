@@ -23,6 +23,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>
 builder.Services.AddSingleton<DevicePolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DevicePolicySyncService>());
 builder.Services.AddSingleton<PendingWindowListRequestCoordinator>();
+builder.Services.AddSingleton<PendingScreenCaptureRequestCoordinator>();
 builder.Services.AddHostedService<NamedPipeServerService>();
 builder.Services.AddSingleton<ProcessMonitoringService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProcessMonitoringService>());

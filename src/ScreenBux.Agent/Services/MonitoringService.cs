@@ -12,6 +12,7 @@ public class MonitoringService
 {
     private readonly ForegroundWindowDetector _windowDetector;
     private readonly NamedPipeClient _pipeClient;
+    private readonly ScreenCaptureService _screenCaptureService;
     private readonly DispatcherTimer _timer;
     private ProcessInfo? _lastReportedProcess;
 
@@ -22,6 +23,7 @@ public class MonitoringService
     {
         _windowDetector = new ForegroundWindowDetector();
         _pipeClient = new NamedPipeClient();
+        _screenCaptureService = new ScreenCaptureService();
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -90,6 +92,11 @@ public class MonitoringService
                 {
                     await ReportWindowListAsync(requestId);
                 }
+
+                if (cmdResponse.PendingScreenCaptureRequestId is Guid captureRequestId)
+                {
+                    await ReportScreenCaptureAsync(captureRequestId);
+                }
             }
         }
         catch (Exception ex)
@@ -120,6 +127,45 @@ public class MonitoringService
         catch (Exception ex)
         {
             RaiseStatusChanged($"Error reporting window list: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Captures all connected monitors and reports the JPEG images back to the Service for a
+    /// pending on-demand "screen capture" request. Sent as its own transactional pipe call
+    /// (rather than waiting for the next tick) so the parent doesn't wait longer than necessary.
+    /// </summary>
+    private async Task ReportScreenCaptureAsync(Guid requestId)
+    {
+        try
+        {
+            var images = _screenCaptureService.CaptureAllScreens();
+            var report = new ScreenCaptureReportMessage
+            {
+                RequestId = requestId,
+                Success = true,
+                Images = images
+            };
+
+            await _pipeClient.SendMessageAsync<object>(report);
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error capturing screens: {ex.Message}");
+
+            try
+            {
+                await _pipeClient.SendMessageAsync<object>(new ScreenCaptureReportMessage
+                {
+                    RequestId = requestId,
+                    Success = false,
+                    ErrorMessage = ex.Message
+                });
+            }
+            catch
+            {
+                // Best effort - if this fails too, the Service will time out waiting.
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using ScreenBux.Shared.Models;
@@ -17,6 +19,8 @@ public class PolicySyncService : BackgroundService
     private readonly DeviceIdentityService _deviceIdentity;
     private readonly IServiceProvider _serviceProvider;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
+    private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
+    private readonly IHttpClientFactory _httpClientFactory;
     private HubConnection? _hubConnection;
 
     public PolicySyncService(
@@ -26,7 +30,9 @@ public class PolicySyncService : BackgroundService
         GrantService grantService,
         DeviceIdentityService deviceIdentity,
         IServiceProvider serviceProvider,
-        PendingWindowListRequestCoordinator windowListCoordinator)
+        PendingWindowListRequestCoordinator windowListCoordinator,
+        PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _configuration = configuration;
@@ -35,6 +41,8 @@ public class PolicySyncService : BackgroundService
         _deviceIdentity = deviceIdentity;
         _serviceProvider = serviceProvider;
         _windowListCoordinator = windowListCoordinator;
+        _screenCaptureCoordinator = screenCaptureCoordinator;
+        _httpClientFactory = httpClientFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -70,6 +78,12 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogInformation("Process list requested via SignalR (request {RequestId}).", requestId);
             await HandleProcessListRequestedAsync(requestId);
+        });
+
+        _hubConnection.On<Guid>("ScreenCaptureRequested", async requestId =>
+        {
+            _logger.LogInformation("Screen capture requested via SignalR (request {RequestId}).", requestId);
+            await HandleScreenCaptureRequestedAsync(requestId);
         });
 
         _hubConnection.Reconnecting += error =>
@@ -246,6 +260,78 @@ public class PolicySyncService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send process list result to hub for request {RequestId}.", requestId);
+        }
+    }
+
+    /// <summary>
+    /// Handles an on-demand "capture all screens" request pushed from the web server's hub.
+    /// Registers the request with <see cref="_screenCaptureCoordinator"/>, waits for the Agent
+    /// to capture and report images back over the named pipe (see <see cref="NamedPipeServerService"/>),
+    /// then POSTs the resulting images to the WebServer's REST endpoint (not over SignalR, to
+    /// avoid pushing large binary payloads through the hub) and finally notifies the WebClient
+    /// that the images are ready to download.
+    /// </summary>
+    private async Task HandleScreenCaptureRequestedAsync(Guid requestId)
+    {
+        var connection = _hubConnection;
+        if (connection is not { State: HubConnectionState.Connected })
+        {
+            return;
+        }
+
+        // Register before doing any other work, so the Agent's next poll tick has the maximum
+        // chance of picking up this request before the wait below times out.
+        _screenCaptureCoordinator.Register(requestId);
+
+        var images = await _screenCaptureCoordinator.WaitAsync(
+            requestId, TimeSpan.FromSeconds(15), CancellationToken.None);
+
+        if (images is null)
+        {
+            _logger.LogWarning("No screen capture response from Agent for request {RequestId}.", requestId);
+            return;
+        }
+
+        var serverBaseUrl = _configuration["ServerBaseUrl"];
+        if (string.IsNullOrWhiteSpace(serverBaseUrl))
+        {
+            _logger.LogWarning("ServerBaseUrl not configured; cannot upload screen capture for request {RequestId}.", requestId);
+            return;
+        }
+
+        var state = _deviceIdentity.GetOrCreate();
+        if (!state.IsLinked)
+        {
+            _logger.LogWarning("Device not linked; cannot upload screen capture for request {RequestId}.", requestId);
+            return;
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(serverBaseUrl.TrimEnd('/') + "/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
+
+            var uploadRequest = new
+            {
+                DeviceId = state.DeviceId,
+                Success = true,
+                ErrorMessage = (string?)null,
+                Images = images
+            };
+
+            using var response = await client.PostAsJsonAsync($"api/screencapture/{requestId}", uploadRequest);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to upload screen capture for request {RequestId} ({Status}).", requestId, (int)response.StatusCode);
+                return;
+            }
+
+            await connection.InvokeAsync("ReportScreenCaptureReady", requestId, images.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to upload/report screen capture for request {RequestId}.", requestId);
         }
     }
 }

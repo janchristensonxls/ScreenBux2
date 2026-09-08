@@ -46,6 +46,14 @@ public class CommandResponse : Contracts.INamedPipeMessage
     /// persistent duplex pipe connection for this occasional, user-triggered request.
     /// </summary>
     public Guid? PendingWindowListRequestId { get; set; }
+
+    /// <summary>
+    /// Piggybacks a pending on-demand "capture all screens" request onto this response, using
+    /// the same polling mechanism as <see cref="PendingWindowListRequestId"/>. When set, the
+    /// Agent should capture all monitors and reply with a <see cref="ScreenCaptureReportMessage"/>
+    /// carrying the same RequestId.
+    /// </summary>
+    public Guid? PendingScreenCaptureRequestId { get; set; }
 }
 
 /// <summary>
@@ -59,6 +67,21 @@ public class WindowListReportMessage : Contracts.INamedPipeMessage
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public Guid RequestId { get; set; }
     public List<Models.WindowInfo> Windows { get; set; } = new();
+}
+
+/// <summary>
+/// Sent from Agent to Service in response to a <see cref="CommandResponse.PendingScreenCaptureRequestId"/>,
+/// carrying a JPEG-encoded screenshot of each connected monitor so the Service can upload them
+/// to the WebServer for on-demand parental viewing.
+/// </summary>
+public class ScreenCaptureReportMessage : Contracts.INamedPipeMessage
+{
+    public string MessageType => "ScreenCaptureReport";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public Guid RequestId { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public List<Models.CapturedImage> Images { get; set; } = new();
 }
 
 /// <summary>

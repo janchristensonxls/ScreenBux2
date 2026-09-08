@@ -5,6 +5,7 @@
 @using ScreenBux.WebClient.Services
 @inject MonitoringService MonitoringService
 @inject DevicesApiService DevicesApiService
+@inject ScreenCaptureApiService ScreenCaptureApiService
 @implements IAsyncDisposable
 
 <PageTitle>Monitoring</PageTitle>
@@ -116,6 +117,30 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Screen Capture</h5>
+        <button class="btn btn-primary" @onclick="RequestScreenCapture" disabled="@(_isRequestingScreenCapture || string.IsNullOrEmpty(_selectedDeviceId))">
+            @(_isRequestingScreenCapture ? "Capturing..." : "Capture Screens")
+        </button>
+
+        @if (_screenCaptureError is not null)
+        {
+            <p class="text-danger">@_screenCaptureError</p>
+        }
+
+        @if (_screenCaptureImages.Any())
+        {
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                @foreach (var image in _screenCaptureImages)
+                {
+                    <img src="@image" style="max-width: 320px; border: 1px solid #ccc;" />
+                }
+            </div>
+        }
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <h5 class="card-title">Status Messages</h5>
@@ -143,12 +168,20 @@
     private Guid? _pendingProcessListRequestId;
     private CancellationTokenSource? _processListTimeoutCts;
 
+    private static readonly TimeSpan ScreenCaptureTimeout = TimeSpan.FromSeconds(20);
+    private bool _isRequestingScreenCapture = false;
+    private string? _screenCaptureError;
+    private List<string> _screenCaptureImages = new();
+    private Guid? _pendingScreenCaptureRequestId;
+    private CancellationTokenSource? _screenCaptureTimeoutCts;
+
     protected override async Task OnInitializedAsync()
     {
         MonitoringService.ProcessDetected += OnProcessDetected;
         MonitoringService.PolicyUpdated += OnPolicyUpdated;
         MonitoringService.StatusReceived += OnStatusReceived;
         MonitoringService.ProcessListReceived += OnProcessListReceived;
+        MonitoringService.ScreenCaptureReady += OnScreenCaptureReady;
 
         try
         {
@@ -300,6 +333,96 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private async Task RequestScreenCapture()
+    {
+        if (!Guid.TryParse(_selectedDeviceId, out var deviceId))
+        {
+            return;
+        }
+
+        _screenCaptureTimeoutCts?.Cancel();
+        _screenCaptureTimeoutCts = new CancellationTokenSource();
+        var timeoutToken = _screenCaptureTimeoutCts.Token;
+
+        _isRequestingScreenCapture = true;
+        _screenCaptureError = null;
+        _screenCaptureImages = new();
+        StateHasChanged();
+
+        try
+        {
+            _pendingScreenCaptureRequestId = await MonitoringService.RequestScreenCaptureAsync(deviceId);
+            AddStatusMessage($"Screen capture requested for device {deviceId}");
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(ScreenCaptureTimeout, timeoutToken);
+                    await InvokeAsync(() =>
+                    {
+                        if (_isRequestingScreenCapture)
+                        {
+                            _isRequestingScreenCapture = false;
+                            _screenCaptureError = "Device did not respond in time.";
+                            StateHasChanged();
+                        }
+                    });
+                }
+                catch (TaskCanceledException)
+                {
+                    // Response arrived before the timeout elapsed; nothing to do.
+                }
+            }, timeoutToken);
+        }
+        catch (Exception ex)
+        {
+            _isRequestingScreenCapture = false;
+            _screenCaptureError = $"Error requesting screen capture: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private async void OnScreenCaptureReady(object? sender, (Guid RequestId, int ImageCount) ready)
+    {
+        if (_pendingScreenCaptureRequestId != ready.RequestId)
+        {
+            // Stale/unexpected result (e.g. a previous request that already timed out); ignore.
+            return;
+        }
+
+        _screenCaptureTimeoutCts?.Cancel();
+
+        try
+        {
+            var images = new List<string>();
+            for (var index = 0; index < ready.ImageCount; index++)
+            {
+                var bytes = await ScreenCaptureApiService.DownloadImageAsync(ready.RequestId, index);
+                images.Add($"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}");
+            }
+
+            await InvokeAsync(() =>
+            {
+                _isRequestingScreenCapture = false;
+                _screenCaptureImages = images;
+                _screenCaptureError = null;
+                AddStatusMessage($"Screen capture received ({ready.ImageCount} images)");
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                _isRequestingScreenCapture = false;
+                _screenCaptureError = $"Error downloading screen capture: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
     private void AddStatusMessage(string message)
     {
         var timestamp = DateTime.Now.ToString("HH:mm:ss");
@@ -313,9 +436,11 @@
     public async ValueTask DisposeAsync()
     {
         _processListTimeoutCts?.Cancel();
+        _screenCaptureTimeoutCts?.Cancel();
         MonitoringService.ProcessDetected -= OnProcessDetected;
         MonitoringService.PolicyUpdated -= OnPolicyUpdated;
         MonitoringService.StatusReceived -= OnStatusReceived;
         MonitoringService.ProcessListReceived -= OnProcessListReceived;
+        MonitoringService.ScreenCaptureReady -= OnScreenCaptureReady;
     }
 }

@@ -14,6 +14,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<GrantDto>? GrantUpdated;
     public event EventHandler<string>? StatusReceived;
     public event EventHandler<ProcessListResult>? ProcessListReceived;
+    public event EventHandler<(Guid RequestId, int ImageCount)>? ScreenCaptureReady;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
@@ -67,6 +68,12 @@ public class MonitoringService : IAsyncDisposable
             _logger.LogInformation("Process list received for device {DeviceId} (request {RequestId})", result.DeviceId, result.RequestId);
             ProcessListReceived?.Invoke(this, result);
         });
+
+        _hubConnection.On<Guid, int>("ScreenCaptureReady", (requestId, imageCount) =>
+        {
+            _logger.LogInformation("Screen capture ready (request {RequestId}, {ImageCount} images)", requestId, imageCount);
+            ScreenCaptureReady?.Invoke(this, (requestId, imageCount));
+        });
     }
 
     public async Task StartAsync()
@@ -114,6 +121,22 @@ public class MonitoringService : IAsyncDisposable
         if (_hubConnection.State == HubConnectionState.Connected)
         {
             await _hubConnection.InvokeAsync("RequestProcessList", deviceId, requestId);
+        }
+
+        return requestId;
+    }
+
+    /// <summary>
+    /// Requests an on-demand screen capture from the given device. The result arrives
+    /// asynchronously via <see cref="ScreenCaptureReady"/>, correlated by the returned request
+    /// id; the images themselves are downloaded separately via REST, not through SignalR.
+    /// </summary>
+    public async Task<Guid> RequestScreenCaptureAsync(Guid deviceId)
+    {
+        var requestId = Guid.NewGuid();
+        if (_hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.InvokeAsync("RequestScreenCapture", deviceId, requestId);
         }
 
         return requestId;

@@ -161,4 +161,45 @@ public class MonitoringHub : Hub
             await Clients.Group(accountId).SendAsync("ProcessListReceived", result);
         }
     }
+
+    /// <summary>
+    /// Called by a WebClient to request an on-demand "capture all screens" from a specific
+    /// device. Mirrors <see cref="RequestProcessList"/>; the actual image bytes are never sent
+    /// over SignalR - only this small control-plane signal, and later a "ready" notification
+    /// once the Service has uploaded the images to the WebServer's REST endpoint.
+    /// </summary>
+    public async Task RequestScreenCapture(Guid deviceId, Guid requestId)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (string.IsNullOrEmpty(accountId))
+        {
+            return;
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == deviceId && d.AccountId == accountId);
+        if (!deviceExists)
+        {
+            _logger.LogWarning("Client {ConnectionId} (account {AccountId}) requested screen capture for device {DeviceId} it does not own.",
+                Context.ConnectionId, accountId, deviceId);
+            return;
+        }
+
+        _logger.LogInformation("Client {ConnectionId} requested screen capture for device {DeviceId} (request {RequestId}).",
+            Context.ConnectionId, deviceId, requestId);
+        await Clients.Group(GetDeviceGroupName(deviceId)).SendAsync("ScreenCaptureRequested", requestId);
+    }
+
+    /// <summary>
+    /// Called by the Service (as a SignalR client) once it has uploaded a completed screen
+    /// capture to the WebServer's REST endpoint, to notify the owning account's WebClient(s)
+    /// that the images are ready to download.
+    /// </summary>
+    public async Task ReportScreenCaptureReady(Guid requestId, int imageCount)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            await Clients.Group(accountId).SendAsync("ScreenCaptureReady", requestId, imageCount);
+        }
+    }
 }

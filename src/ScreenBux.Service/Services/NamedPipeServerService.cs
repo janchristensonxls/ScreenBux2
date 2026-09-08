@@ -21,6 +21,7 @@ public class NamedPipeServerService : BackgroundService
     private readonly PowerActionService _powerAction;
     private readonly PolicySyncService _policySync;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
+    private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
@@ -31,7 +32,8 @@ public class NamedPipeServerService : BackgroundService
         DevicePolicySyncService devicePolicySync,
         PowerActionService powerAction,
         PolicySyncService policySync,
-        PendingWindowListRequestCoordinator windowListCoordinator)
+        PendingWindowListRequestCoordinator windowListCoordinator,
+        PendingScreenCaptureRequestCoordinator screenCaptureCoordinator)
     {
         _logger = logger;
         _policyService = policyService;
@@ -41,6 +43,7 @@ public class NamedPipeServerService : BackgroundService
         _powerAction = powerAction;
         _policySync = policySync;
         _windowListCoordinator = windowListCoordinator;
+        _screenCaptureCoordinator = screenCaptureCoordinator;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -251,6 +254,10 @@ public class NamedPipeServerService : BackgroundService
                     var windowListReport = JsonSerializer.Deserialize<WindowListReportMessage>(messageJson);
                     return HandleWindowListReport(windowListReport);
 
+                case "ScreenCaptureReport":
+                    var screenCaptureReport = JsonSerializer.Deserialize<ScreenCaptureReportMessage>(messageJson);
+                    return HandleScreenCaptureReport(screenCaptureReport);
+
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
                     return new CommandResponse
@@ -410,6 +417,7 @@ public class NamedPipeServerService : BackgroundService
         if (response is CommandResponse commandResponse)
         {
             commandResponse.PendingWindowListRequestId = _windowListCoordinator.TryGetNextPendingRequestId();
+            commandResponse.PendingScreenCaptureRequestId = _screenCaptureCoordinator.TryGetNextPendingRequestId();
         }
 
         return response;
@@ -423,6 +431,17 @@ public class NamedPipeServerService : BackgroundService
         }
 
         _windowListCoordinator.Complete(message.RequestId, message.Windows);
+        return new CommandResponse { Success = true };
+    }
+
+    private object HandleScreenCaptureReport(ScreenCaptureReportMessage? message)
+    {
+        if (message is null)
+        {
+            return new CommandResponse { Success = false, Message = "Invalid screen capture report" };
+        }
+
+        _screenCaptureCoordinator.Complete(message.RequestId, message.Success ? message.Images : null);
         return new CommandResponse { Success = true };
     }
 
