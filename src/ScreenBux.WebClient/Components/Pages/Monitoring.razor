@@ -70,76 +70,98 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <h5 class="card-title">Process List</h5>
-        <div class="d-flex align-items-center mb-2">
-            <select class="form-select me-2" style="max-width: 300px;" @bind="_selectedDeviceId">
+        <h5 class="card-title">Device Actions</h5>
+        <div class="mb-3">
+            <label class="form-label">Select a device</label>
+            <select class="form-select" style="max-width: 300px;" @bind="_selectedDeviceId">
                 <option value="">-- Select a device --</option>
                 @foreach (var device in _devices)
                 {
                     <option value="@device.Id">@device.Name</option>
                 }
             </select>
-            <button class="btn btn-primary" @onclick="RequestProcessList" disabled="@(_isRequestingProcessList || string.IsNullOrEmpty(_selectedDeviceId))">
-                @(_isRequestingProcessList ? "Requesting..." : "Get Process List")
-            </button>
         </div>
 
-        @if (_processListError is not null)
+        @if (!_isConnected)
         {
-            <p class="text-danger">@_processListError</p>
+            <p class="text-warning">Connect to the monitoring service (above) to use device actions.</p>
         }
 
-        @if (_currentProcessList is not null)
-        {
-            <p class="text-muted">Retrieved @_currentProcessList.Count at @_processListRetrievedAt?.ToLocalTime().ToString("HH:mm:ss")</p>
-            <div class="table-responsive">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>PID</th>
-                            <th>Name</th>
-                            <th>Executable Path</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var process in _currentProcessList)
-                        {
-                            <tr>
-                                <td>@process.ProcessId</td>
-                                <td>@process.ProcessName</td>
-                                <td>@process.ExecutablePath</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
-</div>
+        <div class="row">
+            <div class="col-md-6 border-md-end">
+                <h6>Process List</h6>
+                <button class="btn btn-primary mb-2" @onclick="RequestProcessList" disabled="@(!_isConnected || _isRequestingProcessList || string.IsNullOrEmpty(_selectedDeviceId))">
+                    @(_isRequestingProcessList ? "Requesting..." : "Get Process List")
+                </button>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <h5 class="card-title">Screen Capture</h5>
-        <button class="btn btn-primary" @onclick="RequestScreenCapture" disabled="@(_isRequestingScreenCapture || string.IsNullOrEmpty(_selectedDeviceId))">
-            @(_isRequestingScreenCapture ? "Capturing..." : "Capture Screens")
-        </button>
-
-        @if (_screenCaptureError is not null)
-        {
-            <p class="text-danger">@_screenCaptureError</p>
-        }
-
-        @if (_screenCaptureImages.Any())
-        {
-            <div class="d-flex flex-wrap gap-2 mt-2">
-                @foreach (var image in _screenCaptureImages)
+                @if (_processListError is not null)
                 {
-                    <img src="@image" style="max-width: 320px; border: 1px solid #ccc;" />
+                    <p class="text-danger">@_processListError</p>
+                }
+
+                @if (_currentProcessList is not null)
+                {
+                    <p class="text-muted">Retrieved @_currentProcessList.Count at @_processListRetrievedAt?.ToLocalTime().ToString("HH:mm:ss")</p>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>PID</th>
+                                    <th>Name</th>
+                                    <th>Executable Path</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var process in _currentProcessList)
+                                {
+                                    <tr>
+                                        <td>@process.ProcessId</td>
+                                        <td>@process.ProcessName</td>
+                                        <td>@process.ExecutablePath</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
             </div>
-        }
+
+            <div class="col-md-6">
+                <h6>Screen Capture</h6>
+                <button class="btn btn-primary mb-2" @onclick="RequestScreenCapture" disabled="@(!_isConnected || _isRequestingScreenCapture || string.IsNullOrEmpty(_selectedDeviceId))">
+                    @(_isRequestingScreenCapture ? "Capturing..." : "Capture Screens")
+                </button>
+
+                @if (_screenCaptureError is not null)
+                {
+                    <p class="text-danger">@_screenCaptureError</p>
+                }
+
+                @if (_screenCaptureImages.Any())
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @for (var i = 0; i < _screenCaptureImages.Count; i++)
+                        {
+                            var index = i;
+                            <img src="@_screenCaptureImages[index]"
+                                 class="w-100"
+                                 style="cursor: pointer; border: 1px solid #ccc;"
+                                 @onclick="() => OpenScreenCaptureViewer(index)" />
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     </div>
 </div>
+
+@if (_viewerImageIndex is not null)
+{
+    <div style="position: fixed; inset: 0; background-color: rgba(0,0,0,0.85); z-index: 1050; display: flex; align-items: center; justify-content: center; cursor: zoom-out;"
+         @onclick="CloseScreenCaptureViewer">
+        <img src="@_screenCaptureImages[_viewerImageIndex.Value]" style="max-width: 95vw; max-height: 95vh;" />
+    </div>
+}
 
 <div class="card">
     <div class="card-body">
@@ -174,6 +196,7 @@
     private List<string> _screenCaptureImages = new();
     private Guid? _pendingScreenCaptureRequestId;
     private CancellationTokenSource? _screenCaptureTimeoutCts;
+    private int? _viewerImageIndex;
 
     protected override async Task OnInitializedAsync()
     {
@@ -347,6 +370,7 @@
         _isRequestingScreenCapture = true;
         _screenCaptureError = null;
         _screenCaptureImages = new();
+        _viewerImageIndex = null;
         StateHasChanged();
 
         try
@@ -421,6 +445,16 @@
                 StateHasChanged();
             });
         }
+    }
+
+    private void OpenScreenCaptureViewer(int index)
+    {
+        _viewerImageIndex = index;
+    }
+
+    private void CloseScreenCaptureViewer()
+    {
+        _viewerImageIndex = null;
     }
 
     private void AddStatusMessage(string message)

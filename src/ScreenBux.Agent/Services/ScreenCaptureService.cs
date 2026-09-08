@@ -13,7 +13,7 @@ namespace ScreenBux.Agent.Services;
 /// </summary>
 public class ScreenCaptureService
 {
-    private const int MaxWidthPx = 1920;
+    private const int MaxWidthPx = 2560;
     private const long JpegQuality = 80L;
 
     public List<CapturedImage> CaptureAllScreens()
