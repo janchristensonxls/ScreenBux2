@@ -16,6 +16,7 @@ public class NamedPipeServerService : BackgroundService
     private readonly ILogger<NamedPipeServerService> _logger;
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
+    private readonly UsageTrackingService _usageTracking;
     private readonly ProcessKillerService _processKiller;
     private readonly DevicePolicySyncService _devicePolicySync;
     private readonly PowerActionService _powerAction;
@@ -28,6 +29,7 @@ public class NamedPipeServerService : BackgroundService
         ILogger<NamedPipeServerService> logger,
         PolicyService policyService,
         GrantService grantService,
+        UsageTrackingService usageTracking,
         ProcessKillerService processKiller,
         DevicePolicySyncService devicePolicySync,
         PowerActionService powerAction,
@@ -38,6 +40,7 @@ public class NamedPipeServerService : BackgroundService
         _logger = logger;
         _policyService = policyService;
         _grantService = grantService;
+        _usageTracking = usageTracking;
         _processKiller = processKiller;
         _devicePolicySync = devicePolicySync;
         _powerAction = powerAction;
@@ -317,13 +320,18 @@ public class NamedPipeServerService : BackgroundService
             };
         }
 
-        var rule = _policyService.GetMatchingRule(message.Process, isForegroundWindow: true);
-        var shouldBlock = rule != null || _policyService.ShouldBlockProcess(message.Process, isForegroundWindow: true);
+        var category = _policyService.ClassifyProcess(message.Process, isForegroundWindow: true);
+        _usageTracking.ReportForegroundCategory(category?.Name);
+
+        var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
+        var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategory(categoryPolicy.CategoryName));
 
         if (shouldBlock)
         {
-            var reason = rule?.Name ?? "Application blocked by parental control policy";
-            var action = rule?.Action ?? PolicyRuleAction.CloseProcess;
+            var reason = category != null
+                ? $"Category '{category.Name}' blocked by parental control policy"
+                : "Application blocked by parental control policy";
+            var action = categoryPolicy.Action;
 
             _logger.LogWarning("Process {ProcessName} (PID: {ProcessId}) violates policy ({Reason}), enforcing {Action}",
                 message.Process.ProcessName, message.Process.ProcessId, reason, action);

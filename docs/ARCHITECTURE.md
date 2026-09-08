@@ -138,36 +138,46 @@ Solution file: `ScreenBux2.sln`.
   built-in strict-lockout mode). There is currently no scheduling — mode
   switches are manual only (parent clicks a mode button in `Policy.razor`).
 
-### Policy matching — two parallel rule systems (legacy debt)
-`PolicyConfiguration` still holds **two** independent rule systems:
-- `Rules: List<PolicyRule>` — the **primary/intended** model: regex on
-  `ProcessNameRegex` and/or `WindowTitleRegex`. This is the "forbid apps by
-  regex" feature and is what the UI and defaults use. Each rule also carries a
-  `ConditionKind` (`ProcessMatch` — the default, evaluated per detected
-  process; or `Always` — evaluated once per policy tick, independent of any
-  process, used for whole-session actions) and an `Action`
-  (`CloseProcess` — the default/original implicit behavior; `KillProcessTree`;
-  `Sleep`; `Hibernate`). `Always`-condition rules are handled separately by
-  `ProcessMonitoringService.EnforceAlwaysRules`, gated on
-  `PolicyService.HasSyncedSinceStartup` (see Sleep/Hibernate note below) —
-  they short-circuit the rest of that tick's per-process enforcement since the
-  device is about to suspend.
-- `Policies: List<AppPolicy>` — a **legacy** model: name/path match +
-  `PolicyAction` (Allow/Block/TimeRestricted) + `AllowedTimeWindows` +
-  `MaxUsageMinutesPerDay`.
+### Policy matching — category-based classification and enforcement
 
-`PolicyService.ShouldBlockProcess` checks `Rules` first and **returns as soon
-as any `Rule` matches**, and `ProcessMonitoringService.EnforcePoliciesAsync`
-only bothers resolving `Process.MainModule`/`ExecutablePath` when **no**
-`Rules` are enabled (`Policies.Count > 0`) — resolving it otherwise causes a
-flood of `Win32Exception`s for protected/system processes. Net effect: the
-`AppPolicy` time-window / usage-limit path is **effectively dead whenever any
-`Rule` exists**. Don't assume `AppPolicy` logic runs unless you've confirmed
-`Rules` is empty for that policy document.
+`PolicyConfiguration` has been migrated off the old dual `Rules`/`Policies`
+model (see `docs/decisions/group-based-policy-model.md`) onto three pieces,
+all still embedded in the same synced JSON blob:
+- `AppCategories: List<AppCategoryConfig>` — named categories (e.g. "Games",
+  "Social Media"), each with regex `Rules` on `ProcessNameRegex`/`WindowTitleRegex`
+  used to classify a process. Mode-independent — the same categories apply
+  across every `PolicyProfile`. A process matching nothing is treated as the
+  implicit "Other" category.
+- `CategoryPolicies: List<CategoryPolicy>` — per-mode enforcement per category:
+  `Enforcement` (`Allowed`/`Blocked`/`TimeLimited`), an optional
+  `DailyBudgetMinutes` (only for `TimeLimited`), an `Action`
+  (`CloseProcess`/`KillProcessTree`/`Sleep`/`Hibernate`), and optional
+  `AllowedWindows` (a `TimeWindow` schedule outside of which the category is
+  always treated as blocked).
+- `SessionRules: List<SessionRule>` — whole-session actions not tied to any
+  category (the successor to the old `Always`-condition rules), each
+  optionally schedule-gated via `TimeWindow`s; an empty schedule means "always
+  active" (today's built-in "Sleep" lockout mode uses this).
 
-`MaxUsageMinutesPerDay` and any notion of a **total daily time budget across
-devices are declared but never enforced** — there is no usage accumulation
-anywhere in the codebase.
+`PolicyService.ClassifyProcess` resolves a process/window into an
+`AppCategoryConfig` (or `null` for "Other"); `PolicyService.GetCategoryPolicy`
+resolves the effective `CategoryPolicy` for that category name (defaulting to
+`Allowed` if unconfigured); `PolicyService.IsBlockedByPolicy` is the single
+static predicate both `NamedPipeServerService` (foreground) and
+`ProcessMonitoringService` (background enumeration) call to decide
+enforcement, using `UsageTrackingService.GetTotalSecondsTodayForCategory` for
+`TimeLimited` budget checks. `ProcessMonitoringService.EnforceAlwaysRules` was
+renamed in spirit to evaluating `PolicyService.GetActiveSessionRules()`,
+still gated on `PolicyService.HasSyncedSinceStartup` before a Sleep/Hibernate
+action is allowed to fire.
+
+Per-category daily usage accumulation (via `UsageTrackingService`) is now
+wired end-to-end: the Agent's foreground report is classified on receipt
+(`NamedPipeServerService.HandleProcessReportAsync` calls
+`UsageTrackingService.ReportForegroundCategory`), so accumulated seconds are
+attributed to the correct category rather than a single "Other" bucket. Usage
+accumulation is independent of an active time grant — a grant only pauses
+enforcement, never accounting.
 
 ### Device time grants (temporary enforcement pause)
 

@@ -89,8 +89,8 @@ public class ProcessMonitoringService : BackgroundService
     }
 
     /// <summary>
-    /// Evaluates "Always" condition rules (e.g. a "Sleep" lockout mode), which apply to the
-    /// whole session rather than a specific process. Gated on <see cref="PolicyService.HasSyncedSinceStartup"/>
+    /// Evaluates active <see cref="SessionRule"/>s (e.g. a "Sleep" lockout mode), which apply to
+    /// the whole session rather than a specific process. Gated on <see cref="PolicyService.HasSyncedSinceStartup"/>
     /// so a stale cached policy.json left over from before a reboot can never trigger a
     /// power action before the real current mode has been confirmed with the server.
     /// Returns true if a power action was executed (short-circuiting further per-process
@@ -98,25 +98,25 @@ public class ProcessMonitoringService : BackgroundService
     /// </summary>
     private bool EnforceAlwaysRules()
     {
-        var alwaysRules = _policyService.GetAlwaysRules();
-        if (alwaysRules.Count == 0)
+        var activeRules = _policyService.GetActiveSessionRules();
+        if (activeRules.Count == 0)
         {
             return false;
         }
 
         if (!_policyService.HasSyncedSinceStartup)
         {
-            _logger.LogDebug("Skipping Always-condition rules until policy has synced with the server since startup.");
+            _logger.LogDebug("Skipping session rules until policy has synced with the server since startup.");
             return false;
         }
 
-        var rule = alwaysRules.FirstOrDefault(r => r.Action is PolicyRuleAction.Sleep or PolicyRuleAction.Hibernate);
+        var rule = activeRules.FirstOrDefault(r => r.Action is PolicyRuleAction.Sleep or PolicyRuleAction.Hibernate);
         if (rule is null)
         {
             return false;
         }
 
-        _logger.LogWarning("Policy rule {RuleName} triggered a device-wide {Action} action", rule.Name, rule.Action);
+        _logger.LogWarning("Session rule {RuleName} triggered a device-wide {Action} action", rule.Name, rule.Action);
 
         if (rule.Action == PolicyRuleAction.Hibernate)
         {
@@ -134,12 +134,6 @@ public class ProcessMonitoringService : BackgroundService
     {
         var handledProcesses = new HashSet<int>();
 
-        // The executable path is only consulted by the legacy AppPolicy matching path,
-        // which is dead whenever regex Rules exist. Resolving it requires Process.MainModule,
-        // which throws Win32Exception for every protected/system process we can't open -
-        // producing a flood of first-chance exceptions. Only resolve it when it can matter.
-        var resolveExecutablePath = !config.Rules.Any(r => r.Enabled) && config.Policies.Count > 0;
-
         foreach (var process in Process.GetProcesses())
         {
             if (stoppingToken.IsCancellationRequested)
@@ -147,7 +141,7 @@ public class ProcessMonitoringService : BackgroundService
                 return;
             }
 
-            var processInfo = CreateProcessInfo(process, resolveExecutablePath);
+            var processInfo = CreateProcessInfo(process, resolveExecutablePath: false);
             if (processInfo == null)
             {
                 continue;
@@ -155,39 +149,33 @@ public class ProcessMonitoringService : BackgroundService
 
             // isForegroundWindow: false - this loop has no reliable window-title data for
             // any of these processes, so only ProcessNameRegex/name-based matching applies.
-            var rule = _policyService.GetMatchingRule(processInfo, isForegroundWindow: false);
-            if (rule != null)
-            {
-                if (handledProcesses.Add(processInfo.ProcessId))
-                {
-                    await EnforceRuleAsync(processInfo, rule);
-                }
+            var category = _policyService.ClassifyProcess(processInfo, isForegroundWindow: false);
+            var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
 
-                continue;
-            }
-
-            if (_policyService.ShouldBlockProcess(processInfo, isForegroundWindow: false) && handledProcesses.Add(processInfo.ProcessId))
+            if (PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategory(categoryPolicy.CategoryName)) && handledProcesses.Add(processInfo.ProcessId))
             {
-                await CloseProcessAsync(processInfo, "Legacy policy");
+                await EnforceRuleAsync(processInfo, categoryPolicy, category?.Name);
             }
         }
     }
 
-    private async Task EnforceRuleAsync(ProcessInfo processInfo, PolicyRule rule)
+    private async Task EnforceRuleAsync(ProcessInfo processInfo, CategoryPolicy policy, string? categoryName)
     {
-        if (rule.Action == PolicyRuleAction.KillProcessTree)
+        var ruleName = categoryName ?? "Other";
+
+        if (policy.Action == PolicyRuleAction.KillProcessTree)
         {
             _logger.LogWarning(
-                "Process {ProcessName} (PID: {ProcessId}) matched rule {RuleName}, killing process tree",
-                processInfo.ProcessName, processInfo.ProcessId, rule.Name);
 
-            await _processKiller.KillProcessTreeAsync(processInfo.ProcessId, rule.Name);
+                processInfo.ProcessName, processInfo.ProcessId, ruleName);
+
+            await _processKiller.KillProcessTreeAsync(processInfo.ProcessId, ruleName);
             processInfo.DetectedAt = DateTime.UtcNow;
             await _policySync.SendProcessDetectionAsync(processInfo);
             return;
         }
 
-        await CloseProcessAsync(processInfo, rule.Name);
+        await CloseProcessAsync(processInfo, ruleName);
     }
 
     private async Task CloseProcessAsync(ProcessInfo processInfo, string ruleName)

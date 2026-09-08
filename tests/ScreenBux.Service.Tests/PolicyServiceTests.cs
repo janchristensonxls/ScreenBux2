@@ -49,47 +49,40 @@ public class PolicyServiceTests
     }
 
     [Fact]
-    public async Task GetAlwaysRules_ReturnsOnlyEnabledAlwaysConditionRules()
+    public async Task GetActiveSessionRules_ReturnsOnlyEnabledActiveSessionRules()
     {
         var config = new PolicyConfiguration
         {
-            Rules = new List<PolicyRule>
+            SessionRules = new List<SessionRule>
             {
-                new() { Name = "ProcessRule", ConditionKind = PolicyConditionKind.ProcessMatch, Enabled = true },
-                new() { Name = "DisabledAlways", ConditionKind = PolicyConditionKind.Always, Enabled = false },
-                new() { Name = "Lockout", ConditionKind = PolicyConditionKind.Always, Action = PolicyRuleAction.Sleep, Enabled = true }
+                new() { Name = "DisabledLockout", Enabled = false },
+                new() { Name = "Lockout", Action = PolicyRuleAction.Sleep, Enabled = true }
             }
         };
         var service = await CreateServiceWithConfigurationAsync(config);
 
-        var alwaysRules = service.GetAlwaysRules();
+        var activeRules = service.GetActiveSessionRules();
 
-        var rule = Assert.Single(alwaysRules);
+        var rule = Assert.Single(activeRules);
         Assert.Equal("Lockout", rule.Name);
         Assert.Equal(PolicyRuleAction.Sleep, rule.Action);
     }
 
     [Fact]
-    public async Task GetAlwaysRules_ReturnsEmpty_WhenNoAlwaysRulesConfigured()
+    public async Task GetActiveSessionRules_ReturnsEmpty_WhenNoSessionRulesConfigured()
     {
-        var config = new PolicyConfiguration
-        {
-            Rules = new List<PolicyRule>
-            {
-                new() { Name = "ProcessRule", ConditionKind = PolicyConditionKind.ProcessMatch, Enabled = true }
-            }
-        };
+        var config = new PolicyConfiguration();
         var service = await CreateServiceWithConfigurationAsync(config);
 
-        Assert.Empty(service.GetAlwaysRules());
+        Assert.Empty(service.GetActiveSessionRules());
     }
 
     [Fact]
-    public void PolicyRule_DefaultsToProcessMatchAndCloseProcess()
+    public void SessionRule_DefaultsToEnabledAndSleep()
     {
-        var rule = new PolicyRule();
+        var rule = new SessionRule();
 
-        Assert.Equal(PolicyConditionKind.ProcessMatch, rule.ConditionKind);
-        Assert.Equal(PolicyRuleAction.CloseProcess, rule.Action);
+        Assert.True(rule.Enabled);
+        Assert.Equal(PolicyRuleAction.Sleep, rule.Action);
     }
 }

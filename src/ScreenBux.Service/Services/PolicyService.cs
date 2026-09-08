@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using ScreenBux.Shared.Models;
 using ScreenBux.Shared.Utilities;
 
@@ -43,7 +42,8 @@ public class PolicyService
                 var json = await File.ReadAllTextAsync(_policyFilePath);
                 _configuration = JsonSerializer.Deserialize<PolicyConfiguration>(json) ?? new PolicyConfiguration();
                 _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
-                _logger.LogInformation("Policy loaded successfully with {Count} policies", _configuration.Policies.Count);
+                _logger.LogInformation("Policy loaded successfully with {Count} categories, {RuleCount} category policies",
+                    _configuration.AppCategories.Count, _configuration.CategoryPolicies.Count);
             }
             else
             {
@@ -104,14 +104,28 @@ public class PolicyService
             EnableMonitoring = true,
             CheckIntervalSeconds = 5,
             LogActivity = true,
-            Rules = new List<PolicyRule>
+            AppCategories = new List<AppCategoryConfig>
             {
-                new PolicyRule
+                new AppCategoryConfig
                 {
                     Name = "Example Blocked App",
-                    ProcessNameRegex = "^example$",
-                    WindowTitleRegex = string.Empty,
-                    Enabled = true
+                    Rules = new List<AppCategoryRuleConfig>
+                    {
+                        new AppCategoryRuleConfig
+                        {
+                            ProcessNameRegex = "^example$",
+                            WindowTitleRegex = string.Empty,
+                            Enabled = true
+                        }
+                    }
+                }
+            },
+            CategoryPolicies = new List<CategoryPolicy>
+            {
+                new CategoryPolicy
+                {
+                    CategoryName = "Example Blocked App",
+                    Enforcement = CategoryPolicyEnforcement.Blocked
                 }
             }
         };
@@ -131,43 +145,20 @@ public class PolicyService
         await SavePolicyAsync();
     }
 
-    public bool ShouldBlockProcess(ProcessInfo processInfo, bool isForegroundWindow = true)
+    /// <summary>
+    /// Classifies a process/window into an <see cref="AppCategoryConfig"/> by matching its
+    /// regex rules in order; returns null if no category matches (implicit "Other").
+    /// </summary>
+    public AppCategoryConfig? ClassifyProcess(ProcessInfo processInfo, bool isForegroundWindow)
     {
-        if (!_configuration.EnableMonitoring)
-            return false;
-
-        if (_configuration.Rules.Count > 0)
+        foreach (var category in _configuration.AppCategories)
         {
-            return GetMatchingRule(processInfo, isForegroundWindow) != null;
-        }
-
-        var policy = _configuration.Policies.FirstOrDefault(p =>
-            processInfo.ProcessName.Contains(p.ApplicationName, StringComparison.OrdinalIgnoreCase) ||
-            processInfo.ExecutablePath.Contains(p.ExecutablePath, StringComparison.OrdinalIgnoreCase));
-
-        if (policy == null)
-            return false;
-
-        return policy.Action switch
-        {
-            PolicyAction.Block => true,
-            PolicyAction.TimeRestricted => !IsWithinAllowedTime(policy),
-            _ => false
-        };
-    }
-
-    public PolicyRule? GetMatchingRule(ProcessInfo processInfo, bool isForegroundWindow)
-    {
-        foreach (var rule in _configuration.Rules.Where(rule => rule.Enabled && rule.ConditionKind == PolicyConditionKind.ProcessMatch))
-        {
-            if (IsRegexMatch(rule.ProcessNameRegex, processInfo.ProcessName))
+            foreach (var rule in category.Rules)
             {
-                return rule;
-            }
-
-            if (isForegroundWindow && IsRegexMatch(rule.WindowTitleRegex, processInfo.WindowTitle))
-            {
-                return rule;
+                if (rule.Matches(processInfo.ProcessName, processInfo.WindowTitle, isForegroundWindow))
+                {
+                    return category;
+                }
             }
         }
 
@@ -175,49 +166,68 @@ public class PolicyService
     }
 
     /// <summary>
-    /// Returns enabled rules that always apply (not tied to a specific process match), e.g. a
-    /// "Sleep" lockout mode. Callers should evaluate these once per policy tick.
+    /// Resolves the effective <see cref="CategoryPolicy"/> for a given category name (or the
+    /// implicit "Other" bucket when <paramref name="categoryName"/> is null), defaulting to
+    /// <see cref="CategoryPolicyEnforcement.Allowed"/> when no explicit policy is configured.
     /// </summary>
-    public IReadOnlyList<PolicyRule> GetAlwaysRules() =>
-        _configuration.Rules.Where(rule => rule.Enabled && rule.ConditionKind == PolicyConditionKind.Always).ToList();
-
-    private bool IsRegexMatch(string? pattern, string input)
+    public CategoryPolicy GetCategoryPolicy(string? categoryName)
     {
-        if (string.IsNullOrWhiteSpace(pattern))
-        {
-            return false;
-        }
+        var policy = categoryName != null
+            ? _configuration.CategoryPolicies.FirstOrDefault(p => p.CategoryName == categoryName)
+            : null;
 
-        try
-        {
-            return Regex.IsMatch(input ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        }
-        catch (ArgumentException ex)
-        {
-            _logger.LogWarning(ex, "Invalid regex pattern in policy: {Pattern}", pattern);
-            return false;
-        }
+        return policy ?? new CategoryPolicy { CategoryName = categoryName ?? "Other", Enforcement = CategoryPolicyEnforcement.Allowed };
     }
 
-    private bool IsWithinAllowedTime(AppPolicy policy)
+    /// <summary>
+    /// True if the given process should be blocked right now, per its category's resolved
+    /// <see cref="CategoryPolicy"/>. <paramref name="usedSecondsToday"/> is only consulted for
+    /// <see cref="CategoryPolicyEnforcement.TimeLimited"/> categories.
+    /// </summary>
+    public bool ShouldBlockProcess(ProcessInfo processInfo, bool isForegroundWindow, long usedSecondsToday = 0)
     {
-        var now = DateTime.Now;
-        var currentTime = TimeOnly.FromDateTime(now);
-        var currentDay = now.DayOfWeek;
-
-        // Check day-based blocks
-        if (policy.BlockOnWeekdays && currentDay >= DayOfWeek.Monday && currentDay <= DayOfWeek.Friday)
+        if (!_configuration.EnableMonitoring)
+        {
             return false;
-        if (policy.BlockOnWeekends && (currentDay == DayOfWeek.Saturday || currentDay == DayOfWeek.Sunday))
-            return false;
+        }
 
-        // Check time windows
-        if (policy.AllowedTimeWindows.Count == 0)
-            return false;
+        var category = ClassifyProcess(processInfo, isForegroundWindow);
+        var policy = GetCategoryPolicy(category?.Name);
 
-        return policy.AllowedTimeWindows.Any(window =>
-            window.DaysOfWeek.Contains(currentDay) &&
-            currentTime >= window.StartTime &&
-            currentTime <= window.EndTime);
+        return IsBlockedByPolicy(policy, usedSecondsToday);
     }
+
+    /// <summary>
+    /// True if <paramref name="policy"/> currently blocks its category, accounting for
+    /// <see cref="CategoryPolicy.AllowedWindows"/> and, for <see cref="CategoryPolicyEnforcement.TimeLimited"/>,
+    /// <paramref name="usedSecondsToday"/> against <see cref="CategoryPolicy.DailyBudgetMinutes"/>.
+    /// </summary>
+    public static bool IsBlockedByPolicy(CategoryPolicy policy, long usedSecondsToday)
+    {
+        if (policy.Enforcement == CategoryPolicyEnforcement.Allowed)
+        {
+            return false;
+        }
+
+        if (policy.AllowedWindows.Count > 0 && !policy.AllowedWindows.Any(w => w.IsActiveAt(DateTime.Now)))
+        {
+            return true;
+        }
+
+        if (policy.Enforcement == CategoryPolicyEnforcement.Blocked)
+        {
+            return true;
+        }
+
+        // TimeLimited
+        return policy.DailyBudgetMinutes is int minutes && usedSecondsToday >= minutes * 60L;
+    }
+
+    /// <summary>
+    /// Returns enabled session rules that are currently active per their schedule (or always,
+    /// if unscheduled), e.g. a "Sleep" lockout mode. Callers should evaluate these once per
+    /// policy tick.
+    /// </summary>
+    public IReadOnlyList<SessionRule> GetActiveSessionRules() =>
+        _configuration.SessionRules.Where(rule => rule.IsActiveAt(DateTime.Now)).ToList();
 }

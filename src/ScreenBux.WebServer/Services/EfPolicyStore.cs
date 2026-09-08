@@ -252,7 +252,7 @@ public class EfPolicyStore : IPolicyStore
 
     private async Task<List<PolicyProfile>> SeedDefaultProfilesAsync(string accountId, CancellationToken cancellationToken)
     {
-        var normal = LoadLegacyPolicyOrDefault();
+        var normal = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
         var open = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
         var school = new PolicyConfiguration { EnableMonitoring = true, CheckIntervalSeconds = 5, LogActivity = true };
         var sleep = new PolicyConfiguration
@@ -260,12 +260,11 @@ public class EfPolicyStore : IPolicyStore
             EnableMonitoring = true,
             CheckIntervalSeconds = 5,
             LogActivity = true,
-            Rules = new List<PolicyRule>
+            SessionRules = new List<SessionRule>
             {
-                new PolicyRule
+                new SessionRule
                 {
                     Name = "Lockout",
-                    ConditionKind = PolicyConditionKind.Always,
                     Action = PolicyRuleAction.Sleep,
                     Enabled = true
                 }
@@ -299,27 +298,6 @@ public class EfPolicyStore : IPolicyStore
             Policy = policy,
             UpdatedAt = profile.UpdatedAt
         };
-    }
-
-    private PolicyConfiguration LoadLegacyPolicyOrDefault()
-    {
-        try
-        {
-            var policyPath = _configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
-            if (File.Exists(policyPath))
-            {
-                var json = File.ReadAllText(policyPath);
-                var legacy = Deserialize(json);
-                _logger.LogInformation("Seeded policy from legacy file {Path}", policyPath);
-                return legacy;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to seed policy from legacy policy.json; using defaults.");
-        }
-
-        return new PolicyConfiguration();
     }
 
     private static PolicyConfiguration Deserialize(string json)

@@ -13,11 +13,11 @@ namespace ScreenBux.Service.Services;
 /// Caches the server's last-known cross-device total so <see cref="IsBudgetExceeded"/> is a
 /// cheap in-memory check for <see cref="ProcessMonitoringService"/>.
 ///
-/// v1 limitation: all accumulated time is currently attributed to the "Other" category
-/// (approximating "device is on"), since foreground-process category matching
-/// (<c>AppCategory</c>/<c>AppCategoryRule</c>) is not yet wired through from the Agent's
-/// foreground-window reports. The schema and sync plumbing already support per-category
-/// breakdowns; only the attribution step is a follow-up.
+/// Accumulated time is attributed to whichever <see cref="AppCategoryConfig"/> the current
+/// foreground process last classified into (via <see cref="ReportForegroundCategory"/>,
+/// called from <c>NamedPipeServerService</c> on every Agent foreground report), falling back
+/// to the implicit "Other" bucket when no foreground report has been received yet or the
+/// process matched no category.
 /// </summary>
 public class UsageTrackingService : BackgroundService
 {
@@ -34,9 +34,11 @@ public class UsageTrackingService : BackgroundService
     private readonly GrantService _grantService;
 
     private readonly object _lock = new();
-    private long _pendingSeconds;
+    private readonly Dictionary<string, long> _pendingSecondsByCategory = new();
+    private readonly Dictionary<string, long> _totalSecondsTodayByCategory = new();
     private long _totalSecondsToday;
     private DateOnly _cachedEffectiveDate;
+    private string _currentCategoryName = DefaultCategoryName;
 
     public UsageTrackingService(
         ILogger<UsageTrackingService> logger,
@@ -54,10 +56,32 @@ public class UsageTrackingService : BackgroundService
         _grantService = grantService;
     }
 
+    /// <summary>
+    /// Records the category the current foreground process classified into, so subsequently
+    /// accumulated seconds are attributed to it. Pass null when the process matched no
+    /// category (implicit "Other").
+    /// </summary>
+    public void ReportForegroundCategory(string? categoryName)
+    {
+        lock (_lock)
+        {
+            _currentCategoryName = categoryName ?? DefaultCategoryName;
+        }
+    }
+
     /// <summary>Cross-device total for today, per the last successful sync (or 0 if never synced).</summary>
     public long TotalSecondsToday
     {
         get { lock (_lock) { return _totalSecondsToday; } }
+    }
+
+    /// <summary>Cross-device total for today for one category, per the last successful sync.</summary>
+    public long GetTotalSecondsTodayForCategory(string categoryName)
+    {
+        lock (_lock)
+        {
+            return _totalSecondsTodayByCategory.TryGetValue(categoryName, out var seconds) ? seconds : 0;
+        }
     }
 
     /// <summary>True once the cross-device total for today reaches the child's configured daily budget.</summary>
@@ -94,14 +118,12 @@ public class UsageTrackingService : BackgroundService
         {
             await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
 
-            if (!_grantService.IsGrantActive)
+            // Usage accumulates regardless of an active time grant - a grant only pauses
+            // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
+            lock (_lock)
             {
-                // Approximates "device is on and in use"; see class summary for the v1
-                // category-attribution limitation.
-                lock (_lock)
-                {
-                    _pendingSeconds += 1;
-                }
+                _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
+                _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
             }
 
             var elapsedSinceFlush = stopwatch.Elapsed - lastFlush;
@@ -138,15 +160,15 @@ public class UsageTrackingService : BackgroundService
             return true;
         }
 
-        long secondsToFlush;
+        Dictionary<string, long> secondsToFlushByCategory;
         lock (_lock)
         {
-            secondsToFlush = _pendingSeconds;
+            secondsToFlushByCategory = new Dictionary<string, long>(_pendingSecondsByCategory);
         }
 
         var effectiveDate = ComputeEffectiveDate(DateTime.Now, _policyService.GetConfiguration().DayStartHour);
 
-        if (secondsToFlush <= 0 && effectiveDate == _cachedEffectiveDate)
+        if (secondsToFlushByCategory.Values.All(s => s <= 0) && effectiveDate == _cachedEffectiveDate)
         {
             return true;
         }
@@ -157,27 +179,62 @@ public class UsageTrackingService : BackgroundService
             client.BaseAddress = new Uri(serverBaseUrl.TrimEnd('/') + "/");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
 
-            var request = new AddUsageSecondsRequest
-            {
-                DeviceId = state.DeviceId,
-                EffectiveDate = effectiveDate,
-                CategoryName = DefaultCategoryName,
-                Seconds = secondsToFlush
-            };
+            UsageSummaryDto? summary = null;
+            var flushedCategories = new List<string>();
 
-            using var response = await client.PostAsJsonAsync("api/usage/add", request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
+            foreach (var (categoryName, seconds) in secondsToFlushByCategory)
             {
-                _logger.LogWarning("Usage sync failed ({Status}); will retry.", (int)response.StatusCode);
+                if (seconds <= 0)
+                {
+                    continue;
+                }
+
+                var request = new AddUsageSecondsRequest
+                {
+                    DeviceId = state.DeviceId,
+                    EffectiveDate = effectiveDate,
+                    CategoryName = categoryName,
+                    Seconds = seconds
+                };
+
+                using var response = await client.PostAsJsonAsync("api/usage/add", request, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Usage sync failed ({Status}) for category {Category}; will retry.", (int)response.StatusCode, categoryName);
+                    continue;
+                }
+
+                summary = await response.Content.ReadFromJsonAsync<UsageSummaryDto>(cancellationToken);
+                flushedCategories.Add(categoryName);
+            }
+
+            if (flushedCategories.Count != secondsToFlushByCategory.Count(kvp => kvp.Value > 0))
+            {
+                // At least one category failed to sync; leave everything pending and retry next tick.
                 return false;
             }
 
-            var summary = await response.Content.ReadFromJsonAsync<UsageSummaryDto>(cancellationToken);
-
             lock (_lock)
             {
-                _pendingSeconds -= secondsToFlush;
+                foreach (var categoryName in flushedCategories)
+                {
+                    _pendingSecondsByCategory[categoryName] -= secondsToFlushByCategory[categoryName];
+                }
+
                 _totalSecondsToday = effectiveDate == _cachedEffectiveDate ? summary?.TotalSeconds ?? _totalSecondsToday : summary?.TotalSeconds ?? 0;
+
+                if (summary != null)
+                {
+                    if (effectiveDate != _cachedEffectiveDate)
+                    {
+                        _totalSecondsTodayByCategory.Clear();
+                    }
+
+                    foreach (var categoryTotal in summary.ByCategory)
+                    {
+                        _totalSecondsTodayByCategory[categoryTotal.AppCategoryName] = categoryTotal.Seconds;
+                    }
+                }
             }
 
             if (effectiveDate != _cachedEffectiveDate)
@@ -185,7 +242,7 @@ public class UsageTrackingService : BackgroundService
                 _cachedEffectiveDate = effectiveDate;
             }
 
-            _logger.LogDebug("Synced {Seconds}s of usage for {EffectiveDate}; cross-device total now {TotalSeconds}s.", secondsToFlush, effectiveDate, summary?.TotalSeconds);
+            _logger.LogDebug("Synced usage across {Count} categories for {EffectiveDate}; cross-device total now {TotalSeconds}s.", flushedCategories.Count, effectiveDate, summary?.TotalSeconds);
             return true;
         }
         catch (Exception ex)

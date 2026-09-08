@@ -13,8 +13,25 @@ public class PolicyConfiguration
     /// is currently applied without a separate round-trip.
     /// </summary>
     public string Name { get; set; } = string.Empty;
-    public List<PolicyRule> Rules { get; set; } = new();
-    public List<AppPolicy> Policies { get; set; } = new();
+
+    /// <summary>
+    /// Category definitions (name + regex matching rules), used to classify processes locally
+    /// without a network round-trip. Mode-independent - the same categories exist across every
+    /// PolicyProfile, only <see cref="CategoryPolicies"/> varies per mode. A process matching no
+    /// rule in any category falls back to an implicit "Other" category (present even if not
+    /// explicitly listed here). See docs/decisions/group-based-policy-model.md.
+    /// </summary>
+    public List<AppCategoryConfig> AppCategories { get; set; } = new();
+
+    /// <summary>
+    /// Per-category enforcement for the currently active mode - the resolved "grid row" for
+    /// each category. A category with no entry here defaults to <see cref="CategoryPolicyEnforcement.Allowed"/>.
+    /// </summary>
+    public List<CategoryPolicy> CategoryPolicies { get; set; } = new();
+
+    /// <summary>Whole-session actions not tied to any app category (e.g. a bedtime lockout).</summary>
+    public List<SessionRule> SessionRules { get; set; } = new();
+
     public bool EnableMonitoring { get; set; } = true;
     public int CheckIntervalSeconds { get; set; } = 5;
     public bool LogActivity { get; set; } = true;
