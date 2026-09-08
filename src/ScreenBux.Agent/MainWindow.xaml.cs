@@ -289,7 +289,7 @@ public partial class MainWindow : Window
         try
         {
             var isAvailable = await _pipeClient.IsServiceAvailableAsync();
-            ServiceStatusText.Text = isAvailable ? "Service: Connected" : "Service: Disconnected";
+            ServiceStatusText.Text = isAvailable ? "Status: Connected" : "Status: Disconnected";
             ServiceStatusText.Foreground = isAvailable ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Red;
             UpdateTrayConnectionState(isAvailable);
 

@@ -10,6 +10,8 @@ using ScreenBux.WebServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
