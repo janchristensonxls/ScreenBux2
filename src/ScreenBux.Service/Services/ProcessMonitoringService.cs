@@ -23,6 +23,7 @@ public class ProcessMonitoringService : BackgroundService
     private readonly ILogger<ProcessMonitoringService> _logger;
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
+    private readonly UsageTrackingService _usageTracking;
     private readonly ProcessKillerService _processKiller;
     private readonly PolicySyncService _policySync;
     private readonly PowerActionService _powerAction;
@@ -31,6 +32,7 @@ public class ProcessMonitoringService : BackgroundService
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
         GrantService grantService,
+        UsageTrackingService usageTracking,
         ProcessKillerService processKiller,
         PolicySyncService policySync,
         PowerActionService powerAction)
@@ -38,6 +40,7 @@ public class ProcessMonitoringService : BackgroundService
         _logger = logger;
         _policyService = policyService;
         _grantService = grantService;
+        _usageTracking = usageTracking;
         _processKiller = processKiller;
         _policySync = policySync;
         _powerAction = powerAction;
@@ -60,6 +63,17 @@ public class ProcessMonitoringService : BackgroundService
                 if (_grantService.IsGrantActive)
                 {
                     _logger.LogDebug("Skipping enforcement; a time grant is active until {ExpiresAtUtc}.", _grantService.ExpiresAtUtc);
+                }
+                else if (_usageTracking.IsBudgetExceeded)
+                {
+                    // An independent, third enforcement check - deliberately not folded into
+                    // PolicyRule/AppPolicy matching so it can't be silently shadowed by
+                    // whichever rule system currently wins there. See
+                    // docs/decisions/screen-time-usage-tracking.md.
+                    _logger.LogWarning(
+                        "Daily usage budget exceeded ({TotalSeconds}s used); putting device to sleep.",
+                        _usageTracking.TotalSecondsToday);
+                    _powerAction.Sleep();
                 }
                 else if (!EnforceAlwaysRules())
                 {

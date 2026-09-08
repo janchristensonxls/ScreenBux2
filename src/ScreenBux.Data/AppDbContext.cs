@@ -27,6 +27,12 @@ public class AppDbContext : IdentityDbContext<Account>
 
     public DbSet<DeviceGrant> DeviceGrants => Set<DeviceGrant>();
 
+    public DbSet<AppCategory> AppCategories => Set<AppCategory>();
+
+    public DbSet<AppCategoryRule> AppCategoryRules => Set<AppCategoryRule>();
+
+    public DbSet<UsageDailyTotal> UsageDailyTotals => Set<UsageDailyTotal>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -93,6 +99,42 @@ public class AppDbContext : IdentityDbContext<Account>
                 .WithOne()
                 .HasForeignKey<DeviceGrant>(g => g.DeviceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AppCategory>(entity =>
+        {
+            entity.HasOne(c => c.Account)
+                .WithMany()
+                .HasForeignKey(c => c.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AppCategoryRule>(entity =>
+        {
+            entity.HasOne(r => r.AppCategory)
+                .WithMany(c => c.Rules)
+                .HasForeignKey(r => r.AppCategoryId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<UsageDailyTotal>(entity =>
+        {
+            entity.HasIndex(u => new { u.EffectiveDate, u.ChildProfileId, u.DeviceId, u.AppCategoryId }).IsUnique();
+
+            entity.HasOne(u => u.ChildProfile)
+                .WithMany()
+                .HasForeignKey(u => u.ChildProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(u => u.Device)
+                .WithMany()
+                .HasForeignKey(u => u.DeviceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(u => u.AppCategory)
+                .WithMany()
+                .HasForeignKey(u => u.AppCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

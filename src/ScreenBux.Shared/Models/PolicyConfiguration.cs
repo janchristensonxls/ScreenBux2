@@ -18,4 +18,19 @@ public class PolicyConfiguration
     public bool EnableMonitoring { get; set; } = true;
     public int CheckIntervalSeconds { get; set; } = 5;
     public bool LogActivity { get; set; } = true;
+
+    /// <summary>
+    /// Hour (0-23, device-local time) at which the "day" resets for usage-tracking purposes.
+    /// 0 = ordinary midnight. Mirrors <c>ChildProfile.DayStartHour</c> - piggybacks on the
+    /// existing policy sync pipeline as a stopgap until per-child config has its own sync path.
+    /// See docs/decisions/screen-time-usage-tracking.md.
+    /// </summary>
+    public int DayStartHour { get; set; }
+
+    /// <summary>
+    /// Total accumulated-usage-per-day budget across all of this device's child's devices, in
+    /// minutes. Null means no total-day budget is enforced. Mirrors
+    /// <c>ChildProfile.DailyBudgetMinutes</c>.
+    /// </summary>
+    public int? DailyBudgetMinutes { get; set; }
 }
