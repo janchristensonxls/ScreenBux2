@@ -33,6 +33,8 @@
         catch
         {
             // Not authenticated or the request failed; NotAuthorized view (or a retry) handles it.
+
+            Navigation.NavigateTo("login");
         }
         finally
         {
