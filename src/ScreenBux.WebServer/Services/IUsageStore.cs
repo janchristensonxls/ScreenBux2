@@ -22,4 +22,10 @@ public interface IUsageStore
     /// breakdowns) for one effective day.
     /// </summary>
     Task<UsageSummaryDto> GetSummaryAsync(string accountId, Guid childProfileId, DateOnly effectiveDate, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a child's usage summaries for a range of consecutive effective days, ending at
+    /// (and including) <paramref name="endDate"/>, oldest first.
+    /// </summary>
+    Task<List<UsageSummaryDto>> GetHistoryAsync(string accountId, Guid childProfileId, DateOnly endDate, int days, CancellationToken cancellationToken = default);
 }

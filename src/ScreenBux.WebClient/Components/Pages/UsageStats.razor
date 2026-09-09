@@ -1,0 +1,152 @@
+@page "/usage-stats"
+@attribute [Authorize]
+@using ScreenBux.Shared.Models
+@using ScreenBux.Shared.Models.Devices
+@using ScreenBux.WebClient.Services
+@inject UsageApiService UsageApiService
+@inject ChildProfilesApiService ChildProfilesApiService
+
+<PageTitle>Usage Stats</PageTitle>
+
+<h1>Usage Stats</h1>
+
+@if (_isLoadingChildren)
+{
+    <p class="text-muted">Loading children...</p>
+}
+else if (!_children.Any())
+{
+    <p class="text-muted">No child profiles found yet. Add one from the Devices page first.</p>
+}
+else
+{
+    <div class="mb-3">
+        <label class="form-label">Child</label>
+        <select class="form-select" style="max-width: 300px;" value="@_selectedChildId" @onchange="OnChildChanged">
+            @foreach (var child in _children)
+            {
+                <option value="@child.Id">@child.DisplayName</option>
+            }
+        </select>
+    </div>
+
+    @if (_isLoadingStats)
+    {
+        <p class="text-muted">Loading usage...</p>
+    }
+    else
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Today</h5>
+                @if (_today is null)
+                {
+                    <p class="text-muted">No usage recorded today.</p>
+                }
+                else
+                {
+                    <p><strong>Total:</strong> @FormatDuration(_today.TotalSeconds)</p>
+
+                    @if (_today.ByCategory.Any())
+                    {
+                        <h6>By category</h6>
+                        @foreach (var category in _today.ByCategory.OrderByDescending(c => c.Seconds))
+                        {
+                            var percent = _today.TotalSeconds > 0 ? (int)(100 * category.Seconds / _today.TotalSeconds) : 0;
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>@category.AppCategoryName</span>
+                                    <span class="text-muted">@FormatDuration(category.Seconds)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar" role="progressbar" style="width: @(percent)%;"></div>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Last @_historyDays days</h5>
+                @if (!_history.Any())
+                {
+                    <p class="text-muted">No history yet.</p>
+                }
+                else
+                {
+                    var maxSeconds = Math.Max(1, _history.Max(h => h.TotalSeconds));
+                    <div class="d-flex align-items-end gap-2" style="height: 160px;">
+                        @foreach (var day in _history)
+                        {
+                            var barHeight = (int)(140 * day.TotalSeconds / maxSeconds);
+                            <div class="d-flex flex-column align-items-center" style="width: 48px;">
+                                <div class="text-muted small">@FormatDuration(day.TotalSeconds)</div>
+                                <div class="bg-primary" style="width: 24px; height: @(barHeight)px;" title="@day.EffectiveDate.ToString("yyyy-MM-dd")"></div>
+                                <div class="small">@day.EffectiveDate.ToString("MMM d")</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<ChildProfileDto> _children = new();
+    private Guid? _selectedChildId;
+    private UsageSummaryDto? _today;
+    private List<UsageSummaryDto> _history = new();
+    private bool _isLoadingChildren = true;
+    private bool _isLoadingStats;
+    private const int _historyDays = 7;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoadingChildren = true;
+        _children = (await ChildProfilesApiService.ListProfilesAsync()).ToList();
+        _isLoadingChildren = false;
+
+        if (_children.Any())
+        {
+            _selectedChildId = _children[0].Id;
+            await LoadStatsAsync();
+        }
+    }
+
+    private async Task OnChildChanged(ChangeEventArgs args)
+    {
+        if (Guid.TryParse(args.Value?.ToString(), out var childId))
+        {
+            _selectedChildId = childId;
+            await LoadStatsAsync();
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        if (_selectedChildId is not Guid childId)
+        {
+            return;
+        }
+
+        _isLoadingStats = true;
+        StateHasChanged();
+
+        _today = await UsageApiService.GetSummaryAsync(childId);
+        _history = await UsageApiService.GetHistoryAsync(childId, _historyDays);
+
+        _isLoadingStats = false;
+    }
+
+    private static string FormatDuration(long seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours}h {ts.Minutes}m"
+            : $"{ts.Minutes}m";
+    }
+}

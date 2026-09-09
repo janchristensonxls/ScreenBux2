@@ -110,6 +110,60 @@ public class EfUsageStore : IUsageStore
         };
     }
 
+    public async Task<List<UsageSummaryDto>> GetHistoryAsync(string accountId, Guid childProfileId, DateOnly endDate, int days, CancellationToken cancellationToken = default)
+    {
+        var childExists = await _db.ChildProfiles.AnyAsync(c => c.Id == childProfileId && c.AccountId == accountId, cancellationToken);
+        if (!childExists)
+        {
+            throw new InvalidOperationException($"Child profile {childProfileId} was not found for account {accountId}.");
+        }
+
+        if (days < 1)
+        {
+            days = 1;
+        }
+
+        var startDate = endDate.AddDays(-(days - 1));
+
+        var totals = await _db.UsageDailyTotals
+            .Where(u => u.ChildProfileId == childProfileId && u.EffectiveDate >= startDate && u.EffectiveDate <= endDate)
+            .Include(u => u.AppCategory)
+            .ToListAsync(cancellationToken);
+
+        var byDate = totals.ToLookup(t => t.EffectiveDate);
+
+        var results = new List<UsageSummaryDto>();
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            var dayTotals = byDate[date].ToList();
+            results.Add(new UsageSummaryDto
+            {
+                ChildProfileId = childProfileId,
+                EffectiveDate = date,
+                TotalSeconds = dayTotals.Sum(t => t.Seconds),
+                ByCategory = dayTotals
+                    .GroupBy(t => t.AppCategoryId)
+                    .Select(g => new UsageCategoryTotalDto
+                    {
+                        AppCategoryId = g.Key,
+                        AppCategoryName = g.First().AppCategory?.Name ?? DefaultCategoryName,
+                        Seconds = g.Sum(t => t.Seconds)
+                    })
+                    .ToList(),
+                ByDevice = dayTotals
+                    .GroupBy(t => t.DeviceId)
+                    .Select(g => new UsageDeviceTotalDto
+                    {
+                        DeviceId = g.Key,
+                        Seconds = g.Sum(t => t.Seconds)
+                    })
+                    .ToList()
+            });
+        }
+
+        return results;
+    }
+
     private async Task<AppCategory> GetOrCreateCategoryAsync(string accountId, string? categoryName, CancellationToken cancellationToken)
     {
         var name = string.IsNullOrWhiteSpace(categoryName) ? DefaultCategoryName : categoryName.Trim();

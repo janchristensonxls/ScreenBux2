@@ -88,4 +88,32 @@ public class UsageController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
+
+    /// <summary>Parent (or a device token for one of the child's devices) fetches a short usage history, ending today (or an optional end date), for stats/trend views.</summary>
+    [HttpGet("{childProfileId:guid}/history")]
+    public async Task<ActionResult<List<UsageSummaryDto>>> GetHistory(Guid childProfileId, [FromQuery] int days = 7, [FromQuery] DateOnly? endDate = null, CancellationToken cancellationToken = default)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (days is < 1 or > 90)
+        {
+            return BadRequest(new { message = "Days must be between 1 and 90." });
+        }
+
+        var end = endDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        try
+        {
+            var history = await _usageStore.GetHistoryAsync(accountId, childProfileId, end, days, cancellationToken);
+            return Ok(history);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }

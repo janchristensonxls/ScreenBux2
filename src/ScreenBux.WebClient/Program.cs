@@ -65,6 +65,11 @@ builder.Services.AddHttpClient<ScreenCaptureApiService>((serviceProvider, client
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);
 });
 
+builder.Services.AddHttpClient<UsageApiService>((serviceProvider, client) =>
+{
+    client.BaseAddress = ResolveApiBaseUri(serviceProvider);
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
