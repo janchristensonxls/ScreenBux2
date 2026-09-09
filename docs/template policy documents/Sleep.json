@@ -36,11 +36,13 @@
 			"rules": []
 		}
 	],
+	"categoryPolicies": [],
 	"sessionRules": [
 		{
 			"name": "No computer use",
 			"enabled": true,
-			"action": "Sleep"
+			"action": "Sleep",
+			"schedule": []
 		}
 	],
 	"enableMonitoring": true,

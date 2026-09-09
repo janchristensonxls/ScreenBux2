@@ -38,21 +38,15 @@
 	],
 	"categoryPolicies": [
 		{
-			"categoryNames": ["Games", "Social-media", "Distraction"],
+			"categoryNames": [
+				"Games",
+				"Social-media",
+				"Distraction"
+			],
 			"enforcement": "TimeLimited",
 			"dailyBudgetMinutes": 120,
 			"action": "CloseProcess",
-			"allowedWindows": [
-				{
-					"daysOfWeek": [
-						"Friday",
-						"Saturday",
-						"Sunday"
-					],
-					"startTime": "16:00:00",
-					"endTime": "20:00:00"
-				}
-			]
+			"allowedWindows": []
 		}
 	],
 	"sessionRules": [
@@ -82,7 +76,7 @@
 				{
 					"daysOfWeek": [
 						"Saturday",
-						"Sunday",
+						"Sunday"
 					],
 					"startTime": "01:00:00",
 					"endTime": "09:00:00"
