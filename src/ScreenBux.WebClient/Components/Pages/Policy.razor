@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using System.Text.Json
 @using ScreenBux.Shared.Models
+@using ScreenBux.Shared.Utilities
 @inject ScreenBux.WebClient.Services.PolicyApiService PolicyApiService
 
 <PageTitle>Policy</PageTitle>
@@ -41,6 +42,26 @@
     </div>
 </div>
 
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">App Categories</h5>
+        <p class="text-muted">
+            Categories (e.g. "Games", "Social Media") classify running apps by regex rules on
+            process name and/or foreground window title. Edit the JSON below and save to persist
+            it to the account's active policy profile in the database.
+        </p>
+        <textarea class="form-control font-monospace" rows="16" @bind="_categoriesJson"></textarea>
+        <div class="mt-3">
+            <button class="btn btn-primary me-2" @onclick="LoadCategoriesAsync">Load</button>
+            <button class="btn btn-success" @onclick="SaveCategoriesAsync">Save Categories</button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_categoriesStatusMessage))
+        {
+            <div class="alert alert-info mt-3">@_categoriesStatusMessage</div>
+        }
+    </div>
+</div>
+
 @if (!string.IsNullOrWhiteSpace(_statusMessage))
 {
     <div class="alert alert-info">@_statusMessage</div>
@@ -49,12 +70,63 @@
 @code {
     private string _policyJson = string.Empty;
     private string _statusMessage = string.Empty;
+    private string _categoriesJson = string.Empty;
+    private string _categoriesStatusMessage = string.Empty;
     private List<PolicyProfileDto> _profiles = new();
+
+    private static readonly JsonSerializerOptions SerializerOptions = PolicyJsonOptions.Default;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadPolicyAsync();
         await LoadProfilesAsync();
+        await LoadCategoriesAsync();
+    }
+
+    private async Task LoadCategoriesAsync()
+    {
+        try
+        {
+            var json = await PolicyApiService.GetPolicyJsonAsync();
+            var policy = JsonSerializer.Deserialize<PolicyConfiguration>(json, SerializerOptions);
+            _categoriesJson = JsonSerializer.Serialize(policy?.AppCategories ?? new List<AppCategoryConfig>(), SerializerOptions);
+            _categoriesStatusMessage = "Categories loaded.";
+        }
+        catch (Exception ex)
+        {
+            _categoriesStatusMessage = $"Failed to load categories: {ex.Message}";
+        }
+    }
+
+    private async Task SaveCategoriesAsync()
+    {
+        try
+        {
+            var categories = JsonSerializer.Deserialize<List<AppCategoryConfig>>(_categoriesJson, SerializerOptions);
+            if (categories is null)
+            {
+                _categoriesStatusMessage = "Categories JSON is invalid.";
+                return;
+            }
+
+            var json = await PolicyApiService.GetPolicyJsonAsync();
+            var policy = JsonSerializer.Deserialize<PolicyConfiguration>(json, SerializerOptions) ?? new PolicyConfiguration();
+            policy.AppCategories = categories;
+
+            await PolicyApiService.UpdatePolicyAsync(policy);
+            _categoriesStatusMessage = "Categories saved.";
+
+            // Keep the raw JSON editor and its buffer in sync with the change.
+            await LoadPolicyAsync();
+        }
+        catch (JsonException jsonException)
+        {
+            _categoriesStatusMessage = $"Categories JSON error: {jsonException.Message}";
+        }
+        catch (Exception ex)
+        {
+            _categoriesStatusMessage = $"Failed to save categories: {ex.Message}";
+        }
     }
 
     private async Task LoadProfilesAsync()
@@ -101,10 +173,7 @@
     {
         try
         {
-            var policy = JsonSerializer.Deserialize<PolicyConfiguration>(_policyJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            var policy = JsonSerializer.Deserialize<PolicyConfiguration>(_policyJson, SerializerOptions);
 
             if (policy == null)
             {

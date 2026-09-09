@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.WebClient.Services;
 
@@ -27,13 +28,13 @@ public class PolicyApiService
 
     public async Task UpdatePolicyAsync(PolicyConfiguration policy)
     {
-        var response = await _httpClient.PutAsJsonAsync("api/policy", policy);
+        var response = await _httpClient.PutAsJsonAsync("api/policy", policy, PolicyJsonOptions.Default);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task<List<PolicyProfileDto>> GetProfilesAsync()
     {
-        var profiles = await _httpClient.GetFromJsonAsync<List<PolicyProfileDto>>("api/policy/profiles");
+        var profiles = await _httpClient.GetFromJsonAsync<List<PolicyProfileDto>>("api/policy/profiles", PolicyJsonOptions.Default);
         return profiles ?? new List<PolicyProfileDto>();
     }
 
@@ -43,9 +44,9 @@ public class PolicyApiService
         {
             Name = name,
             Policy = policy
-        });
+        }, PolicyJsonOptions.Default);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<PolicyProfileDto>();
+        return await response.Content.ReadFromJsonAsync<PolicyProfileDto>(PolicyJsonOptions.Default);
     }
 
     public async Task ActivateProfileAsync(Guid profileId)

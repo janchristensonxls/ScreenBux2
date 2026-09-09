@@ -58,6 +58,10 @@ public class PolicySyncService : BackgroundService
                     return Task.FromResult(state.DeviceToken);
                 };
             })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+            })
             .WithAutomaticReconnect()
             .Build();
 

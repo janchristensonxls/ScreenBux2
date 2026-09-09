@@ -40,7 +40,7 @@ public class PolicyService
             if (File.Exists(_policyFilePath))
             {
                 var json = await File.ReadAllTextAsync(_policyFilePath);
-                _configuration = JsonSerializer.Deserialize<PolicyConfiguration>(json) ?? new PolicyConfiguration();
+                _configuration = JsonSerializer.Deserialize<PolicyConfiguration>(json, PolicyJsonOptions.Default) ?? new PolicyConfiguration();
                 _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
                 _logger.LogInformation("Policy loaded successfully with {Count} categories, {RuleCount} category policies",
                     _configuration.AppCategories.Count, _configuration.CategoryPolicies.Count);
@@ -83,10 +83,7 @@ public class PolicyService
     {
         try
         {
-            var json = JsonSerializer.Serialize(_configuration, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            var json = JsonSerializer.Serialize(_configuration, PolicyJsonOptions.Default);
             await File.WriteAllTextAsync(_policyFilePath, json);
             _lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
             _logger.LogInformation("Policy saved successfully");

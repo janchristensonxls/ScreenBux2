@@ -1,12 +1,8 @@
 # ScreenBux2 — AI Agent Guide
 
-Windows **parental-control** system. A privileged service enforces policy on a controlled
-device; a web server + Blazor UI let a parent manage accounts, linked devices, and policy,
-and watch activity in real time. Target framework: **.NET 8**. Solution: `ScreenBux2.sln`.
+Windows **parental-control** system. A privileged service enforces policy on a controlled device; a web server + Blazor UI let a parent manage accounts, linked devices, and policy, and watch activity in real time. Target framework: **.NET 8**. Solution: `ScreenBux2.sln`.
 
-> For full architecture detail (data flow, domain model, known gaps), see
-> [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Keep that file in sync when you change
-> data flow, add a project, or close/discover a gap — this file stays short on purpose.
+> For full architecture detail (data flow, domain model, known gaps), see [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Keep that file in sync when you change data flow, add a project, or close/discover a gap — this file stays short on purpose.
 
 ## The seven projects (and who talks to whom)
 
@@ -30,11 +26,15 @@ and watch activity in real time. Target framework: **.NET 8**. Solution: `Screen
 ## Domain model — read this before touching policy code
 
 - Multi-tenancy is real now: `Account : IdentityUser` owns many `ChildProfile`s and `Device`s (`ScreenBux.Data`, SQL Server via EF Core). `DeviceLinkCode` is a one-time, 15-minute code binding a `Device` to an `Account`.
-- `PolicyConfiguration` uses a **category-based** model (migrated off the old dual `Rules`/`Policies` system — see `docs/decisions/group-based-policy-model.md`): `AppCategories: List<AppCategoryConfig>` (named, regex-classified, mode-independent), `CategoryPolicies: List<CategoryPolicy>` (per-mode Allowed/Blocked/TimeLimited enforcement per category, with optional `AllowedWindows`), and `SessionRules: List<SessionRule>` (schedule-gated whole-session actions like Sleep/Hibernate lockouts, the successor to the old `Always`-condition rules).
+- `PolicyConfiguration` uses a **category-based** model (migrated off the old dual `Rules`/`Policies` system — see `docs/decisions/group-based-policy-model.md`): `AppCategories: List<AppCategoryConfig>` (named, regex-classified, mode-independent), `CategoryPolicies: List<CategoryPolicy>` (per-mode Allowed/Blocked/TimeLimited enforcement per category, with optional `AllowedWindows`), and `SessionRules: List<SessionRule>` (schedule-gated whole-session actions like Sleep/Hibernate lockouts, the successor to the old `Always`-condition rules). **Decision**: Keep `ScreenBux2`'s `PolicyConfiguration.AppCategories` embedded per-`PolicyProfile` (not normalized/shared across modes) rather than extracting a shared account-wide category store. Usage-history independence from category definition changes is a priority, and cross-mode category orthogonality will be reinforced later via UI logic (e.g., fan-out on save), not a schema change.
 - `PolicyService.ClassifyProcess`/`GetCategoryPolicy`/`IsBlockedByPolicy` are the resolution pipeline both `NamedPipeServerService` (foreground) and `ProcessMonitoringService` (background enumeration) call for enforcement; `TimeLimited` categories are checked against `UsageTrackingService.GetTotalSecondsTodayForCategory`.
 - Per-category usage accumulation is now wired end-to-end: `NamedPipeServerService` classifies each Agent foreground report and calls `UsageTrackingService.ReportForegroundCategory` so accumulated seconds attribute to the right category. Accumulation is independent of an active time grant — a grant only pauses enforcement, never accounting.
 - Policy has **two separate stores** that are only bridged via REST/SignalR: the WebServer persists `PolicyConfiguration` as JSON inside a SQL Server `PolicyDocument` row (`EfPolicyStore`, scoped by `AccountId`/optionally `ChildProfileId`/`DeviceId` — though only the unscoped account-wide document is actually written today); the Service persists its own local flat-file copy at `PolicyStorage.GetDefaultPolicyPath()` (`%CommonApplicationData%\ScreenBux\policy.json`). Don't assume either side can see the other's storage directly.
 - **Device time grants** are a separate, orthogonal mechanism: a per-device `DeviceGrant.ExpiresAtUtc` (WebServer-authoritative, `IGrantStore`/`EfGrantStore`) that pauses ALL enforcement — both rule systems and Always/power-action rules — until it expires, regardless of active policy mode. Synced to the Service the same way policy is (REST poll + SignalR `GrantUpdated` push) into a local `grant.json`, so `GrantService.IsGrantActive` stays correct even while disconnected. See `docs/flows.md` section 4.
+
+## Policy Configuration Serialization
+
+- Always serialize `PolicyConfiguration` and its nested models (enums, DayOfWeek) with `JsonStringEnumConverter` (via the shared `ScreenBux.Shared.Utilities.PolicyJsonOptions.Default`) rather than raw numeric enums, across WebServer REST/SignalR, WebClient, and the Service's local policy cache.
 
 ## Conventions
 
@@ -47,7 +47,6 @@ and watch activity in real time. Target framework: **.NET 8**. Solution: `Screen
 - EF Core migrations live in `ScreenBux.Data/Migrations`; add new ones with `dotnet ef migrations add <Name> -p src/ScreenBux.Data -s src/ScreenBux.WebServer` whenever an entity changes.
 
 ## Build & run
-
 ```powershell
 dotnet build ScreenBux2.sln
 # Run order for a full local loop:
@@ -70,7 +69,4 @@ There is **no test project** and the `.github/workflows` files are empty — no 
 
 ## Missing capabilities (major — see [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md))
 
-The biggest genuinely-missing piece is **usage tracking/enforcement**: `MaxUsageMinutesPerDay`
-and multi-device `ChildProfile` budgets exist as shape only — nothing accumulates usage
-anywhere. Accounts, device identity/linking, and JWT auth are already implemented; don't
-rebuild them from scratch.
+The biggest genuinely-missing piece is **usage tracking/enforcement**: `MaxUsageMinutesPerDay` and multi-device `ChildProfile` budgets exist as shape only — nothing accumulates usage anywhere. Accounts, device identity/linking, and JWT auth are already implemented; don't rebuild them from scratch.

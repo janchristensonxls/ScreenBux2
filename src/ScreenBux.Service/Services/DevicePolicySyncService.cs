@@ -15,7 +15,7 @@ namespace ScreenBux.Service.Services;
 /// </summary>
 public class DevicePolicySyncService : BackgroundService
 {
-    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions WriteOptions = PolicyJsonOptions.Default;
 
     private readonly ILogger<DevicePolicySyncService> _logger;
     private readonly IConfiguration _configuration;
@@ -167,7 +167,7 @@ public class DevicePolicySyncService : BackgroundService
             return;
         }
 
-        var policy = await response.Content.ReadFromJsonAsync<PolicyConfiguration>(cancellationToken);
+        var policy = await response.Content.ReadFromJsonAsync<PolicyConfiguration>(WriteOptions, cancellationToken);
         if (policy is null)
         {
             return;

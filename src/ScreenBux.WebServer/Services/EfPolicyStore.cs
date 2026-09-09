@@ -17,7 +17,7 @@ namespace ScreenBux.WebServer.Services;
 /// </summary>
 public class EfPolicyStore : IPolicyStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions SerializerOptions = PolicyJsonOptions.Default;
 
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
@@ -307,6 +307,6 @@ public class EfPolicyStore : IPolicyStore
             return new PolicyConfiguration();
         }
 
-        return JsonSerializer.Deserialize<PolicyConfiguration>(json) ?? new PolicyConfiguration();
+        return JsonSerializer.Deserialize<PolicyConfiguration>(json, SerializerOptions) ?? new PolicyConfiguration();
     }
 }
