@@ -325,7 +325,11 @@ public class NamedPipeServerService : BackgroundService
 
         var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
         var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames));
-
+        var dbg = !string.IsNullOrEmpty(message.Process.WindowTitle) && message.Process.WindowTitle.Contains("tube");
+        if (dbg)
+        {
+            var stp = 56;
+        }
         if (shouldBlock)
         {
             var reason = category != null

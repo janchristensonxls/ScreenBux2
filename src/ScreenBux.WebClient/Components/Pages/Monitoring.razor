@@ -12,7 +12,7 @@
 
 <h1>ScreenBux Monitoring</h1>
 
-<div class="card mb-3">
+@* <div class="card mb-3">
     <div class="card-body">
         <h5 class="card-title">Connection Status</h5>
         <p>
@@ -24,7 +24,7 @@
         <button class="btn btn-secondary me-2" @onclick="Disconnect" disabled="@(!_isConnected)">Disconnect</button>
         <button class="btn btn-info" @onclick="RequestStatus" disabled="@(!_isConnected)">Get Status</button>
     </div>
-</div>
+</div> *@
 
 <div class="card mb-3">
     <div class="card-body">
@@ -167,7 +167,7 @@
     </div>
 }
 
-<div class="card">
+@* <div class="card">
     <div class="card-body">
         <h5 class="card-title">Status Messages</h5>
         <div style="height: 200px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; font-family: monospace; font-size: 0.9em;">
@@ -177,7 +177,7 @@
             }
         </div>
     </div>
-</div>
+</div> *@
 
 @code {
     private static readonly TimeSpan ProcessListTimeout = TimeSpan.FromSeconds(15);
@@ -219,6 +219,8 @@
         {
             AddStatusMessage($"Error loading devices: {ex.Message}");
         }
+
+        await Connect();
     }
 
     private async Task Connect()
@@ -251,11 +253,11 @@
         StateHasChanged();
     }
 
-    private async Task RequestStatus()
-    {
-        await MonitoringService.RequestStatusAsync();
-        AddStatusMessage("Status request sent");
-    }
+    // private async Task RequestStatus()
+    // {
+    //     await MonitoringService.RequestStatusAsync();
+    //     AddStatusMessage("Status request sent");
+    // }
 
     private async Task CloseProcess(int processId)
     {
