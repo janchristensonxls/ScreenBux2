@@ -91,8 +91,9 @@ public class ProcessMonitoringService : BackgroundService
     /// <summary>
     /// Evaluates active <see cref="SessionRule"/>s (e.g. a "Sleep" lockout mode), which apply to
     /// the whole session rather than a specific process. Gated on <see cref="PolicyService.HasSyncedSinceStartup"/>
-    /// so a stale cached policy.json left over from before a reboot can never trigger a
-    /// power action before the real current mode has been confirmed with the server.
+    /// so a stale cached policy.json left over from before a reboot (or from before the device
+    /// went to sleep) can never trigger a power action before the real current mode has been
+    /// recently reconfirmed with the server.
     /// Returns true if a power action was executed (short-circuiting further per-process
     /// enforcement for this tick, since the device is about to suspend).
     /// </summary>

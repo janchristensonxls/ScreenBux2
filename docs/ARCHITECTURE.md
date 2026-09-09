@@ -169,7 +169,13 @@ enforcement, using `UsageTrackingService.GetTotalSecondsTodayForCategory` for
 `TimeLimited` budget checks. `ProcessMonitoringService.EnforceAlwaysRules` was
 renamed in spirit to evaluating `PolicyService.GetActiveSessionRules()`,
 still gated on `PolicyService.HasSyncedSinceStartup` before a Sleep/Hibernate
-action is allowed to fire.
+action is allowed to fire. That gate is staleness-based (last successful
+sync within `PolicySyncStalenessSeconds`, default 180s) rather than a
+one-shot "synced at least once" latch, specifically so it re-engages after
+the OS resumes from a Sleep/Hibernate action — the Service process itself
+never restarts on resume, so a one-shot flag would otherwise stay stuck
+`true` and allow the same lockout rule to immediately put the device back
+to sleep before a fresh sync could confirm the current mode.
 
 Per-category daily usage accumulation (via `UsageTrackingService`) is now
 wired end-to-end: the Agent's foreground report is classified on receipt

@@ -12,23 +12,33 @@ public class PolicyService
     private readonly ILogger<PolicyService> _logger;
     private PolicyConfiguration _configuration;
     private readonly string _policyFilePath;
+    private readonly TimeSpan _syncStalenessThreshold;
     private DateTime? _lastWriteTimeUtc;
+    private DateTime? _lastSyncedUtc;
 
     /// <summary>
-    /// True once the Service has successfully synced policy from the server at least once
-    /// since process startup (via either the REST poll or the SignalR push). Used to gate
-    /// device-wide power actions (Sleep/Hibernate) so a stale cached policy.json left over
-    /// from before a reboot can never fire a lockout action before the real current mode is
-    /// confirmed from the server.
+    /// True while the Service has successfully synced policy from the server "recently enough"
+    /// (via either the REST poll or the SignalR push) - see <see cref="_syncStalenessThreshold"/>.
+    /// Used to gate device-wide power actions (Sleep/Hibernate) so a stale cached policy.json
+    /// can never fire a lockout action before the real current mode is reconfirmed from the
+    /// server. This is deliberately staleness-based (re-evaluated on every read) rather than a
+    /// one-shot "synced since process startup" latch: the process does NOT restart after a
+    /// Sleep/Hibernate power action (only the OS suspends), so a one-shot flag would stay stuck
+    /// "true" forever after the very first sync and would never re-gate a lockout rule that
+    /// fires again immediately after the device wakes back up, before the next poll/push has
+    /// had a chance to run.
     /// </summary>
-    public bool HasSyncedSinceStartup { get; private set; }
+    public bool HasSyncedSinceStartup =>
+        _lastSyncedUtc.HasValue && DateTime.UtcNow - _lastSyncedUtc.Value <= _syncStalenessThreshold;
 
-    public void MarkSyncedSinceStartup() => HasSyncedSinceStartup = true;
+    public void MarkSyncedSinceStartup() => _lastSyncedUtc = DateTime.UtcNow;
 
     public PolicyService(ILogger<PolicyService> logger, IConfiguration configuration)
     {
         _logger = logger;
         _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
+        var stalenessSeconds = int.TryParse(configuration["PolicySyncStalenessSeconds"], out var s) ? s : 180;
+        _syncStalenessThreshold = TimeSpan.FromSeconds(Math.Max(1, stalenessSeconds));
         PolicyStorage.EnsurePolicyDirectory(_policyFilePath);
         _configuration = new PolicyConfiguration();
     }

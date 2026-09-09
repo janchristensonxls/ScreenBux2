@@ -343,11 +343,19 @@ These were discovered while writing this document
 3. **Power-action ("Sleep"/"Hibernate") "Always" rules are correctly gated behind
    `HasSyncedSinceStartup`, but that gate can be starved by issue #2 above.** If SignalR never
    connects, `HasSyncedSinceStartup` only becomes `true` after the first REST poll succeeds —
-   up to 60 seconds after Service startup, and this only happens once; after that it stays
-   `true` for the rest of the process lifetime. So a "Sleep" mode activated right after the
-   Service starts (e.g., during testing/dev iteration where the Service is frequently
-   restarted) can appear to silently do nothing for up to a minute — not a bug in the gate
-   itself, but worth knowing when debugging "why didn't Sleep mode trigger."
+   up to 60 seconds after Service startup. So a "Sleep" mode activated right after the Service
+   starts (e.g., during testing/dev iteration where the Service is frequently restarted) can
+   appear to silently do nothing for up to a minute — not a bug in the gate itself, but worth
+   knowing when debugging "why didn't Sleep mode trigger." Note that `HasSyncedSinceStartup` is
+   **staleness-based**, not a one-shot latch: it re-checks on every read whether the last
+   successful sync (REST poll or SignalR push) happened within `PolicySyncStalenessSeconds`
+   (default 180s) of "now." This matters across Sleep/Hibernate specifically because the
+   process does *not* restart when the OS resumes from suspend — only a fresh reboot or service
+   restart would have reset a one-shot flag, so without the staleness check a device that woke
+   from a "Sleep" lockout could immediately re-trigger the same stale rule before the next poll
+   had a chance to run, sleeping again before it ever reconnects. On resume, real wall-clock
+   time has advanced by the sleep duration, so the gate is naturally stale until the next
+   successful poll/push confirms the current mode.
 
 4. **Regular `CloseProcess`/`KillProcessTree` rules are *not* gated by `HasSyncedSinceStartup`
    at all**, so they act on whatever `policy.json` contains from a previous session the
