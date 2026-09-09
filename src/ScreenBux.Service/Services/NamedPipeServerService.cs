@@ -324,7 +324,7 @@ public class NamedPipeServerService : BackgroundService
         _usageTracking.ReportForegroundCategory(category?.Name);
 
         var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
-        var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategory(categoryPolicy.CategoryName));
+        var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames));
 
         if (shouldBlock)
         {

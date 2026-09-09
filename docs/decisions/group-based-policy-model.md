@@ -110,3 +110,34 @@ unaccounted screen time.
   as a JSON sub-document inside `PolicyDocument` like today's `Policies`/`Rules` — leaning
   towards a first-class entity for query-ability (e.g. "which groups are TimeLimited across all
   profiles") but this is a migration-plan decision, not a data-model decision.
+
+## Addendum: `CategoryPolicy.CategoryNames` (multi-category enforcement buckets)
+
+Accepted after the initial migration shipped. Real-world editing revealed that classification
+granularity (fine, for reporting - "Games", "Social Media", "YouTube") and enforcement
+granularity (coarse, for parenting decisions - "Distraction") are often genuinely different: a
+parent wants to see separate usage history per fine-grained category, but wants one shared
+`TimeLimited`/`Blocked` rule to apply across several of them at once (e.g. one 2-hour budget
+shared by Games + Social Media + YouTube combined), without being forced to either merge those
+categories' classification rules or duplicate the same policy three times.
+
+- `CategoryPolicy.CategoryName` (single string) → `CategoryPolicy.CategoryNames` (`List<string>`).
+  A JSON array was chosen over a delimiter-encoded string (e.g. `"Games|Social Media"`) for
+  consistency with every other multi-value field in this model (`DaysOfWeek`, `AllowedWindows`)
+  and to avoid delimiter-escaping edge cases.
+- Classification is unaffected: a process still classifies into exactly one fine-grained
+  `AppCategoryConfig` via `PolicyService.ClassifyProcess`, and `UsageTrackingService` still
+  accumulates/reports usage per fine-grained category name. Only policy *lookup* changes, from an
+  exact-name match to a membership check (`CategoryNames.Contains(name)`).
+- Budget accounting: for a `TimeLimited` policy governing multiple category names, the budget
+  is checked against the **sum** of today's usage across every name in `CategoryNames`
+  (`UsageTrackingService.GetTotalSecondsTodayForCategories`), not any single category in
+  isolation. The budget itself remains one number, shared across the whole bucket.
+- Overlap resolution: if the same category name appears in more than one `CategoryPolicy` on the
+  same profile, first-match-wins (in list order) — consistent with the existing first-match-wins
+  semantics already used for `AppCategoryRule` classification, so the codebase has one overlap
+  rule, not two.
+- No back-compat shim: per the "no real production data" non-goal above, saved
+  `PolicyProfile.PolicyJson` documents using the old singular `CategoryName` field will need to be
+  re-edited (they were already expected to be migration-fragile before general availability).
+

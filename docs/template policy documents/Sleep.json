@@ -1,0 +1,51 @@
+{
+	"name": "Sleep",
+	"appCategories": [
+		{
+			"name": "Games",
+			"rules": [
+				{
+					"processNameRegex": "discord|Steam|epic|battle|roblox|Forge|fort|AutoClicker|GeometryDash|xbox|medal|Kryptex|obs64",
+					"windowTitleRegex": "roblox|Forge|fort|games|fun |brawl|minecraft|Palladium|Astroneer|spel|jeux|jouer|play gam|online|GeometryDash|Geometry Dash|xbox",
+					"enabled": true
+				}
+			]
+		},
+		{
+			"name": "Social-media",
+			"rules": [
+				{
+					"processNameRegex": "Whatsapp|snapchat",
+					"windowTitleRegex": "facebook|instagram|tiktok",
+					"enabled": true
+				}
+			]
+		},
+		{
+			"name": "Distraction",
+			"rules": [
+				{
+					"processNameRegex": null,
+					"windowTitleRegex": "manga|youtube|tiktok|anime|netflix|movies|series|films",
+					"enabled": true
+				}
+			]
+		},
+		{
+			"name": "Other",
+			"rules": []
+		}
+	],
+	"sessionRules": [
+		{
+			"name": "No computer use",
+			"enabled": true,
+			"action": "Sleep"
+		}
+	],
+	"enableMonitoring": true,
+	"checkIntervalSeconds": 5,
+	"logActivity": true,
+	"dayStartHour": 6,
+	"dailyBudgetMinutes": null
+}

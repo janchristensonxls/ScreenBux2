@@ -121,7 +121,7 @@ public class PolicyService
             {
                 new CategoryPolicy
                 {
-                    CategoryName = "Example Blocked App",
+                    CategoryNames = new List<string> { "Example Blocked App" },
                     Enforcement = CategoryPolicyEnforcement.Blocked
                 }
             }
@@ -166,20 +166,26 @@ public class PolicyService
     /// Resolves the effective <see cref="CategoryPolicy"/> for a given category name (or the
     /// implicit "Other" bucket when <paramref name="categoryName"/> is null), defaulting to
     /// <see cref="CategoryPolicyEnforcement.Allowed"/> when no explicit policy is configured.
+    /// A <see cref="CategoryPolicy"/> may govern multiple category names (see
+    /// <see cref="CategoryPolicy.CategoryNames"/>); the first policy (in list order) whose
+    /// <see cref="CategoryPolicy.CategoryNames"/> contains <paramref name="categoryName"/> wins.
     /// </summary>
     public CategoryPolicy GetCategoryPolicy(string? categoryName)
     {
         var policy = categoryName != null
-            ? _configuration.CategoryPolicies.FirstOrDefault(p => p.CategoryName == categoryName)
+            ? _configuration.CategoryPolicies.FirstOrDefault(p => p.CategoryNames.Contains(categoryName))
             : null;
 
-        return policy ?? new CategoryPolicy { CategoryName = categoryName ?? "Other", Enforcement = CategoryPolicyEnforcement.Allowed };
+        return policy ?? new CategoryPolicy { CategoryNames = new List<string> { categoryName ?? "Other" }, Enforcement = CategoryPolicyEnforcement.Allowed };
     }
 
     /// <summary>
     /// True if the given process should be blocked right now, per its category's resolved
     /// <see cref="CategoryPolicy"/>. <paramref name="usedSecondsToday"/> is only consulted for
-    /// <see cref="CategoryPolicyEnforcement.TimeLimited"/> categories.
+    /// <see cref="CategoryPolicyEnforcement.TimeLimited"/> categories, and should already be the
+    /// sum of usage across every category name in the resolved policy's
+    /// <see cref="CategoryPolicy.CategoryNames"/> (see
+    /// <c>UsageTrackingService.GetTotalSecondsTodayForCategories</c>).
     /// </summary>
     public bool ShouldBlockProcess(ProcessInfo processInfo, bool isForegroundWindow, long usedSecondsToday = 0)
     {

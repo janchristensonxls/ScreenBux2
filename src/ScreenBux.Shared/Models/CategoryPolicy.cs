@@ -33,15 +33,27 @@ public enum CategoryPolicyEnforcement
 }
 
 /// <summary>
-/// Per-mode enforcement for one <c>AppCategory</c> (identified by name - see
+/// Per-mode enforcement for one or more <c>AppCategory</c> entries (identified by name - see
 /// docs/decisions/group-based-policy-model.md for why category identity flows by name rather
 /// than a synced database id). One list of these lives on each active <see cref="PolicyConfiguration"/>,
 /// resolved server-side for whichever <c>PolicyProfile</c>/mode is currently active.
+///
+/// A single policy can govern multiple fine-grained categories (e.g. a "Distraction" bucket
+/// grouping "Games", "Social Media", and "YouTube") without merging their classification rules -
+/// each category still classifies independently and accumulates its own usage seconds; this
+/// policy's <see cref="DailyBudgetMinutes"/> is checked against the *sum* of usage across all of
+/// <see cref="CategoryNames"/>. If the same category name appears in more than one
+/// <see cref="CategoryPolicy"/> on the same profile, the first matching policy wins (in list
+/// order) - this mirrors the existing first-match-wins semantics used for
+/// <c>AppCategoryRule</c> classification.
 /// </summary>
 public class CategoryPolicy
 {
-    /// <summary>Name of the <c>AppCategory</c> this policy governs (e.g. "Games", "Social Media", "Other").</summary>
-    public string CategoryName { get; set; } = string.Empty;
+    /// <summary>
+    /// Names of the <c>AppCategory</c> entries this policy governs (e.g. ["Games"], or
+    /// ["Games", "Social Media", "YouTube"] for a combined "Distraction" bucket).
+    /// </summary>
+    public List<string> CategoryNames { get; set; } = new();
 
     public CategoryPolicyEnforcement Enforcement { get; set; } = CategoryPolicyEnforcement.Allowed;
 

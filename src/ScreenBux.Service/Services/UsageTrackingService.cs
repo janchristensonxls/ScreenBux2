@@ -84,6 +84,29 @@ public class UsageTrackingService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Cross-device total for today summed across every given category name, per the last
+    /// successful sync. Used when a single <see cref="CategoryPolicy"/> governs multiple
+    /// fine-grained categories (see <see cref="CategoryPolicy.CategoryNames"/>) - the budget is
+    /// checked against the combined usage of all of them, not any one category in isolation.
+    /// </summary>
+    public long GetTotalSecondsTodayForCategories(IReadOnlyList<string> categoryNames)
+    {
+        lock (_lock)
+        {
+            long total = 0;
+            foreach (var categoryName in categoryNames)
+            {
+                if (_totalSecondsTodayByCategory.TryGetValue(categoryName, out var seconds))
+                {
+                    total += seconds;
+                }
+            }
+
+            return total;
+        }
+    }
+
     /// <summary>True once the cross-device total for today reaches the child's configured daily budget.</summary>
     public bool IsBudgetExceeded
     {

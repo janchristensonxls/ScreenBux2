@@ -152,7 +152,7 @@ public class ProcessMonitoringService : BackgroundService
             var category = _policyService.ClassifyProcess(processInfo, isForegroundWindow: false);
             var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
 
-            if (PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategory(categoryPolicy.CategoryName)) && handledProcesses.Add(processInfo.ProcessId))
+            if (PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames)) && handledProcesses.Add(processInfo.ProcessId))
             {
                 await EnforceRuleAsync(processInfo, categoryPolicy, category?.Name);
             }
