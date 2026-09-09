@@ -133,6 +133,12 @@ public class UsageTrackingService : BackgroundService
 
         _cachedEffectiveDate = ComputeEffectiveDate(DateTime.Now, _policyService.GetConfiguration().DayStartHour);
 
+        // Seed today's totals from the server before enforcement starts. Without this, a
+        // restart leaves _totalSecondsTodayByCategory empty until the next periodic flush
+        // (up to BaselineSyncIntervalSeconds later), letting a child exceed an already-used
+        // daily budget for minutes after the service comes back up.
+        await InitializeTodayTotalsAsync(serverBaseUrl, stoppingToken);
+
         var stopwatch = Stopwatch.StartNew();
         var lastFlush = stopwatch.Elapsed;
         var lastFlushSuccessful = true;
@@ -173,6 +179,70 @@ public class UsageTrackingService : BackgroundService
 
         // Best-effort final flush so nothing accumulated since the last periodic sync is lost.
         await FlushAsync(serverBaseUrl, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Fetches today's cross-device usage totals from the server and seeds
+    /// <see cref="_totalSecondsToday"/>/<see cref="_totalSecondsTodayByCategory"/> with them, so
+    /// enforcement reflects usage already recorded in the database before this process started
+    /// (e.g. from earlier today, or from other devices) rather than starting from zero.
+    /// </summary>
+    private async Task InitializeTodayTotalsAsync(string serverBaseUrl, CancellationToken cancellationToken)
+    {
+        var state = _deviceIdentity.GetOrCreate();
+        if (!state.IsLinked)
+        {
+            return;
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(serverBaseUrl.TrimEnd('/') + "/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
+
+            // A zero-second "add" is a no-op on the server but returns the current summary,
+            // reusing the existing endpoint instead of requiring the Service to know its
+            // ChildProfileId (which api/usage/{childProfileId} would need).
+            var request = new AddUsageSecondsRequest
+            {
+                DeviceId = state.DeviceId,
+                EffectiveDate = _cachedEffectiveDate,
+                CategoryName = DefaultCategoryName,
+                Seconds = 0
+            };
+
+            using var response = await client.PostAsJsonAsync("api/usage/add", request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to fetch initial usage totals ({Status}); enforcement may under-count usage until the next sync.", (int)response.StatusCode);
+                return;
+            }
+
+            var summary = await response.Content.ReadFromJsonAsync<UsageSummaryDto>(cancellationToken);
+            if (summary is null)
+            {
+                return;
+            }
+
+            lock (_lock)
+            {
+                _totalSecondsToday = summary.TotalSeconds;
+                _totalSecondsTodayByCategory.Clear();
+                foreach (var categoryTotal in summary.ByCategory)
+                {
+                    _totalSecondsTodayByCategory[categoryTotal.AppCategoryName] = categoryTotal.Seconds;
+                }
+            }
+
+            _logger.LogInformation(
+                "Initialized today's usage totals from server: {TotalSeconds}s across {Count} categories for {EffectiveDate}.",
+                summary.TotalSeconds, summary.ByCategory.Count, _cachedEffectiveDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching initial usage totals.");
+        }
     }
 
     private async Task<bool> FlushAsync(string serverBaseUrl, CancellationToken cancellationToken)
