@@ -214,6 +214,10 @@
         {
             var devices = await DevicesApiService.ListDevicesAsync();
             _devices = devices.ToList();
+            if (_devices.Count == 1)
+            {
+                _selectedDeviceId = _devices[0].Id.ToString();
+            }
         }
         catch (Exception ex)
         {
