@@ -21,9 +21,9 @@ public class DevicesApiService
         }
     }
 
-    public async Task<LinkCodeResponse?> GenerateLinkCodeAsync()
+    public async Task<LinkCodeResponse?> GenerateLinkCodeAsync(Guid childProfileId)
     {
-        var response = await _httpClient.PostAsync("api/devices/linkcode", content: null);
+        var response = await _httpClient.PostAsync($"api/devices/linkcode?childProfileId={childProfileId}", content: null);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<LinkCodeResponse>();
     }

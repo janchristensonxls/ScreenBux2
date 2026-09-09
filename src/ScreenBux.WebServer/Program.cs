@@ -57,6 +57,7 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<IPolicyStore, EfPolicyStore>();
 builder.Services.AddScoped<IGrantStore, EfGrantStore>();
 builder.Services.AddScoped<IUsageStore, EfUsageStore>();
+builder.Services.AddScoped<IChildProfileStore, EfChildProfileStore>();
 builder.Services.AddSingleton<IUpdateManifestStore, StaticUpdateManifestStore>();
 builder.Services.AddSingleton<IScreenCaptureStore, InMemoryScreenCaptureStore>();
 

@@ -50,6 +50,11 @@ builder.Services.AddHttpClient<DevicesApiService>((serviceProvider, client) =>
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);
 });
 
+builder.Services.AddHttpClient<ChildProfilesApiService>((serviceProvider, client) =>
+{
+    client.BaseAddress = ResolveApiBaseUri(serviceProvider);
+});
+
 builder.Services.AddHttpClient<GrantApiService>((serviceProvider, client) =>
 {
     client.BaseAddress = ResolveApiBaseUri(serviceProvider);

@@ -43,7 +43,7 @@ public class DevicesController : ControllerBase
         _hubContext = hubContext;
     }
 
-    /// <summary>Parent generates a short link code to enter on a device.</summary>
+    /// <summary>Parent generates a short link code, targeting a specific child profile, to enter on a device.</summary>
     [HttpPost("linkcode")]
     [Authorize]
     public async Task<ActionResult<LinkCodeResponse>> GenerateLinkCode([FromQuery] Guid? childProfileId, CancellationToken cancellationToken)
@@ -54,10 +54,21 @@ public class DevicesController : ControllerBase
             return Unauthorized();
         }
 
+        if (childProfileId is not Guid childId)
+        {
+            return BadRequest(new { message = "childProfileId is required; create a child profile before linking a device." });
+        }
+
+        var childExists = await _db.ChildProfiles.AnyAsync(c => c.Id == childId && c.AccountId == accountId, cancellationToken);
+        if (!childExists)
+        {
+            return BadRequest(new { message = "Child profile was not found for this account." });
+        }
+
         var linkCode = new DeviceLinkCode
         {
             AccountId = accountId,
-            ChildProfileId = childProfileId,
+            ChildProfileId = childId,
             Code = GenerateCode(),
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddMinutes(15)
@@ -147,6 +158,7 @@ public class DevicesController : ControllerBase
                 Id = d.Id,
                 Name = d.Name,
                 ChildProfileId = d.ChildProfileId,
+                ChildProfileName = d.ChildProfile != null ? d.ChildProfile.DisplayName : null,
                 LinkedAt = d.LinkedAt,
                 LastSeenAt = d.LastSeenAt
             })

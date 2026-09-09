@@ -28,6 +28,7 @@ public class DeviceDto
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public Guid? ChildProfileId { get; set; }
+    public string? ChildProfileName { get; set; }
     public DateTime LinkedAt { get; set; }
     public DateTime? LastSeenAt { get; set; }
 }
