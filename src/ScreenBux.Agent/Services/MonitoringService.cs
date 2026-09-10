@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using ScreenBux.Shared.Messages;
 using ScreenBux.Shared.Models;
@@ -43,10 +44,38 @@ public class MonitoringService
         RaiseStatusChanged("Monitoring stopped");
     }
 
+    [DllImport("kernel32.dll")]
+    private static extern uint WTSGetActiveConsoleSessionId();
+
+    /// <summary>
+    /// True only while this Agent's own session is the active console session. GetForegroundWindow
+    /// is scoped to the caller's session, not to whichever session is physically displayed, so an
+    /// Agent left running in a disconnected/switched-away session (fast user switching) would
+    /// otherwise keep reporting its last-focused window as if it were still being actively used,
+    /// double-counting/corrupting usage tracking for a session nobody is looking at.
+    /// </summary>
+    private static bool IsRunningInActiveConsoleSession()
+    {
+        try
+        {
+            return WTSGetActiveConsoleSessionId() == (uint)Process.GetCurrentProcess().SessionId;
+        }
+        catch
+        {
+            // If we can't tell, err on the side of reporting rather than going silent.
+            return true;
+        }
+    }
+
     private async void OnTimerTick(object? sender, EventArgs e)
     {
         try
         {
+            if (!IsRunningInActiveConsoleSession())
+            {
+                return;
+            }
+
             var processInfo = _windowDetector.GetForegroundProcessInfo();
 
             if (processInfo == null)

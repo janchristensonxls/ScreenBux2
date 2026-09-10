@@ -316,6 +316,22 @@ files are empty — no CI to satisfy yet.
   clients, but check whether the Service actually invokes an
   equivalent server-to-clients broadcast for live "process detected" events
   before assuming the WebClient monitoring page is fully wired end-to-end.
+- **`Device` is a whole-machine concept, not per-Windows-session/account**:
+  a single `ScreenBux.Service` instance (and its `UsageTrackingService`/
+  `PolicyService`) serves the whole PC, and `ScreenBux.Agent` reports
+  foreground info regardless of which Windows user account is signed in. If
+  a PC has multiple Windows accounts (fast user switching, shared family
+  PC), all of them are currently policed/tracked as the same `Device` with
+  no way to attribute usage or apply different policy per Windows account.
+  The Agent now skips reporting while its own session isn't the active
+  console session (`MonitoringService.IsRunningInActiveConsoleSession`), so
+  a session left running in the background via fast user switch no longer
+  double-reports stale foreground state — but the underlying model gap
+  remains. A future possibility worth considering: scope `Device`
+  enforcement/usage to a Windows *account* (e.g. keyed by SID) rather than
+  just the physical machine, so a shared PC could map each Windows account
+  to its own `ChildProfile`/policy instead of one shared `Device` policy for
+  everyone who logs into it.
 
 ## Auto-update
 
