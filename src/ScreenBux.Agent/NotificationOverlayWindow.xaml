@@ -1,0 +1,19 @@
+<Window x:Class="ScreenBux.Agent.NotificationOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        mc:Ignorable="d"
+        Title="ScreenBux" Topmost="True" ShowInTaskbar="False"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" SizeToContent="WidthAndHeight"
+        WindowStartupLocation="Manual">
+    <Border Background="#E6202020" CornerRadius="8" Padding="18" MinWidth="280" MaxWidth="420">
+        <StackPanel>
+            <TextBlock x:Name="TitleText" FontSize="17" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"/>
+            <TextBlock x:Name="MessageText" FontSize="13" Foreground="#DDDDDD" Margin="0,6,0,12" TextWrapping="Wrap"/>
+            <Button x:Name="DismissButton" Content="OK" HorizontalAlignment="Right"
+                    Padding="16,4" Click="DismissButton_Click"/>
+        </StackPanel>
+    </Border>
+</Window>

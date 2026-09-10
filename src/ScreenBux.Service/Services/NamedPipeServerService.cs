@@ -23,6 +23,8 @@ public class NamedPipeServerService : BackgroundService
     private readonly PolicySyncService _policySync;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
+    private readonly NotificationQueueService _notificationQueue;
+    private readonly NotificationRelayService _notificationRelay;
     private const string PipeName = "ScreenBuxServicePipe";
 
     public NamedPipeServerService(
@@ -35,7 +37,9 @@ public class NamedPipeServerService : BackgroundService
         PowerActionService powerAction,
         PolicySyncService policySync,
         PendingWindowListRequestCoordinator windowListCoordinator,
-        PendingScreenCaptureRequestCoordinator screenCaptureCoordinator)
+        PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
+        NotificationQueueService notificationQueue,
+        NotificationRelayService notificationRelay)
     {
         _logger = logger;
         _policyService = policyService;
@@ -47,6 +51,8 @@ public class NamedPipeServerService : BackgroundService
         _policySync = policySync;
         _windowListCoordinator = windowListCoordinator;
         _screenCaptureCoordinator = screenCaptureCoordinator;
+        _notificationQueue = notificationQueue;
+        _notificationRelay = notificationRelay;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -261,6 +267,10 @@ public class NamedPipeServerService : BackgroundService
                     var screenCaptureReport = JsonSerializer.Deserialize<ScreenCaptureReportMessage>(messageJson);
                     return HandleScreenCaptureReport(screenCaptureReport);
 
+                case "NotificationAck":
+                    var notificationAck = JsonSerializer.Deserialize<NotificationAckMessage>(messageJson);
+                    return await HandleNotificationAckAsync(notificationAck);
+
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
                     return new CommandResponse
@@ -430,9 +440,33 @@ public class NamedPipeServerService : BackgroundService
         {
             commandResponse.PendingWindowListRequestId = _windowListCoordinator.TryGetNextPendingRequestId();
             commandResponse.PendingScreenCaptureRequestId = _screenCaptureCoordinator.TryGetNextPendingRequestId();
+
+            if (_notificationQueue.TryDequeue(out var pendingNotification))
+            {
+                commandResponse.PendingNotification = pendingNotification;
+            }
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Handles the Agent's acknowledgement of a previously delivered <see cref="PendingNotification"/>,
+    /// relaying it on to the WebServer (best-effort) so the parent's WebClient session can see it live.
+    /// </summary>
+    private async Task<object> HandleNotificationAckAsync(NotificationAckMessage? message)
+    {
+        if (message is null)
+        {
+            return new CommandResponse { Success = false, Message = "Invalid notification ack" };
+        }
+
+        _logger.LogInformation(
+            "Notification {NotificationId} acknowledged (shown={Shown}) at {AckedAt}",
+            message.NotificationId, message.Shown, message.AcknowledgedAtUtc);
+
+        await _notificationRelay.RelayAckAsync(message);
+        return new CommandResponse { Success = true, Message = "Ack received" };
     }
 
     private object HandleWindowListReport(WindowListReportMessage? message)

@@ -15,6 +15,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<string>? StatusReceived;
     public event EventHandler<ProcessListResult>? ProcessListReceived;
     public event EventHandler<(Guid RequestId, int ImageCount)>? ScreenCaptureReady;
+    public event EventHandler<NotificationAcknowledgedDto>? NotificationAcknowledged;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
@@ -73,6 +74,12 @@ public class MonitoringService : IAsyncDisposable
         {
             _logger.LogInformation("Screen capture ready (request {RequestId}, {ImageCount} images)", requestId, imageCount);
             ScreenCaptureReady?.Invoke(this, (requestId, imageCount));
+        });
+
+        _hubConnection.On<NotificationAcknowledgedDto>("NotificationAcknowledged", (ack) =>
+        {
+            _logger.LogInformation("Notification {NotificationId} acknowledged by device {DeviceId} (shown={Shown})", ack.NotificationId, ack.DeviceId, ack.Shown);
+            NotificationAcknowledged?.Invoke(this, ack);
         });
     }
 

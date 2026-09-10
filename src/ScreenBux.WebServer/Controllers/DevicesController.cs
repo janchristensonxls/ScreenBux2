@@ -228,6 +228,43 @@ public class DevicesController : ControllerBase
         return Ok(grant);
     }
 
+    /// <summary>
+    /// The Service relays a notification acknowledgement here (device token required) after the
+    /// Agent has shown/dismissed a <see cref="Shared.Messages.PendingNotification"/>, so it can be
+    /// broadcast live to the parent's WebClient session over SignalR.
+    /// </summary>
+    [HttpPost("notifications/ack")]
+    [Authorize]
+    public async Task<IActionResult> AcknowledgeNotification(
+        [FromBody] Shared.Messages.NotificationAckMessage ack,
+        CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        var deviceId = User.GetDeviceId();
+        if (accountId is null || deviceId is null)
+        {
+            return Unauthorized();
+        }
+
+        var device = await _db.Devices
+            .FirstOrDefaultAsync(d => d.Id == deviceId && d.AccountId == accountId, cancellationToken);
+
+        if (device is null)
+        {
+            return NotFound();
+        }
+
+        await _hubContext.Clients.Group(accountId).SendAsync("NotificationAcknowledged", new Shared.Models.NotificationAcknowledgedDto
+        {
+            DeviceId = device.Id,
+            NotificationId = ack.NotificationId,
+            Shown = ack.Shown,
+            AcknowledgedAtUtc = ack.AcknowledgedAtUtc
+        }, cancellationToken);
+
+        return Ok();
+    }
+
     /// <summary>Parent sets (or clears, with a null/past value) the absolute grant expiry for a device.</summary>
     [HttpPut("{id:guid}/grant")]
     [Authorize]

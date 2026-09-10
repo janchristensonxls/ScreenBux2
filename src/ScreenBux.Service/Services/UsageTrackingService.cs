@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ScreenBux.Shared.Messages;
 using ScreenBux.Shared.Models;
 using ScreenBux.Shared.Utilities;
 
@@ -26,12 +27,16 @@ public class UsageTrackingService : BackgroundService
     private const int NearLimitSyncIntervalSeconds = 30;
     private const int NearLimitThresholdSeconds = 600;
 
+    /// <summary>Remaining-seconds threshold at which a one-time "N minutes left" warning fires.</summary>
+    private const int WarningThresholdSeconds = 300;
+
     private readonly ILogger<UsageTrackingService> _logger;
     private readonly IConfiguration _configuration;
     private readonly DeviceIdentityService _deviceIdentity;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
+    private readonly NotificationQueueService _notificationQueue;
 
     private readonly object _lock = new();
     private readonly Dictionary<string, long> _pendingSecondsByCategory = new();
@@ -40,13 +45,20 @@ public class UsageTrackingService : BackgroundService
     private DateOnly _cachedEffectiveDate;
     private string _currentCategoryName = DefaultCategoryName;
 
+    // Tracks which TimeLimited category policies (keyed by their joined CategoryNames) have
+    // already had their warning/time-up notification queued today, so each fires only once.
+    // Cleared whenever the effective date rolls over (see FlushAsync).
+    private readonly HashSet<string> _warnedPolicyKeys = new();
+    private readonly HashSet<string> _timeUpPolicyKeys = new();
+
     public UsageTrackingService(
         ILogger<UsageTrackingService> logger,
         IConfiguration configuration,
         DeviceIdentityService deviceIdentity,
         IHttpClientFactory httpClientFactory,
         PolicyService policyService,
-        GrantService grantService)
+        GrantService grantService,
+        NotificationQueueService notificationQueue)
     {
         _logger = logger;
         _configuration = configuration;
@@ -54,6 +66,7 @@ public class UsageTrackingService : BackgroundService
         _httpClientFactory = httpClientFactory;
         _policyService = policyService;
         _grantService = grantService;
+        _notificationQueue = notificationQueue;
     }
 
     /// <summary>
@@ -154,6 +167,8 @@ public class UsageTrackingService : BackgroundService
                 _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
                 _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
             }
+
+            CheckCategoryPolicyThresholds();
 
             var elapsedSinceFlush = stopwatch.Elapsed - lastFlush;
             var syncIntervalSeconds = BaselineSyncIntervalSeconds;
@@ -333,6 +348,8 @@ public class UsageTrackingService : BackgroundService
             if (effectiveDate != _cachedEffectiveDate)
             {
                 _cachedEffectiveDate = effectiveDate;
+                _warnedPolicyKeys.Clear();
+                _timeUpPolicyKeys.Clear();
             }
 
             _logger.LogDebug("Synced usage across {Count} categories for {EffectiveDate}; cross-device total now {TotalSeconds}s.", flushedCategories.Count, effectiveDate, summary?.TotalSeconds);
@@ -342,6 +359,69 @@ public class UsageTrackingService : BackgroundService
         {
             _logger.LogError(ex, "Error syncing usage.");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Fires a one-time "5 minutes left" warning notification when a TimeLimited category's
+    /// remaining budget crosses <see cref="WarningThresholdSeconds"/>, and a "time's up"
+    /// notification once it's exhausted. Runs every tick alongside usage accumulation; each
+    /// policy only fires each notification once per effective day (tracked via
+    /// <see cref="_warnedPolicyKeys"/>/<see cref="_timeUpPolicyKeys"/>, cleared on day rollover
+    /// in <see cref="FlushAsync"/>).
+    /// </summary>
+    private void CheckCategoryPolicyThresholds()
+    {
+        if (_grantService.IsGrantActive)
+        {
+            return;
+        }
+
+        foreach (var categoryPolicy in _policyService.GetConfiguration().CategoryPolicies)
+        {
+            if (categoryPolicy.Enforcement != CategoryPolicyEnforcement.TimeLimited ||
+                categoryPolicy.DailyBudgetMinutes is not int budgetMinutes)
+            {
+                continue;
+            }
+
+            var policyKey = string.Join(",", categoryPolicy.CategoryNames);
+            if (string.IsNullOrEmpty(policyKey))
+            {
+                continue;
+            }
+
+            var remainingSeconds = (budgetMinutes * 60L) - GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames);
+            var displayName = string.Join(", ", categoryPolicy.CategoryNames);
+
+            if (remainingSeconds <= 0)
+            {
+                if (_timeUpPolicyKeys.Add(policyKey))
+                {
+                    _notificationQueue.Enqueue(new PendingNotification
+                    {
+                        Severity = NotificationSeverity.TimeUp,
+                        Title = "Time's up",
+                        Message = $"Your time for {displayName} is up.",
+                        AutoDismissSeconds = null,
+                        CategoryName = categoryPolicy.CategoryNames.FirstOrDefault()
+                    });
+                }
+            }
+            else if (remainingSeconds <= WarningThresholdSeconds)
+            {
+                if (_warnedPolicyKeys.Add(policyKey))
+                {
+                    _notificationQueue.Enqueue(new PendingNotification
+                    {
+                        Severity = NotificationSeverity.Warning,
+                        Title = "5 minutes left",
+                        Message = $"You have about 5 minutes left for {displayName} today.",
+                        AutoDismissSeconds = 8,
+                        CategoryName = categoryPolicy.CategoryNames.FirstOrDefault()
+                    });
+                }
+            }
         }
     }
 

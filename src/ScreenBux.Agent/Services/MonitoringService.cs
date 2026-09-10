@@ -14,6 +14,7 @@ public class MonitoringService
     private readonly ForegroundWindowDetector _windowDetector;
     private readonly NamedPipeClient _pipeClient;
     private readonly ScreenCaptureService _screenCaptureService;
+    private readonly NotificationPresenter _notificationPresenter;
     private readonly DispatcherTimer _timer;
     private ProcessInfo? _lastReportedProcess;
 
@@ -25,6 +26,7 @@ public class MonitoringService
         _windowDetector = new ForegroundWindowDetector();
         _pipeClient = new NamedPipeClient();
         _screenCaptureService = new ScreenCaptureService();
+        _notificationPresenter = new NotificationPresenter();
         _timer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -126,6 +128,11 @@ public class MonitoringService
                 {
                     await ReportScreenCaptureAsync(captureRequestId);
                 }
+
+                if (cmdResponse.PendingNotification is PendingNotification pendingNotification)
+                {
+                    await PresentAndAckNotificationAsync(pendingNotification);
+                }
             }
         }
         catch (Exception ex)
@@ -195,6 +202,38 @@ public class MonitoringService
             {
                 // Best effort - if this fails too, the Service will time out waiting.
             }
+        }
+    }
+
+    /// <summary>
+    /// Shows the overlay + audio cue for a notification piggybacked on the poll response, then
+    /// sends a <see cref="NotificationAckMessage"/> back to the Service as its own transactional
+    /// pipe call so the acknowledgement reaches the WebServer/parent promptly rather than
+    /// waiting for the next 2s tick.
+    /// </summary>
+    private async Task PresentAndAckNotificationAsync(PendingNotification notification)
+    {
+        var shown = false;
+        try
+        {
+            shown = _notificationPresenter.Present(notification);
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error presenting notification: {ex.Message}");
+        }
+
+        try
+        {
+            await _pipeClient.SendMessageAsync<object>(new NotificationAckMessage
+            {
+                NotificationId = notification.NotificationId,
+                Shown = shown
+            });
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error acknowledging notification: {ex.Message}");
         }
     }
 

@@ -54,6 +54,13 @@ public class CommandResponse : Contracts.INamedPipeMessage
     /// carrying the same RequestId.
     /// </summary>
     public Guid? PendingScreenCaptureRequestId { get; set; }
+
+    /// <summary>
+    /// Piggybacks a queued notification (e.g. "5 minutes left") onto this response, using the
+    /// same polling mechanism as <see cref="PendingWindowListRequestId"/>. When set, the Agent
+    /// shows a topmost overlay + audio cue and replies with a <see cref="NotificationAckMessage"/>.
+    /// </summary>
+    public PendingNotification? PendingNotification { get; set; }
 }
 
 /// <summary>
