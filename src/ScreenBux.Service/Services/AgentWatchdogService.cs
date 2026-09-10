@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using ScreenBux.Shared.Services;
 
 namespace ScreenBux.Service.Services;
@@ -68,12 +69,30 @@ public class AgentWatchdogService : BackgroundService
 
     private void CheckAndRelaunchAgentIfNeeded()
     {
+        // The Service typically runs as LocalSystem, which can see Agent processes across every
+        // session on the machine (stale/disconnected/other-user sessions), not just the active
+        // console session the current user is actually sitting at. A name-only, machine-wide
+        // check would treat such a stray instance as "the Agent is running" and silently skip
+        // relaunch forever, even though the active session has no Agent at all. Scope the check
+        // to the active console session's id to avoid that trap.
+        var activeConsoleSessionId = WTSGetActiveConsoleSessionId();
         var runningAgents = Process.GetProcessesByName(AgentProcessName);
         try
         {
+            var runningInActiveSession = Array.Exists(runningAgents, p => TryGetSessionId(p) == (int)activeConsoleSessionId);
+            if (runningInActiveSession)
+            {
+                _logger.LogDebug(
+                    "Agent process ({ProcessName}) is already running in the active console session {SessionId}.",
+                    AgentProcessName, activeConsoleSessionId);
+                return;
+            }
+
             if (runningAgents.Length > 0)
             {
-                return;
+                _logger.LogWarning(
+                    "Agent process ({ProcessName}) is running but not in the active console session {SessionId} (found in session(s) {FoundSessions}); attempting relaunch anyway.",
+                    AgentProcessName, activeConsoleSessionId, string.Join(", ", Array.ConvertAll(runningAgents, TryGetSessionId)));
             }
 
             var executablePath = _configuration["Agent:ExecutablePath"];
@@ -105,4 +124,21 @@ public class AgentWatchdogService : BackgroundService
             }
         }
     }
+
+    private static int TryGetSessionId(Process process)
+    {
+        try
+        {
+            return process.SessionId;
+        }
+        catch
+        {
+            // Process may have exited between enumeration and this call; treat as "unknown"
+            // rather than throw out of the loop.
+            return -1;
+        }
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WTSGetActiveConsoleSessionId();
 }

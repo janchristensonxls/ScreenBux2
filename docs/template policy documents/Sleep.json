@@ -5,7 +5,7 @@
 			"name": "Games",
 			"rules": [
 				{
-					"processNameRegex": "discord|Steam|epic|battle|roblox|Forge|fort|AutoClicker|GeometryDash|xbox|medal|Kryptex|obs64",
+					"processNameRegex": "discord|Steam|epic|battle|roblox|Forge|fort|AutoClicker|GeometryDash|xbox|medal|Kryptex|obs64|minecraft|Astroneer|subnautica",
 					"windowTitleRegex": "roblox|Forge|fort|games|fun |brawl|minecraft|Palladium|Astroneer|spel|jeux|jouer|play gam|online|GeometryDash|Geometry Dash|xbox",
 					"enabled": true
 				}

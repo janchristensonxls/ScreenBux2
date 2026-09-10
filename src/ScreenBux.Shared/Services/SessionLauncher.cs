@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
 
@@ -92,7 +93,12 @@ public class SessionLauncher
                         lpDesktop = "winsta0\\default"
                     };
 
-                    var commandLine = arguments is null ? $"\"{executablePath}\"" : $"\"{executablePath}\" {arguments}";
+                    // CreateProcessAsUserW treats lpCommandLine as a mutable LPWSTR buffer and can
+                    // write into it in place; passing an immutable managed string here risks an
+                    // unmanaged AccessViolationException (uncatchable, crashes the whole process).
+                    // A StringBuilder gives the marshaller a real mutable native buffer instead.
+                    var commandLine = new StringBuilder(
+                        arguments is null ? $"\"{executablePath}\"" : $"\"{executablePath}\" {arguments}");
 
                     var created = CreateProcessAsUser(
                         primaryTokenHandle,
@@ -232,7 +238,7 @@ public class SessionLauncher
     private static extern bool CreateProcessAsUser(
         SafeAccessTokenHandle hToken,
         string? lpApplicationName,
-        string lpCommandLine,
+        StringBuilder lpCommandLine,
         IntPtr lpProcessAttributes,
         IntPtr lpThreadAttributes,
         bool bInheritHandles,
