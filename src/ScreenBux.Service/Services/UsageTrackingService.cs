@@ -51,6 +51,11 @@ public class UsageTrackingService : BackgroundService
     private readonly HashSet<string> _warnedPolicyKeys = new();
     private readonly HashSet<string> _timeUpPolicyKeys = new();
 
+    // Same idea, but for the single whole-device PolicyConfiguration.DailyBudgetMinutes cap -
+    // an orthogonal budget from any per-category TimeLimited policy (see IsBudgetExceeded).
+    private bool _dailyBudgetWarned;
+    private bool _dailyBudgetTimeUp;
+
     public UsageTrackingService(
         ILogger<UsageTrackingService> logger,
         IConfiguration configuration,
@@ -169,6 +174,7 @@ public class UsageTrackingService : BackgroundService
             }
 
             CheckCategoryPolicyThresholds();
+            CheckDailyBudgetThreshold();
 
             var elapsedSinceFlush = stopwatch.Elapsed - lastFlush;
             var syncIntervalSeconds = BaselineSyncIntervalSeconds;
@@ -350,6 +356,8 @@ public class UsageTrackingService : BackgroundService
                 _cachedEffectiveDate = effectiveDate;
                 _warnedPolicyKeys.Clear();
                 _timeUpPolicyKeys.Clear();
+                _dailyBudgetWarned = false;
+                _dailyBudgetTimeUp = false;
             }
 
             _logger.LogDebug("Synced usage across {Count} categories for {EffectiveDate}; cross-device total now {TotalSeconds}s.", flushedCategories.Count, effectiveDate, summary?.TotalSeconds);
@@ -421,6 +429,58 @@ public class UsageTrackingService : BackgroundService
                         CategoryName = categoryPolicy.CategoryNames.FirstOrDefault()
                     });
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fires the same Warning/TimeUp notification pair as <see cref="CheckCategoryPolicyThresholds"/>,
+    /// but for the single whole-device <see cref="PolicyConfiguration.DailyBudgetMinutes"/> cap -
+    /// an orthogonal budget from any per-category TimeLimited policy (see <see cref="IsBudgetExceeded"/>).
+    /// Without this, a child could get a "5 minutes left" warning for one category (e.g. Games)
+    /// while the overall daily screen-time budget runs out with no warning at all.
+    /// </summary>
+    private void CheckDailyBudgetThreshold()
+    {
+        if (_grantService.IsGrantActive)
+        {
+            return;
+        }
+
+        var budgetMinutes = _policyService.GetConfiguration().DailyBudgetMinutes;
+        if (budgetMinutes is not int minutes)
+        {
+            return;
+        }
+
+        var remainingSeconds = (minutes * 60L) - TotalSecondsToday;
+
+        if (remainingSeconds <= 0)
+        {
+            if (!_dailyBudgetTimeUp)
+            {
+                _dailyBudgetTimeUp = true;
+                _notificationQueue.Enqueue(new PendingNotification
+                {
+                    Severity = NotificationSeverity.TimeUp,
+                    Title = "Time's up",
+                    Message = "Your overall screen time for today is up.",
+                    AutoDismissSeconds = null
+                });
+            }
+        }
+        else if (remainingSeconds <= WarningThresholdSeconds)
+        {
+            if (!_dailyBudgetWarned)
+            {
+                _dailyBudgetWarned = true;
+                _notificationQueue.Enqueue(new PendingNotification
+                {
+                    Severity = NotificationSeverity.Warning,
+                    Title = "5 minutes left",
+                    Message = "You have about 5 minutes of overall screen time left today.",
+                    AutoDismissSeconds = 8
+                });
             }
         }
     }
