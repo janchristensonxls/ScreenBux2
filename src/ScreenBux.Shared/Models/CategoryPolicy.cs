@@ -33,6 +33,22 @@ public enum CategoryPolicyEnforcement
 }
 
 /// <summary>
+/// Whether a <see cref="CategoryPolicy"/>'s usage accumulation is affected by keyboard/mouse
+/// idle time. Deliberately per-category rather than a single global switch: lack of input is
+/// often a legitimate, deliberate way to use some categories (e.g. watching a video or listening
+/// to music) but a good signal of "walked away" for others (e.g. a game left paused). See
+/// docs/decisions/screen-time-usage-tracking.md.
+/// </summary>
+public enum IdleTimeOutMode
+{
+    /// <summary>Usage keeps accumulating regardless of input activity (the default).</summary>
+    Never = 0,
+
+    /// <summary>Usage stops accumulating once there has been no keyboard/mouse input for at least <see cref="CategoryPolicy.IdleTimeOut"/>.</summary>
+    AfterNoInput = 1
+}
+
+/// <summary>
 /// Per-mode enforcement for one or more <c>AppCategory</c> entries (identified by name - see
 /// docs/decisions/group-based-policy-model.md for why category identity flows by name rather
 /// than a synced database id). One list of these lives on each active <see cref="PolicyConfiguration"/>,
@@ -62,6 +78,19 @@ public class CategoryPolicy
 
     /// <summary>What to do when this category is Blocked, or TimeLimited and its budget is exhausted.</summary>
     public PolicyRuleAction Action { get; set; } = PolicyRuleAction.CloseProcess;
+
+    /// <summary>
+    /// Whether keyboard/mouse idle time pauses usage accumulation for this category. Default
+    /// Never - see <see cref="IdleTimeOutMode"/> for why this isn't a global setting.
+    /// </summary>
+    public IdleTimeOutMode IdleTimeOutMode { get; set; } = IdleTimeOutMode.Never;
+
+    /// <summary>
+    /// Only meaningful when <see cref="IdleTimeOutMode"/> is <see cref="ScreenBux.Shared.Models.IdleTimeOutMode.AfterNoInput"/>:
+    /// how long the user must be idle (no keyboard/mouse input) before usage stops accumulating
+    /// for this category.
+    /// </summary>
+    public TimeSpan? IdleTimeOut { get; set; }
 
     /// <summary>
     /// If non-empty, this category is only ever Allowed/TimeLimited within one of these

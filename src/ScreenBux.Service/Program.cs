@@ -22,6 +22,7 @@ builder.Services.AddSingleton<PolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PolicySyncService>());
 builder.Services.AddSingleton<DevicePolicySyncService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DevicePolicySyncService>());
+builder.Services.AddSingleton<UsageActivityLogWriter>();
 builder.Services.AddSingleton<UsageTrackingService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageTrackingService>());
 builder.Services.AddSingleton<PendingWindowListRequestCoordinator>();

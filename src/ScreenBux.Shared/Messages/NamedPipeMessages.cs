@@ -153,3 +153,18 @@ public class GrantStatusResponse : Contracts.INamedPipeMessage
     public DateTime? ExpiresAtUtc { get; set; }
 }
 
+/// <summary>
+/// Sent from Agent to Service whenever the interactive session's lock state changes (via
+/// <c>Microsoft.Win32.SystemEvents.SessionSwitch</c>), so usage tracking can stop attributing
+/// time to the last-known foreground window while the session is locked - GetForegroundWindow
+/// keeps returning that window's handle even after locking, since foreground-window state isn't
+/// cleared by a desktop switch. Sent immediately on the lock/unlock event, not on the normal 2s
+/// poll cadence.
+/// </summary>
+public class SessionLockStateMessage : Contracts.INamedPipeMessage
+{
+    public string MessageType => "SessionLockState";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public bool IsLocked { get; set; }
+}
+

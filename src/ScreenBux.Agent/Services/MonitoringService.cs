@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using ScreenBux.Shared.Messages;
 using ScreenBux.Shared.Models;
 
@@ -17,6 +18,7 @@ public class MonitoringService
     private readonly NotificationPresenter _notificationPresenter;
     private readonly DispatcherTimer _timer;
     private ProcessInfo? _lastReportedProcess;
+    private bool _isSessionLocked;
 
     public event EventHandler<string>? StatusChanged;
     public event EventHandler<ProcessInfo>? ProcessDetected;
@@ -37,13 +39,43 @@ public class MonitoringService
     public void Start()
     {
         _timer.Start();
+        SystemEvents.SessionSwitch += OnSessionSwitch;
         RaiseStatusChanged("Monitoring started");
     }
 
     public void Stop()
     {
         _timer.Stop();
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
         RaiseStatusChanged("Monitoring stopped");
+    }
+
+    /// <summary>
+    /// Reports the session lock/unlock immediately (rather than waiting for the next 2s tick) so
+    /// the Service can stop crediting usage to the last-known foreground window right away -
+    /// GetForegroundWindow keeps returning that window's handle even after locking, since
+    /// foreground-window state isn't cleared by a desktop switch. See
+    /// UsageTrackingService.SetSessionLocked (ScreenBux.Service) for the Service-side handling.
+    /// </summary>
+    private async void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is not (SessionSwitchReason.SessionLock or SessionSwitchReason.SessionUnlock))
+        {
+            return;
+        }
+
+        _isSessionLocked = e.Reason == SessionSwitchReason.SessionLock;
+        _lastReportedProcess = null;
+        RaiseStatusChanged(_isSessionLocked ? "Session locked" : "Session unlocked");
+
+        try
+        {
+            await _pipeClient.SendMessageAsync<CommandResponse>(new SessionLockStateMessage { IsLocked = _isSessionLocked });
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error reporting session lock state: {ex.Message}");
+        }
     }
 
     [DllImport("kernel32.dll")]
@@ -74,6 +106,15 @@ public class MonitoringService
         try
         {
             if (!IsRunningInActiveConsoleSession())
+            {
+                return;
+            }
+
+            // While locked, GetForegroundWindow keeps returning whatever was focused before the
+            // lock, so skip foreground detection/reporting entirely rather than re-reporting a
+            // stale window as if it were still actively being used. OnSessionSwitch already told
+            // the Service the session is locked.
+            if (_isSessionLocked)
             {
                 return;
             }

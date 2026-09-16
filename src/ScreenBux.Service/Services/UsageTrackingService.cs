@@ -23,6 +23,7 @@ namespace ScreenBux.Service.Services;
 public class UsageTrackingService : BackgroundService
 {
     private const string DefaultCategoryName = "Other";
+    private const string LockedPseudoCategoryName = "Locked";
     private const int BaselineSyncIntervalSeconds = 300;
     private const int NearLimitSyncIntervalSeconds = 30;
     private const int NearLimitThresholdSeconds = 600;
@@ -37,6 +38,7 @@ public class UsageTrackingService : BackgroundService
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
     private readonly NotificationQueueService _notificationQueue;
+    private readonly UsageActivityLogWriter _activityLog;
 
     private readonly object _lock = new();
     private readonly Dictionary<string, long> _pendingSecondsByCategory = new();
@@ -44,6 +46,7 @@ public class UsageTrackingService : BackgroundService
     private long _totalSecondsToday;
     private DateOnly _cachedEffectiveDate;
     private string _currentCategoryName = DefaultCategoryName;
+    private bool _isSessionLocked;
 
     // Tracks which TimeLimited category policies (keyed by their joined CategoryNames) have
     // already had their warning/time-up notification queued today, so each fires only once.
@@ -63,7 +66,8 @@ public class UsageTrackingService : BackgroundService
         IHttpClientFactory httpClientFactory,
         PolicyService policyService,
         GrantService grantService,
-        NotificationQueueService notificationQueue)
+        NotificationQueueService notificationQueue,
+        UsageActivityLogWriter activityLog)
     {
         _logger = logger;
         _configuration = configuration;
@@ -72,18 +76,67 @@ public class UsageTrackingService : BackgroundService
         _policyService = policyService;
         _grantService = grantService;
         _notificationQueue = notificationQueue;
+        _activityLog = activityLog;
     }
 
     /// <summary>
     /// Records the category the current foreground process classified into, so subsequently
     /// accumulated seconds are attributed to it. Pass null when the process matched no
-    /// category (implicit "Other").
+    /// category (implicit "Other"). Also feeds <see cref="UsageActivityLogWriter"/>'s
+    /// transition-based local day-log with the process name/window title, which the aggregated
+    /// per-category seconds tracked here don't retain.
+    ///
+    /// Ignored while the session is locked (see <see cref="SetSessionLocked"/>) - the Agent
+    /// stops sending foreground reports once locked, but this guards against a report already
+    /// in flight when the lock took effect, which would otherwise overwrite the "Locked" segment
+    /// with the stale pre-lock window.
     /// </summary>
-    public void ReportForegroundCategory(string? categoryName)
+    public void ReportForegroundCategory(string? categoryName, string? processName = null, string? windowTitle = null)
     {
         lock (_lock)
         {
+            if (_isSessionLocked)
+            {
+                return;
+            }
+
             _currentCategoryName = categoryName ?? DefaultCategoryName;
+        }
+
+        _activityLog.ReportSegment(DateTime.Now, _policyService.GetConfiguration().DayStartHour, _currentCategoryName, processName, windowTitle);
+    }
+
+    /// <summary>
+    /// Called whenever the Agent detects a session lock/unlock (via
+    /// <c>Microsoft.Win32.SystemEvents.SessionSwitch</c>). While locked, the per-second
+    /// accumulation loop in <see cref="ExecuteAsync"/> stops attributing time to any category -
+    /// without this, GetForegroundWindow on the Agent's side keeps returning the last-focused
+    /// window even after locking (foreground-window state isn't cleared by a desktop switch),
+    /// which would otherwise count the entire locked duration as active use of whatever was
+    /// open beforehand. See docs/decisions/screen-time-usage-tracking.md.
+    /// </summary>
+    public void SetSessionLocked(bool isLocked)
+    {
+        bool changed;
+        lock (_lock)
+        {
+            changed = _isSessionLocked != isLocked;
+            _isSessionLocked = isLocked;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Session {State}.", isLocked ? "locked" : "unlocked");
+
+        if (isLocked)
+        {
+            // Close out whatever segment was open before the lock and open a distinct "Locked"
+            // one, so the day-log shows the gap explicitly instead of silently extending the
+            // prior window's segment across the entire locked duration.
+            _activityLog.ReportSegment(DateTime.Now, _policyService.GetConfiguration().DayStartHour, LockedPseudoCategoryName, null, null);
         }
     }
 
@@ -150,6 +203,7 @@ public class UsageTrackingService : BackgroundService
         }
 
         _cachedEffectiveDate = ComputeEffectiveDate(DateTime.Now, _policyService.GetConfiguration().DayStartHour);
+        _activityLog.PruneOldLogs(_cachedEffectiveDate);
 
         // Seed today's totals from the server before enforcement starts. Without this, a
         // restart leaves _totalSecondsTodayByCategory empty until the next periodic flush
@@ -167,10 +221,15 @@ public class UsageTrackingService : BackgroundService
 
             // Usage accumulates regardless of an active time grant - a grant only pauses
             // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
+            // While the session is locked, no category is credited at all (not even "Other") -
+            // see SetSessionLocked.
             lock (_lock)
             {
-                _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
-                _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
+                if (!_isSessionLocked)
+                {
+                    _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
+                    _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
+                }
             }
 
             CheckCategoryPolicyThresholds();
@@ -200,6 +259,7 @@ public class UsageTrackingService : BackgroundService
 
         // Best-effort final flush so nothing accumulated since the last periodic sync is lost.
         await FlushAsync(serverBaseUrl, CancellationToken.None);
+        _activityLog.Flush(DateTime.Now);
     }
 
     /// <summary>
@@ -358,6 +418,7 @@ public class UsageTrackingService : BackgroundService
                 _timeUpPolicyKeys.Clear();
                 _dailyBudgetWarned = false;
                 _dailyBudgetTimeUp = false;
+                _activityLog.PruneOldLogs(effectiveDate);
             }
 
             _logger.LogDebug("Synced usage across {Count} categories for {EffectiveDate}; cross-device total now {TotalSeconds}s.", flushedCategories.Count, effectiveDate, summary?.TotalSeconds);

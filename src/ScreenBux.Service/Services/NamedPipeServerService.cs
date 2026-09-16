@@ -271,6 +271,10 @@ public class NamedPipeServerService : BackgroundService
                     var notificationAck = JsonSerializer.Deserialize<NotificationAckMessage>(messageJson);
                     return await HandleNotificationAckAsync(notificationAck);
 
+                case "SessionLockState":
+                    var lockStateMessage = JsonSerializer.Deserialize<SessionLockStateMessage>(messageJson);
+                    return HandleSessionLockState(lockStateMessage);
+
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", messageType);
                     return new CommandResponse
@@ -331,7 +335,7 @@ public class NamedPipeServerService : BackgroundService
         }
 
         var category = _policyService.ClassifyProcess(message.Process, isForegroundWindow: true);
-        _usageTracking.ReportForegroundCategory(category?.Name);
+        _usageTracking.ReportForegroundCategory(category?.Name, message.Process.ProcessName, message.Process.WindowTitle);
 
         var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
         var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames));
@@ -467,6 +471,17 @@ public class NamedPipeServerService : BackgroundService
 
         await _notificationRelay.RelayAckAsync(message);
         return new CommandResponse { Success = true, Message = "Ack received" };
+    }
+
+    private object HandleSessionLockState(SessionLockStateMessage? message)
+    {
+        if (message is null)
+        {
+            return new CommandResponse { Success = false, Message = "Invalid session lock state report" };
+        }
+
+        _usageTracking.SetSessionLocked(message.IsLocked);
+        return new CommandResponse { Success = true };
     }
 
     private object HandleWindowListReport(WindowListReportMessage? message)

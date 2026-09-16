@@ -59,6 +59,17 @@ public static class PolicyStorage
         return false;
     }
 
+    /// <summary>
+    /// Returns the directory where local usage activity day-logs (usage-yyyyMMdd.jsonl) are
+    /// written, stored next to policy.json.
+    /// </summary>
+    public static string GetDefaultUsageLogDirectory()
+    {
+        var policyPath = GetDefaultPolicyPath();
+        var directory = Path.GetDirectoryName(policyPath) ?? AppContext.BaseDirectory;
+        return Path.Combine(directory, "UsageLogs");
+    }
+
     public static void EnsurePolicyDirectory(string policyPath)
     {
         var directory = Path.GetDirectoryName(policyPath);
