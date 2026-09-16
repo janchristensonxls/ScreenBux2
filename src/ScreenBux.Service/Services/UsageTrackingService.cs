@@ -47,6 +47,7 @@ public class UsageTrackingService : BackgroundService
     private DateOnly _cachedEffectiveDate;
     private string _currentCategoryName = DefaultCategoryName;
     private bool _isSessionLocked;
+    private bool _isIdlePausedForCurrentCategory;
 
     // Tracks which TimeLimited category policies (keyed by their joined CategoryNames) have
     // already had their warning/time-up notification queued today, so each fires only once.
@@ -86,12 +87,19 @@ public class UsageTrackingService : BackgroundService
     /// transition-based local day-log with the process name/window title, which the aggregated
     /// per-category seconds tracked here don't retain.
     ///
+    /// <paramref name="idleTime"/> (how long there's been no keyboard/mouse input, per the
+    /// Agent's GetLastInputInfo) is checked against the resolved category's
+    /// <see cref="CategoryPolicy.IdleTimeOutMode"/>/<see cref="CategoryPolicy.IdleTimeOut"/> so
+    /// <see cref="ExecuteAsync"/>'s per-second loop can stop crediting usage while idle, for
+    /// categories that opt into it - the log still records the real foreground window
+    /// regardless, since that's genuinely what's open, just not being interacted with.
+    ///
     /// Ignored while the session is locked (see <see cref="SetSessionLocked"/>) - the Agent
     /// stops sending foreground reports once locked, but this guards against a report already
     /// in flight when the lock took effect, which would otherwise overwrite the "Locked" segment
     /// with the stale pre-lock window.
     /// </summary>
-    public void ReportForegroundCategory(string? categoryName, string? processName = null, string? windowTitle = null)
+    public void ReportForegroundCategory(string? categoryName, string? processName = null, string? windowTitle = null, TimeSpan idleTime = default)
     {
         lock (_lock)
         {
@@ -101,9 +109,23 @@ public class UsageTrackingService : BackgroundService
             }
 
             _currentCategoryName = categoryName ?? DefaultCategoryName;
+            _isIdlePausedForCurrentCategory = IsIdlePaused(categoryName, idleTime);
         }
 
         _activityLog.ReportSegment(DateTime.Now, _policyService.GetConfiguration().DayStartHour, _currentCategoryName, processName, windowTitle);
+    }
+
+    /// <summary>
+    /// True if <paramref name="categoryName"/>'s resolved <see cref="CategoryPolicy"/> opts into
+    /// idle-timeout (<see cref="IdleTimeOutMode.AfterNoInput"/>) and <paramref name="idleTime"/>
+    /// has reached its configured <see cref="CategoryPolicy.IdleTimeOut"/>.
+    /// </summary>
+    private bool IsIdlePaused(string? categoryName, TimeSpan idleTime)
+    {
+        var categoryPolicy = _policyService.GetCategoryPolicy(categoryName);
+        return categoryPolicy.IdleTimeOutMode == IdleTimeOutMode.AfterNoInput
+            && categoryPolicy.IdleTimeOut is TimeSpan threshold
+            && idleTime >= threshold;
     }
 
     /// <summary>
@@ -222,10 +244,11 @@ public class UsageTrackingService : BackgroundService
             // Usage accumulates regardless of an active time grant - a grant only pauses
             // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
             // While the session is locked, no category is credited at all (not even "Other") -
-            // see SetSessionLocked.
+            // see SetSessionLocked. While idle-paused, only the current category is skipped -
+            // see IsIdlePaused.
             lock (_lock)
             {
-                if (!_isSessionLocked)
+                if (!_isSessionLocked && !_isIdlePausedForCurrentCategory)
                 {
                     _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
                     _pendingSecondsByCategory[_currentCategoryName] = pending + 1;

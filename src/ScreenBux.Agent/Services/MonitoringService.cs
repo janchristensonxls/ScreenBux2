@@ -13,6 +13,7 @@ namespace ScreenBux.Agent.Services;
 public class MonitoringService
 {
     private readonly ForegroundWindowDetector _windowDetector;
+    private readonly IdleInputDetector _idleDetector;
     private readonly NamedPipeClient _pipeClient;
     private readonly ScreenCaptureService _screenCaptureService;
     private readonly NotificationPresenter _notificationPresenter;
@@ -26,6 +27,7 @@ public class MonitoringService
     public MonitoringService()
     {
         _windowDetector = new ForegroundWindowDetector();
+        _idleDetector = new IdleInputDetector();
         _pipeClient = new NamedPipeClient();
         _screenCaptureService = new ScreenCaptureService();
         _notificationPresenter = new NotificationPresenter();
@@ -123,6 +125,8 @@ public class MonitoringService
 
             if (processInfo == null)
                 return;
+
+            processInfo.IdleTime = _idleDetector.GetIdleTime();
 
             // Only raise the detected-change event/notify listeners if the process has changed,
             // but still send the report every tick below - the response to this round-trip is

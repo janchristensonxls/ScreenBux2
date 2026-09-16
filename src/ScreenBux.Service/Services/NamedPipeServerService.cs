@@ -335,7 +335,7 @@ public class NamedPipeServerService : BackgroundService
         }
 
         var category = _policyService.ClassifyProcess(message.Process, isForegroundWindow: true);
-        _usageTracking.ReportForegroundCategory(category?.Name, message.Process.ProcessName, message.Process.WindowTitle);
+        _usageTracking.ReportForegroundCategory(category?.Name, message.Process.ProcessName, message.Process.WindowTitle, message.Process.IdleTime);
 
         var categoryPolicy = _policyService.GetCategoryPolicy(category?.Name);
         var shouldBlock = PolicyService.IsBlockedByPolicy(categoryPolicy, _usageTracking.GetTotalSecondsTodayForCategories(categoryPolicy.CategoryNames));
