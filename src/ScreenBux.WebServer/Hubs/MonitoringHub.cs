@@ -202,4 +202,46 @@ public class MonitoringHub : Hub
             await Clients.Group(accountId).SendAsync("ScreenCaptureReady", requestId, imageCount);
         }
     }
+
+    /// <summary>
+    /// Called by a WebClient to request the device's local usage-activity day-logs (see
+    /// <c>UsageActivityLogWriter</c> on the Service) for an inclusive date range. Mirrors
+    /// <see cref="RequestScreenCapture"/> - the log entries themselves are uploaded by the
+    /// Service to the WebServer's REST endpoint rather than sent over SignalR, since a wide
+    /// date range's worth of segments could be sizeable.
+    /// </summary>
+    public async Task RequestUsageLogs(Guid deviceId, Guid requestId, DateOnly startDate, DateOnly endDate)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (string.IsNullOrEmpty(accountId))
+        {
+            return;
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == deviceId && d.AccountId == accountId);
+        if (!deviceExists)
+        {
+            _logger.LogWarning("Client {ConnectionId} (account {AccountId}) requested usage logs for device {DeviceId} it does not own.",
+                Context.ConnectionId, accountId, deviceId);
+            return;
+        }
+
+        _logger.LogInformation("Client {ConnectionId} requested usage logs for device {DeviceId} from {StartDate} to {EndDate} (request {RequestId}).",
+            Context.ConnectionId, deviceId, startDate, endDate, requestId);
+        await Clients.Group(GetDeviceGroupName(deviceId)).SendAsync("UsageLogsRequested", requestId, startDate, endDate);
+    }
+
+    /// <summary>
+    /// Called by the Service (as a SignalR client) once it has uploaded the requested usage
+    /// day-logs to the WebServer's REST endpoint, to notify the owning account's WebClient(s)
+    /// that they're ready to download.
+    /// </summary>
+    public async Task ReportUsageLogsReady(Guid requestId, int dayCount)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            await Clients.Group(accountId).SendAsync("UsageLogsReady", requestId, dayCount);
+        }
+    }
 }

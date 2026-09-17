@@ -16,6 +16,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<ProcessListResult>? ProcessListReceived;
     public event EventHandler<(Guid RequestId, int ImageCount)>? ScreenCaptureReady;
     public event EventHandler<NotificationAcknowledgedDto>? NotificationAcknowledged;
+    public event EventHandler<(Guid RequestId, int DayCount)>? UsageLogsReady;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
@@ -81,6 +82,12 @@ public class MonitoringService : IAsyncDisposable
             _logger.LogInformation("Notification {NotificationId} acknowledged by device {DeviceId} (shown={Shown})", ack.NotificationId, ack.DeviceId, ack.Shown);
             NotificationAcknowledged?.Invoke(this, ack);
         });
+
+        _hubConnection.On<Guid, int>("UsageLogsReady", (requestId, dayCount) =>
+        {
+            _logger.LogInformation("Usage logs ready (request {RequestId}, {DayCount} days)", requestId, dayCount);
+            UsageLogsReady?.Invoke(this, (requestId, dayCount));
+        });
     }
 
     public async Task StartAsync()
@@ -144,6 +151,23 @@ public class MonitoringService : IAsyncDisposable
         if (_hubConnection.State == HubConnectionState.Connected)
         {
             await _hubConnection.InvokeAsync("RequestScreenCapture", deviceId, requestId);
+        }
+
+        return requestId;
+    }
+
+    /// <summary>
+    /// Requests the device's local usage-activity day-logs for an inclusive date range. The
+    /// result arrives asynchronously via <see cref="UsageLogsReady"/>, correlated by the
+    /// returned request id; the log entries themselves are downloaded separately via REST, not
+    /// through SignalR.
+    /// </summary>
+    public async Task<Guid> RequestUsageLogsAsync(Guid deviceId, DateOnly startDate, DateOnly endDate)
+    {
+        var requestId = Guid.NewGuid();
+        if (_hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.InvokeAsync("RequestUsageLogs", deviceId, requestId, startDate, endDate);
         }
 
         return requestId;

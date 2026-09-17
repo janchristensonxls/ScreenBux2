@@ -60,6 +60,7 @@ builder.Services.AddScoped<IUsageStore, EfUsageStore>();
 builder.Services.AddScoped<IChildProfileStore, EfChildProfileStore>();
 builder.Services.AddSingleton<IUpdateManifestStore, StaticUpdateManifestStore>();
 builder.Services.AddSingleton<IScreenCaptureStore, InMemoryScreenCaptureStore>();
+builder.Services.AddSingleton<IUsageLogsStore, InMemoryUsageLogsStore>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

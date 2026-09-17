@@ -20,8 +20,12 @@ public class PolicySyncService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
+    private readonly UsageActivityLogWriter _activityLog;
     private readonly IHttpClientFactory _httpClientFactory;
     private HubConnection? _hubConnection;
+
+    /// <summary>Widest date span honored per usage-logs request, to bound how many day-files a single request reads.</summary>
+    private const int MaxUsageLogsRequestDays = 31;
 
     public PolicySyncService(
         ILogger<PolicySyncService> logger,
@@ -32,6 +36,7 @@ public class PolicySyncService : BackgroundService
         IServiceProvider serviceProvider,
         PendingWindowListRequestCoordinator windowListCoordinator,
         PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
+        UsageActivityLogWriter activityLog,
         IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
@@ -42,6 +47,7 @@ public class PolicySyncService : BackgroundService
         _serviceProvider = serviceProvider;
         _windowListCoordinator = windowListCoordinator;
         _screenCaptureCoordinator = screenCaptureCoordinator;
+        _activityLog = activityLog;
         _httpClientFactory = httpClientFactory;
     }
 
@@ -88,6 +94,12 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogInformation("Screen capture requested via SignalR (request {RequestId}).", requestId);
             await HandleScreenCaptureRequestedAsync(requestId);
+        });
+
+        _hubConnection.On<Guid, DateOnly, DateOnly>("UsageLogsRequested", async (requestId, startDate, endDate) =>
+        {
+            _logger.LogInformation("Usage logs requested via SignalR (request {RequestId}, {StartDate} to {EndDate}).", requestId, startDate, endDate);
+            await HandleUsageLogsRequestedAsync(requestId, startDate, endDate);
         });
 
         _hubConnection.Reconnecting += error =>
@@ -336,6 +348,86 @@ public class PolicySyncService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to upload/report screen capture for request {RequestId}.", requestId);
+        }
+    }
+
+    /// <summary>
+    /// Handles an on-demand "fetch usage logs" request pushed from the web server's hub, for an
+    /// inclusive local date range. Unlike <see cref="HandleScreenCaptureRequestedAsync"/>/
+    /// <see cref="HandleProcessListRequestedAsync"/>, there's no Agent/named-pipe round trip
+    /// here - the day-log files already live on this device (written by
+    /// <see cref="_activityLog"/>), so the Service can read and upload them directly.
+    /// </summary>
+    private async Task HandleUsageLogsRequestedAsync(Guid requestId, DateOnly startDate, DateOnly endDate)
+    {
+        var connection = _hubConnection;
+        if (connection is not { State: HubConnectionState.Connected })
+        {
+            return;
+        }
+
+        var serverBaseUrl = _configuration["ServerBaseUrl"];
+        if (string.IsNullOrWhiteSpace(serverBaseUrl))
+        {
+            _logger.LogWarning("ServerBaseUrl not configured; cannot upload usage logs for request {RequestId}.", requestId);
+            return;
+        }
+
+        var state = _deviceIdentity.GetOrCreate();
+        if (!state.IsLinked)
+        {
+            _logger.LogWarning("Device not linked; cannot upload usage logs for request {RequestId}.", requestId);
+            return;
+        }
+
+        if (endDate < startDate)
+        {
+            (startDate, endDate) = (endDate, startDate);
+        }
+
+        // Clamp to a sane span (keeping the more recent end fixed) so a malformed or malicious
+        // range can't force reading an unbounded number of day files.
+        if (endDate.DayNumber - startDate.DayNumber + 1 > MaxUsageLogsRequestDays)
+        {
+            startDate = endDate.AddDays(-(MaxUsageLogsRequestDays - 1));
+        }
+
+        var days = new List<UsageDayLog>();
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            var entries = _activityLog.ReadDay(date);
+            if (entries.Count > 0)
+            {
+                days.Add(new UsageDayLog { EffectiveDate = date, Entries = entries.ToList() });
+            }
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.BaseAddress = new Uri(serverBaseUrl.TrimEnd('/') + "/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
+
+            var uploadRequest = new
+            {
+                DeviceId = state.DeviceId,
+                Success = true,
+                ErrorMessage = (string?)null,
+                Days = days
+            };
+
+            using var response = await client.PostAsJsonAsync($"api/usagelogs/{requestId}", uploadRequest);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to upload usage logs for request {RequestId} ({Status}).", requestId, (int)response.StatusCode);
+                return;
+            }
+
+            await connection.InvokeAsync("ReportUsageLogsReady", requestId, days.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to upload/report usage logs for request {RequestId}.", requestId);
         }
     }
 }

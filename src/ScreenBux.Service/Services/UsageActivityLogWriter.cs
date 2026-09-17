@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ScreenBux.Shared.Models;
 using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.Service.Services;
