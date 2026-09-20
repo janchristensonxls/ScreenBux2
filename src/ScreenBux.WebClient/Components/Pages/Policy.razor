@@ -59,6 +59,7 @@
     private List<PolicyProfileDto> _profiles = new();
 
     private static readonly JsonSerializerOptions SerializerOptions = PolicyJsonOptions.Default;
+    private static readonly JsonSerializerOptions IndentedSerializerOptions = new(PolicyJsonOptions.Default) { WriteIndented = true };
 
     protected override async Task OnInitializedAsync()
     {
@@ -97,7 +98,9 @@
     {
         try
         {
-            _policyJson = await PolicyApiService.GetPolicyJsonAsync();
+            var rawJson = await PolicyApiService.GetPolicyJsonAsync();
+            var policy = JsonSerializer.Deserialize<PolicyConfiguration>(rawJson, SerializerOptions);
+            _policyJson = policy is null ? rawJson : JsonSerializer.Serialize(policy, IndentedSerializerOptions);
             _statusMessage = "Policy loaded.";
         }
         catch (Exception ex)
