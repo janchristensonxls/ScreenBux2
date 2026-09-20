@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using ScreenBux.Shared.Models.Updates;
 
 namespace ScreenBux.Updater.Services;
@@ -183,6 +184,11 @@ public class UpdateCheckService : BackgroundService
                 await responseStream.CopyToAsync(fileStream, stoppingToken);
             }
 
+            if (!await VerifyDownloadIntegrityAsync(componentName, update, tempZipPath, stoppingToken))
+            {
+                return;
+            }
+
             var applied = await apply(tempZipPath);
             if (applied)
             {
@@ -197,6 +203,39 @@ public class UpdateCheckService : BackgroundService
                 File.Delete(tempZipPath);
             }
         }
+    }
+
+    /// <summary>
+    /// Compares the downloaded package's SHA-256 against <see cref="ComponentUpdateInfo.Sha256"/>
+    /// from the manifest, so a package tampered with (or corrupted) after publishing - e.g. via
+    /// unauthorized write access to blob storage, without also touching the manifest - is
+    /// rejected before it's ever extracted/installed. Manifests that omit Sha256 are allowed
+    /// through (logged loudly) so this doesn't hard-break environments that haven't set it yet;
+    /// once present, a mismatch always blocks the update.
+    /// </summary>
+    private async Task<bool> VerifyDownloadIntegrityAsync(string componentName, ComponentUpdateInfo update, string downloadedZipPath, CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(update.Sha256))
+        {
+            _logger.LogWarning("{Component} manifest does not provide a Sha256; skipping integrity check for this download.", componentName);
+            return true;
+        }
+
+        string actualHash;
+        await using (var stream = File.OpenRead(downloadedZipPath))
+        {
+            actualHash = Convert.ToHexString(await SHA256.HashDataAsync(stream, stoppingToken));
+        }
+
+        if (!string.Equals(actualHash, update.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(
+                "{Component} downloaded package hash mismatch (manifest expects {Expected}, downloaded file is {Actual}); aborting update without installing it.",
+                componentName, update.Sha256, actualHash);
+            return false;
+        }
+
+        return true;
     }
 
     private System.Version? ReadInstalledVersion(string? installedVersionPath)

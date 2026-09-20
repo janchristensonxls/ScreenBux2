@@ -39,6 +39,12 @@ public class AgentUpdater
         {
             StopRunningAgent();
 
+            if (!Directory.Exists(installDirectory))
+            {
+                _logger.LogInformation("Install directory {InstallDirectory} does not exist; creating it.", installDirectory);
+                Directory.CreateDirectory(installDirectory);
+            }
+
             _logger.LogInformation("Extracting update package {Package} to {InstallDirectory}.", updatePackagePath, installDirectory);
             ZipFile.ExtractToDirectory(updatePackagePath, installDirectory, overwriteFiles: true);
 

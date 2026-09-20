@@ -13,7 +13,11 @@ public class ComponentUpdateInfo
     /// <summary>HTTPS URL to a .zip containing the published output for this component.</summary>
     public string DownloadUrl { get; set; } = string.Empty;
 
-    /// <summary>Optional SHA-256 (hex) of the zip, for future integrity verification.</summary>
+    /// <summary>
+    /// Optional SHA-256 (hex, case-insensitive) of the zip. When present, the Updater verifies
+    /// the downloaded package against it before installing and rejects a mismatch; when absent,
+    /// the integrity check is skipped (logged as a warning).
+    /// </summary>
     public string? Sha256 { get; set; }
 }
 
