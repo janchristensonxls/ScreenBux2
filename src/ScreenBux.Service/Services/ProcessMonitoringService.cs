@@ -66,38 +66,58 @@ public class ProcessMonitoringService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            await _policyService.ReloadPolicyIfChangedAsync();
+            // Fallback delay if the tick fails before the policy-configured interval can be
+            // read - an unforeseen failure here (e.g. a malformed regex in a synced category
+            // rule) must never escape this loop and take the whole Service down; see the catch
+            // below.
+            var delaySeconds = 5;
 
-            var config = _policyService.GetConfiguration();
-            if (config.EnableMonitoring)
+            try
             {
-                if (_grantService.IsGrantActive)
+                await _policyService.ReloadPolicyIfChangedAsync();
+
+                var config = _policyService.GetConfiguration();
+                delaySeconds = Math.Max(1, config.CheckIntervalSeconds);
+
+                if (config.EnableMonitoring)
                 {
-                    _logger.LogDebug("Skipping enforcement; a time grant is active until {ExpiresAtUtc}.", _grantService.ExpiresAtUtc);
-                }
-                else if (IsPowerActionOnCooldown())
-                {
-                    _logger.LogDebug("Skipping power-action enforcement; still within cooldown after the last Sleep/Hibernate.");
-                }
-                else if (_usageTracking.IsBudgetExceeded)
-                {
-                    // An independent, third enforcement check - deliberately not folded into
-                    // PolicyRule/AppPolicy matching so it can't be silently shadowed by
-                    // whichever rule system currently wins there. See
-                    // docs/decisions/screen-time-usage-tracking.md.
-                    _logger.LogWarning(
-                        "Daily usage budget exceeded ({TotalSeconds}s used); triggering {Action} action.",
-                        _usageTracking.TotalSecondsToday, config.DailyBudgetExceededAction);
-                    ExecutePowerAction(config.DailyBudgetExceededAction);
-                    _lastPowerActionUtc = DateTime.UtcNow;
-                }
-                else if (!EnforceAlwaysRules())
-                {
-                    await EnforcePoliciesAsync(config, stoppingToken);
+                    if (_grantService.IsGrantActive)
+                    {
+                        _logger.LogDebug("Skipping enforcement; a time grant is active until {ExpiresAtUtc}.", _grantService.ExpiresAtUtc);
+                    }
+                    else if (IsPowerActionOnCooldown())
+                    {
+                        _logger.LogDebug("Skipping power-action enforcement; still within cooldown after the last Sleep/Hibernate.");
+                    }
+                    else if (_usageTracking.IsBudgetExceeded)
+                    {
+                        // An independent, third enforcement check - deliberately not folded into
+                        // PolicyRule/AppPolicy matching so it can't be silently shadowed by
+                        // whichever rule system currently wins there. See
+                        // docs/decisions/screen-time-usage-tracking.md.
+                        _logger.LogWarning(
+                            "Daily usage budget exceeded ({TotalSeconds}s used); triggering {Action} action.",
+                            _usageTracking.TotalSecondsToday, config.DailyBudgetExceededAction);
+                        ExecutePowerAction(config.DailyBudgetExceededAction);
+                        _lastPowerActionUtc = DateTime.UtcNow;
+                    }
+                    else if (!EnforceAlwaysRules())
+                    {
+                        await EnforcePoliciesAsync(config, stoppingToken);
+                    }
                 }
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Service is shutting down - let the loop condition below end it normally.
+            }
+            catch (Exception ex)
+            {
+                // A single bad tick (e.g. a malformed regex in a synced policy) must never stop
+                // enforcement entirely - log it and try again next tick instead.
+                _logger.LogError(ex, "Error during process monitoring enforcement tick; will retry next tick.");
+            }
 
-            var delaySeconds = Math.Max(1, config.CheckIntervalSeconds);
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);
         }
 

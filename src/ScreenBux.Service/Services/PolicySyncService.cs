@@ -76,15 +76,29 @@ public class PolicySyncService : BackgroundService
 
         _hubConnection.On<PolicyConfiguration>("PolicyUpdated", async policy =>
         {
-            _logger.LogInformation("Policy update received from SignalR");
-            await _policyService.UpdatePolicyAsync(policy);
-            _policyService.MarkSyncedSinceStartup();
+            try
+            {
+                _logger.LogInformation("Policy update received from SignalR");
+                await _policyService.UpdatePolicyAsync(policy);
+                _policyService.MarkSyncedSinceStartup();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply policy update received from SignalR");
+            }
         });
 
         _hubConnection.On<GrantDto>("GrantUpdated", async grant =>
         {
-            _logger.LogInformation("Grant update received from SignalR; expires at {ExpiresAtUtc}", grant.ExpiresAtUtc);
-            await _grantService.UpdateGrantAsync(grant.ExpiresAtUtc);
+            try
+            {
+                _logger.LogInformation("Grant update received from SignalR; expires at {ExpiresAtUtc}", grant.ExpiresAtUtc);
+                await _grantService.UpdateGrantAsync(grant.ExpiresAtUtc);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply grant update received from SignalR");
+            }
         });
 
         _hubConnection.On<Guid>("ProcessListRequested", async requestId =>
@@ -479,13 +493,21 @@ public class PolicySyncService : BackgroundService
         }
 
         var days = new List<UsageDayLog>();
-        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        try
         {
-            var entries = _activityLog.ReadDay(date);
-            if (entries.Count > 0)
+            for (var date = startDate; date <= endDate; date = date.AddDays(1))
             {
-                days.Add(new UsageDayLog { EffectiveDate = date, Entries = entries.ToList() });
+                var entries = _activityLog.ReadDay(date);
+                if (entries.Count > 0)
+                {
+                    days.Add(new UsageDayLog { EffectiveDate = date, Entries = entries.ToList() });
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read local usage logs for request {RequestId}.", requestId);
+            return;
         }
 
         try

@@ -241,42 +241,53 @@ public class UsageTrackingService : BackgroundService
         {
             await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
 
-            // Usage accumulates regardless of an active time grant - a grant only pauses
-            // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
-            // While the session is locked, no category is credited at all (not even "Other") -
-            // see SetSessionLocked. While idle-paused, only the current category is skipped -
-            // see IsIdlePaused.
-            lock (_lock)
+            try
             {
-                if (!_isSessionLocked && !_isIdlePausedForCurrentCategory)
+                // Usage accumulates regardless of an active time grant - a grant only pauses
+                // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
+                // While the session is locked, no category is credited at all (not even "Other") -
+                // see SetSessionLocked. While idle-paused, only the current category is skipped -
+                // see IsIdlePaused.
+                lock (_lock)
                 {
-                    _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
-                    _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
+                    if (!_isSessionLocked && !_isIdlePausedForCurrentCategory)
+                    {
+                        _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
+                        _pendingSecondsByCategory[_currentCategoryName] = pending + 1;
+                    }
+                }
+
+                CheckCategoryPolicyThresholds();
+                CheckDailyBudgetThreshold();
+
+                var elapsedSinceFlush = stopwatch.Elapsed - lastFlush;
+                var syncIntervalSeconds = BaselineSyncIntervalSeconds;
+
+                // Sync more frequently once the child is close to a configured daily budget, so
+                // other devices see a fresher cross-device total right when it matters.
+                var budgetMinutes = _policyService.GetConfiguration().DailyBudgetMinutes;
+                if (budgetMinutes is int minutes)
+                {
+                    var remainingSeconds = (minutes * 60L) - TotalSecondsToday;
+                    if (remainingSeconds >= 0 && remainingSeconds <= NearLimitThresholdSeconds)
+                    {
+                        syncIntervalSeconds = NearLimitSyncIntervalSeconds;
+                    }
+                }
+
+                if (elapsedSinceFlush.TotalSeconds >= syncIntervalSeconds || (!lastFlushSuccessful && elapsedSinceFlush.TotalSeconds >= 5))
+                {
+                    lastFlushSuccessful = await FlushAsync(serverBaseUrl, stoppingToken);
+                    lastFlush = stopwatch.Elapsed;
                 }
             }
-
-            CheckCategoryPolicyThresholds();
-            CheckDailyBudgetThreshold();
-
-            var elapsedSinceFlush = stopwatch.Elapsed - lastFlush;
-            var syncIntervalSeconds = BaselineSyncIntervalSeconds;
-
-            // Sync more frequently once the child is close to a configured daily budget, so
-            // other devices see a fresher cross-device total right when it matters.
-            var budgetMinutes = _policyService.GetConfiguration().DailyBudgetMinutes;
-            if (budgetMinutes is int minutes)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                var remainingSeconds = (minutes * 60L) - TotalSecondsToday;
-                if (remainingSeconds >= 0 && remainingSeconds <= NearLimitThresholdSeconds)
-                {
-                    syncIntervalSeconds = NearLimitSyncIntervalSeconds;
-                }
+                // Service is shutting down - let the loop condition below end it normally.
             }
-
-            if (elapsedSinceFlush.TotalSeconds >= syncIntervalSeconds || (!lastFlushSuccessful && elapsedSinceFlush.TotalSeconds >= 5))
+            catch (Exception ex)
             {
-                lastFlushSuccessful = await FlushAsync(serverBaseUrl, stoppingToken);
-                lastFlush = stopwatch.Elapsed;
+                _logger.LogError(ex, "Error during usage tracking tick; will retry next tick.");
             }
         }
 

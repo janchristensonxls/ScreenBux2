@@ -10,6 +10,15 @@ builder.Services.AddWindowsService(options =>
     options.ServiceName = "ScreenBux Parental Control Service";
 });
 
+// Last-resort safety net: an uncaught exception in any hosted service must never take down
+// the whole Windows Service (parental-control enforcement should never just stop). Every
+// hosted service's own loop already catches its expected failure modes; this only guards
+// against something unforeseen slipping through.
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 // Register services
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<DeviceIdentityService>();
