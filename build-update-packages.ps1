@@ -14,6 +14,13 @@
     The zips still need to be uploaded to blob storage (with a SAS URL) by hand - this script
     only prepares them and computes the hashes the manifest needs.
 
+    1. Set the new version in root/Directory.Build.props.
+    2. Run this script: (./build-update-packages.ps1) to build the zips and README.md.
+    3. Open the folder /latest.
+    4. Upload agent.zip & service.zip to the SBX blobstorage, container "latest"
+    5. Update ScreenBux.WebServer's appsettings.json "Updates" section with the new version, blob URLs, and SHA-256 hashes, found in the readme.md
+    6. Publish the new ScreenBux.WebServer build to Azure App Service (or wherever it's hosted) - the new "Updates" section will be picked up automatically.
+
 .PARAMETER Configuration
     Build configuration to use. Defaults to "Release".
 

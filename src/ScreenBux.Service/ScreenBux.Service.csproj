@@ -5,8 +5,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-ScreenBux.Service-8d5bcaaa-4c42-4f99-b7bb-8d1d5beb1adc</UserSecretsId>
-    <AssemblyVersion>1.0.1</AssemblyVersion>
-    <FileVersion>1.0.1</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

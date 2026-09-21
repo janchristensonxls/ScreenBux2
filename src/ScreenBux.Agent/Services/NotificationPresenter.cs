@@ -39,36 +39,58 @@ public class NotificationPresenter
         }
     }
 
+    /// <summary>
+    /// Peak sine amplitude used for every tone (0-1 of full scale). Deliberately close to 1.0 -
+    /// at the old 0.3 the cue was easy to miss under other apps' audio (games, calls, music).
+    /// </summary>
+    private const double ToneGain = 0.9;
+
     private static void PlayAudioCue(NotificationSeverity severity)
     {
         try
         {
-            var toneHz = severity switch
+            switch (severity)
             {
-                NotificationSeverity.Warning => 880,
-                NotificationSeverity.TimeUp => 440,
-                _ => 660
-            };
-
-            var signalGenerator = new SignalGenerator
-            {
-                Gain = 0.3,
-                Frequency = toneHz,
-                Type = SignalGeneratorType.Sin
-            };
-
-            using var wave = new WaveOut();
-            wave.Init(signalGenerator.Take(TimeSpan.FromMilliseconds(300)));
-            wave.Play();
-
-            while (wave.PlaybackState == PlaybackState.Playing)
-            {
-                Thread.Sleep(50);
+                case NotificationSeverity.Warning:
+                    // "5 minutes left": three rising beeps read as more urgent than a single
+                    // flat tone and stand out more from background game/media audio.
+                    PlayTone(660, TimeSpan.FromMilliseconds(150));
+                    Thread.Sleep(80);
+                    PlayTone(880, TimeSpan.FromMilliseconds(150));
+                    Thread.Sleep(80);
+                    PlayTone(1175, TimeSpan.FromMilliseconds(220));
+                    break;
+                case NotificationSeverity.TimeUp:
+                    PlayTone(440, TimeSpan.FromMilliseconds(300));
+                    break;
+                default:
+                    PlayTone(660, TimeSpan.FromMilliseconds(300));
+                    break;
             }
         }
         catch
         {
             // Best-effort only - no audio output device, etc.
+        }
+    }
+
+    private static void PlayTone(double frequencyHz, TimeSpan duration)
+    {
+        var signalGenerator = new SignalGenerator
+        {
+            Gain = ToneGain,
+            Frequency = frequencyHz,
+            Type = SignalGeneratorType.Sin
+        };
+
+        using var wave = new WaveOut();
+        wave.Volume = 1.0f;
+        wave.Init(signalGenerator.Take(duration));
+        wave.Play();
+
+        while (wave.PlaybackState == PlaybackState.Playing)
+        {
+            Thread.Sleep(20);
         }
     }
 }
