@@ -178,6 +178,11 @@ public class MonitoringService
                 {
                     await PresentAndAckNotificationAsync(pendingNotification);
                 }
+
+                if (cmdResponse.PendingVersionInfoRequestId is Guid versionRequestId)
+                {
+                    await ReportVersionInfoAsync(versionRequestId);
+                }
             }
         }
         catch (Exception ex)
@@ -315,6 +320,53 @@ public class MonitoringService
         catch (Exception ex)
         {
             RaiseStatusChanged($"Error closing process {processId}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Reads this Agent's installed and currently-running versions and reports them back to
+    /// the Service for a pending on-demand "get version" request. Sent as its own
+    /// transactional pipe call (rather than waiting for the next tick) so the parent doesn't
+    /// wait longer than necessary.
+    ///
+    /// Both are reported since they can legitimately differ: the auto-updater's "installed
+    /// version" marker file (agent.version) is what ScreenBux.Updater actually compares against
+    /// the WebServer's manifest, while the running assembly version reflects what's actually
+    /// executing right now - useful to catch a stale marker or a process that hasn't restarted
+    /// since its last update.
+    /// </summary>
+    private async Task ReportVersionInfoAsync(Guid requestId)
+    {
+        try
+        {
+            var report = new VersionInfoReportMessage
+            {
+                RequestId = requestId,
+                Success = true,
+                AgentInstalledVersion = ScreenBux.Shared.Utilities.VersionFileStorage.TryReadVersion(
+                    ScreenBux.Shared.Utilities.VersionFileStorage.GetAgentVersionFilePath())?.ToString(),
+                AgentRunningVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            };
+
+            await _pipeClient.SendMessageAsync<object>(report);
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error reporting version info: {ex.Message}");
+
+            try
+            {
+                await _pipeClient.SendMessageAsync<object>(new VersionInfoReportMessage
+                {
+                    RequestId = requestId,
+                    Success = false,
+                    ErrorMessage = ex.Message
+                });
+            }
+            catch
+            {
+                // Best effort - if this fails too, the Service will time out waiting.
+            }
         }
     }
 

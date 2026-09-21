@@ -244,4 +244,44 @@ public class MonitoringHub : Hub
             await Clients.Group(accountId).SendAsync("UsageLogsReady", requestId, dayCount);
         }
     }
+
+    /// <summary>
+    /// Called by a WebClient to request an on-demand "get version" from a specific device -
+    /// the Service's own assembly version plus the Agent's (obtained via the Service's named
+    /// pipe round-trip). Mirrors <see cref="RequestProcessList"/>; the result arrives
+    /// asynchronously through <see cref="ReportVersionInfo"/>.
+    /// </summary>
+    public async Task RequestVersionInfo(Guid deviceId, Guid requestId)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (string.IsNullOrEmpty(accountId))
+        {
+            return;
+        }
+
+        var deviceExists = await _db.Devices.AnyAsync(d => d.Id == deviceId && d.AccountId == accountId);
+        if (!deviceExists)
+        {
+            _logger.LogWarning("Client {ConnectionId} (account {AccountId}) requested version info for device {DeviceId} it does not own.",
+                Context.ConnectionId, accountId, deviceId);
+            return;
+        }
+
+        _logger.LogInformation("Client {ConnectionId} requested version info for device {DeviceId} (request {RequestId}).",
+            Context.ConnectionId, deviceId, requestId);
+        await Clients.Group(GetDeviceGroupName(deviceId)).SendAsync("VersionInfoRequested", requestId);
+    }
+
+    /// <summary>
+    /// Called by the Service (as a SignalR client) to report the result of an on-demand
+    /// "get version" request back to the owning account's WebClient(s).
+    /// </summary>
+    public async Task ReportVersionInfo(VersionInfoResult result)
+    {
+        var accountId = Context.User?.GetAccountId();
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            await Clients.Group(accountId).SendAsync("VersionInfoReceived", result);
+        }
+    }
 }

@@ -27,6 +27,7 @@ builder.Services.AddSingleton<UsageTrackingService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageTrackingService>());
 builder.Services.AddSingleton<PendingWindowListRequestCoordinator>();
 builder.Services.AddSingleton<PendingScreenCaptureRequestCoordinator>();
+builder.Services.AddSingleton<PendingVersionInfoRequestCoordinator>();
 builder.Services.AddSingleton<NotificationQueueService>();
 builder.Services.AddSingleton<NotificationRelayService>();
 builder.Services.AddHostedService<NamedPipeServerService>();

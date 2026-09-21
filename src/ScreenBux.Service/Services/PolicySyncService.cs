@@ -20,6 +20,7 @@ public class PolicySyncService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
+    private readonly PendingVersionInfoRequestCoordinator _versionInfoCoordinator;
     private readonly UsageActivityLogWriter _activityLog;
     private readonly IHttpClientFactory _httpClientFactory;
     private HubConnection? _hubConnection;
@@ -36,6 +37,7 @@ public class PolicySyncService : BackgroundService
         IServiceProvider serviceProvider,
         PendingWindowListRequestCoordinator windowListCoordinator,
         PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
+        PendingVersionInfoRequestCoordinator versionInfoCoordinator,
         UsageActivityLogWriter activityLog,
         IHttpClientFactory httpClientFactory)
     {
@@ -47,6 +49,7 @@ public class PolicySyncService : BackgroundService
         _serviceProvider = serviceProvider;
         _windowListCoordinator = windowListCoordinator;
         _screenCaptureCoordinator = screenCaptureCoordinator;
+        _versionInfoCoordinator = versionInfoCoordinator;
         _activityLog = activityLog;
         _httpClientFactory = httpClientFactory;
     }
@@ -100,6 +103,12 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogInformation("Usage logs requested via SignalR (request {RequestId}, {StartDate} to {EndDate}).", requestId, startDate, endDate);
             await HandleUsageLogsRequestedAsync(requestId, startDate, endDate);
+        });
+
+        _hubConnection.On<Guid>("VersionInfoRequested", async requestId =>
+        {
+            _logger.LogInformation("Version info requested via SignalR (request {RequestId}).", requestId);
+            await HandleVersionInfoRequestedAsync(requestId);
         });
 
         _hubConnection.Reconnecting += error =>
@@ -277,6 +286,83 @@ public class PolicySyncService : BackgroundService
         {
             _logger.LogWarning(ex, "Failed to send process list result to hub for request {RequestId}.", requestId);
         }
+    }
+
+    /// <summary>
+    /// Handles an on-demand "get version" request pushed from the web server's hub. Reports
+    /// both the Service's auto-updater-installed version and its currently running assembly
+    /// version (they can legitimately differ - see <see cref="GetInstalledServiceVersion"/>),
+    /// plus the same pair for the Agent, obtained by round-tripping a request through the
+    /// named pipe: registered with <see cref="_versionInfoCoordinator"/> and piggybacked onto
+    /// the Agent's next poll response (see <see cref="NamedPipeServerService"/>), mirroring
+    /// <see cref="HandleProcessListRequestedAsync"/>.
+    /// </summary>
+    private async Task HandleVersionInfoRequestedAsync(Guid requestId)
+    {
+        var connection = _hubConnection;
+        if (connection is not { State: HubConnectionState.Connected })
+        {
+            return;
+        }
+
+        var deviceId = _deviceIdentity.GetOrCreate().DeviceId;
+        var result = new VersionInfoResult
+        {
+            RequestId = requestId,
+            DeviceId = deviceId,
+            ServiceInstalledVersion = GetInstalledServiceVersion(),
+            ServiceRunningVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+        };
+
+        try
+        {
+            // Register before doing any other work, so the Agent's next poll tick has the
+            // maximum chance of picking up this request before the wait below times out.
+            _versionInfoCoordinator.Register(requestId);
+
+            var agentReport = await _versionInfoCoordinator.WaitAsync(
+                requestId, TimeSpan.FromSeconds(8), CancellationToken.None);
+
+            if (agentReport is { Success: true })
+            {
+                result.AgentInstalledVersion = agentReport.AgentInstalledVersion;
+                result.AgentRunningVersion = agentReport.AgentRunningVersion;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "No version info response from Agent for request {RequestId}.", requestId);
+                result.ErrorMessage = "Agent did not respond with its version (it may not be running).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to gather version info for on-demand request {RequestId}.", requestId);
+            result.Success = false;
+            result.ErrorMessage = "Failed to gather version info on this device.";
+        }
+
+        try
+        {
+            await connection.InvokeAsync("ReportVersionInfo", result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send version info result to hub for request {RequestId}.", requestId);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the version the auto-updater (ScreenBux.Updater) actually considers "installed"
+    /// on this machine - the marker file it writes on a successful update - which is reported
+    /// alongside (not instead of) the running assembly version in <see cref="HandleVersionInfoRequestedAsync"/>,
+    /// since the two can legitimately differ (an update pending a restart, a marker that's stale,
+    /// or a dev "dotnet run" that's never touched by the Updater at all).
+    /// </summary>
+    private string? GetInstalledServiceVersion()
+    {
+        var path = _configuration["Service:InstalledVersionFile"] ?? Shared.Utilities.VersionFileStorage.GetServiceVersionFilePath();
+        return Shared.Utilities.VersionFileStorage.TryReadVersion(path)?.ToString();
     }
 
     /// <summary>

@@ -61,6 +61,31 @@ public class CommandResponse : Contracts.INamedPipeMessage
     /// shows a topmost overlay + audio cue and replies with a <see cref="NotificationAckMessage"/>.
     /// </summary>
     public PendingNotification? PendingNotification { get; set; }
+
+    /// <summary>
+    /// Piggybacks a pending on-demand "get version info" request onto this response, using the
+    /// same polling mechanism as <see cref="PendingWindowListRequestId"/>. When set, the Agent
+    /// should read its own assembly version and reply with a <see cref="VersionInfoReportMessage"/>
+    /// carrying the same RequestId.
+    /// </summary>
+    public Guid? PendingVersionInfoRequestId { get; set; }
+}
+
+/// <summary>
+/// Sent from Agent to Service in response to a <see cref="CommandResponse.PendingVersionInfoRequestId"/>,
+/// carrying both the Agent's auto-updater-installed version and its currently running assembly
+/// version, so the Service can relay both (plus its own) back to the WebServer for an on-demand
+/// "Get version" device action.
+/// </summary>
+public class VersionInfoReportMessage : Contracts.INamedPipeMessage
+{
+    public string MessageType => "VersionInfoReport";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public Guid RequestId { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string? AgentInstalledVersion { get; set; }
+    public string? AgentRunningVersion { get; set; }
 }
 
 /// <summary>

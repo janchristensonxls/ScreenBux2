@@ -23,6 +23,7 @@ public class NamedPipeServerService : BackgroundService
     private readonly PolicySyncService _policySync;
     private readonly PendingWindowListRequestCoordinator _windowListCoordinator;
     private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
+    private readonly PendingVersionInfoRequestCoordinator _versionInfoCoordinator;
     private readonly NotificationQueueService _notificationQueue;
     private readonly NotificationRelayService _notificationRelay;
     private const string PipeName = "ScreenBuxServicePipe";
@@ -38,6 +39,7 @@ public class NamedPipeServerService : BackgroundService
         PolicySyncService policySync,
         PendingWindowListRequestCoordinator windowListCoordinator,
         PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
+        PendingVersionInfoRequestCoordinator versionInfoCoordinator,
         NotificationQueueService notificationQueue,
         NotificationRelayService notificationRelay)
     {
@@ -51,6 +53,7 @@ public class NamedPipeServerService : BackgroundService
         _policySync = policySync;
         _windowListCoordinator = windowListCoordinator;
         _screenCaptureCoordinator = screenCaptureCoordinator;
+        _versionInfoCoordinator = versionInfoCoordinator;
         _notificationQueue = notificationQueue;
         _notificationRelay = notificationRelay;
     }
@@ -267,6 +270,10 @@ public class NamedPipeServerService : BackgroundService
                     var screenCaptureReport = JsonSerializer.Deserialize<ScreenCaptureReportMessage>(messageJson);
                     return HandleScreenCaptureReport(screenCaptureReport);
 
+                case "VersionInfoReport":
+                    var versionInfoReport = JsonSerializer.Deserialize<VersionInfoReportMessage>(messageJson);
+                    return HandleVersionInfoReport(versionInfoReport);
+
                 case "NotificationAck":
                     var notificationAck = JsonSerializer.Deserialize<NotificationAckMessage>(messageJson);
                     return await HandleNotificationAckAsync(notificationAck);
@@ -444,6 +451,7 @@ public class NamedPipeServerService : BackgroundService
         {
             commandResponse.PendingWindowListRequestId = _windowListCoordinator.TryGetNextPendingRequestId();
             commandResponse.PendingScreenCaptureRequestId = _screenCaptureCoordinator.TryGetNextPendingRequestId();
+            commandResponse.PendingVersionInfoRequestId = _versionInfoCoordinator.TryGetNextPendingRequestId();
 
             if (_notificationQueue.TryDequeue(out var pendingNotification))
             {
@@ -503,6 +511,17 @@ public class NamedPipeServerService : BackgroundService
         }
 
         _screenCaptureCoordinator.Complete(message.RequestId, message.Success ? message.Images : null);
+        return new CommandResponse { Success = true };
+    }
+
+    private object HandleVersionInfoReport(VersionInfoReportMessage? message)
+    {
+        if (message is null)
+        {
+            return new CommandResponse { Success = false, Message = "Invalid version info report" };
+        }
+
+        _versionInfoCoordinator.Complete(message.RequestId, message);
         return new CommandResponse { Success = true };
     }
 

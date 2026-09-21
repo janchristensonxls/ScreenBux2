@@ -17,6 +17,7 @@ public class MonitoringService : IAsyncDisposable
     public event EventHandler<(Guid RequestId, int ImageCount)>? ScreenCaptureReady;
     public event EventHandler<NotificationAcknowledgedDto>? NotificationAcknowledged;
     public event EventHandler<(Guid RequestId, int DayCount)>? UsageLogsReady;
+    public event EventHandler<VersionInfoResult>? VersionInfoReceived;
 
     public MonitoringService(ILogger<MonitoringService> logger, IConfiguration configuration, TokenProvider tokenProvider)
     {
@@ -88,6 +89,12 @@ public class MonitoringService : IAsyncDisposable
             _logger.LogInformation("Usage logs ready (request {RequestId}, {DayCount} days)", requestId, dayCount);
             UsageLogsReady?.Invoke(this, (requestId, dayCount));
         });
+
+        _hubConnection.On<VersionInfoResult>("VersionInfoReceived", (result) =>
+        {
+            _logger.LogInformation("Version info received for device {DeviceId} (request {RequestId})", result.DeviceId, result.RequestId);
+            VersionInfoReceived?.Invoke(this, result);
+        });
     }
 
     public async Task StartAsync()
@@ -135,6 +142,23 @@ public class MonitoringService : IAsyncDisposable
         if (_hubConnection.State == HubConnectionState.Connected)
         {
             await _hubConnection.InvokeAsync("RequestProcessList", deviceId, requestId);
+        }
+
+        return requestId;
+    }
+
+    /// <summary>
+    /// Requests an on-demand "get version" from the given device (the Service's own assembly
+    /// version plus the Agent's). The result arrives asynchronously via
+    /// <see cref="VersionInfoReceived"/>, correlated by the returned request id. Callers should
+    /// apply their own timeout since the device may be offline.
+    /// </summary>
+    public async Task<Guid> RequestVersionInfoAsync(Guid deviceId)
+    {
+        var requestId = Guid.NewGuid();
+        if (_hubConnection.State == HubConnectionState.Connected)
+        {
+            await _hubConnection.InvokeAsync("RequestVersionInfo", deviceId, requestId);
         }
 
         return requestId;

@@ -140,6 +140,49 @@
             </div>
         </div>
 
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Version</h6>
+                <button class="btn btn-primary mb-2" @onclick="RequestVersionInfo" disabled="@(!_isConnected || _isRequestingVersionInfo || string.IsNullOrEmpty(_selectedDeviceId))">
+                    @(_isRequestingVersionInfo ? "Requesting..." : "Get Version")
+                </button>
+
+                @if (_versionInfoError is not null)
+                {
+                    <p class="text-danger">@_versionInfoError</p>
+                }
+
+                @if (_currentVersionInfo is not null)
+                {
+                    <table class="table table-sm table-striped" style="max-width: 400px;">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Installed</th>
+                                <th>Running</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th>Service</th>
+                                <td>@(_currentVersionInfo.ServiceInstalledVersion ?? "Unknown")</td>
+                                <td>@(_currentVersionInfo.ServiceRunningVersion ?? "Unknown")</td>
+                            </tr>
+                            <tr>
+                                <th>Agent</th>
+                                <td>@(_currentVersionInfo.AgentInstalledVersion ?? "Unknown")</td>
+                                <td>@(_currentVersionInfo.AgentRunningVersion ?? "Unknown")</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    @if (!string.IsNullOrEmpty(_currentVersionInfo.ErrorMessage))
+                    {
+                        <p class="text-warning">@_currentVersionInfo.ErrorMessage</p>
+                    }
+                }
+            </div>
+        </div>
+
         @if (_currentProcessList is not null)
         {
             <hr />
@@ -231,6 +274,13 @@
 
     private List<NotificationAcknowledgedDto> _notificationAcks = new();
 
+    private static readonly TimeSpan VersionInfoTimeout = TimeSpan.FromSeconds(10);
+    private bool _isRequestingVersionInfo = false;
+    private string? _versionInfoError;
+    private VersionInfoResult? _currentVersionInfo;
+    private Guid? _pendingVersionInfoRequestId;
+    private CancellationTokenSource? _versionInfoTimeoutCts;
+
     protected override async Task OnInitializedAsync()
     {
         MonitoringService.ProcessDetected += OnProcessDetected;
@@ -239,6 +289,7 @@
         MonitoringService.ProcessListReceived += OnProcessListReceived;
         MonitoringService.ScreenCaptureReady += OnScreenCaptureReady;
         MonitoringService.NotificationAcknowledged += OnNotificationAcknowledged;
+        MonitoringService.VersionInfoReceived += OnVersionInfoReceived;
 
         try
         {
@@ -396,6 +447,83 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private async Task RequestVersionInfo()
+    {
+        if (!Guid.TryParse(_selectedDeviceId, out var deviceId))
+        {
+            return;
+        }
+
+        _versionInfoTimeoutCts?.Cancel();
+        _versionInfoTimeoutCts = new CancellationTokenSource();
+        var timeoutToken = _versionInfoTimeoutCts.Token;
+
+        _isRequestingVersionInfo = true;
+        _versionInfoError = null;
+        _currentVersionInfo = null;
+        StateHasChanged();
+
+        try
+        {
+            _pendingVersionInfoRequestId = await MonitoringService.RequestVersionInfoAsync(deviceId);
+            AddStatusMessage($"Version info requested for device {deviceId}");
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(VersionInfoTimeout, timeoutToken);
+                    await InvokeAsync(() =>
+                    {
+                        if (_isRequestingVersionInfo)
+                        {
+                            _isRequestingVersionInfo = false;
+                            _versionInfoError = "Device did not respond in time.";
+                            StateHasChanged();
+                        }
+                    });
+                }
+                catch (TaskCanceledException)
+                {
+                    // Response arrived before the timeout elapsed; nothing to do.
+                }
+            }, timeoutToken);
+        }
+        catch (Exception ex)
+        {
+            _isRequestingVersionInfo = false;
+            _versionInfoError = $"Error requesting version info: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnVersionInfoReceived(object? sender, VersionInfoResult result)
+    {
+        if (_pendingVersionInfoRequestId != result.RequestId)
+        {
+            // Stale/unexpected result (e.g. a previous request that already timed out); ignore.
+            return;
+        }
+
+        _versionInfoTimeoutCts?.Cancel();
+        _isRequestingVersionInfo = false;
+
+        if (result.Success)
+        {
+            _currentVersionInfo = result;
+            _versionInfoError = null;
+            AddStatusMessage($"Version info received for device {result.DeviceId}");
+        }
+        else
+        {
+            _versionInfoError = result.ErrorMessage ?? "Failed to retrieve version info.";
+            AddStatusMessage($"Version info request failed for device {result.DeviceId}: {_versionInfoError}");
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
     private async Task RequestScreenCapture()
     {
         if (!Guid.TryParse(_selectedDeviceId, out var deviceId))
@@ -518,11 +646,13 @@
     {
         _processListTimeoutCts?.Cancel();
         _screenCaptureTimeoutCts?.Cancel();
+        _versionInfoTimeoutCts?.Cancel();
         MonitoringService.ProcessDetected -= OnProcessDetected;
         MonitoringService.PolicyUpdated -= OnPolicyUpdated;
         MonitoringService.StatusReceived -= OnStatusReceived;
         MonitoringService.ProcessListReceived -= OnProcessListReceived;
         MonitoringService.ScreenCaptureReady -= OnScreenCaptureReady;
         MonitoringService.NotificationAcknowledged -= OnNotificationAcknowledged;
+        MonitoringService.VersionInfoReceived -= OnVersionInfoReceived;
     }
 }
