@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO.Compression;
 using ScreenBux.Shared.Services;
 
 namespace ScreenBux.Updater.Services;
@@ -46,9 +45,14 @@ public class AgentUpdater
             }
 
             _logger.LogInformation("Extracting update package {Package} to {InstallDirectory}.", updatePackagePath, installDirectory);
-            ZipFile.ExtractToDirectory(updatePackagePath, installDirectory, overwriteFiles: true);
+            ZipExtraction.ExtractWithRetry(updatePackagePath, installDirectory, _logger, "Agent");
+            _logger.LogInformation("Extracted Agent update to {InstallDirectory}.", installDirectory);
 
-            if (!_sessionLauncher.TryStartInActiveSession(agentExecutablePath))
+            if (_sessionLauncher.TryStartInActiveSession(agentExecutablePath))
+            {
+                _logger.LogInformation("Agent update applied and relaunched.");
+            }
+            else
             {
                 _logger.LogInformation("Agent update applied but relaunch was skipped/failed; it will start on next login or the next update check.");
             }

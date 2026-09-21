@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 
@@ -164,7 +163,7 @@ public class ServiceUpdater
             _logger.LogInformation("{ServiceName} is not installed; performing first-time install to {InstallDirectory}.", ServiceName, installDirectory);
 
             Directory.CreateDirectory(installDirectory);
-            ZipFile.ExtractToDirectory(updatePackagePath, installDirectory, overwriteFiles: true);
+            ZipExtraction.ExtractWithRetry(updatePackagePath, installDirectory, _logger, ServiceName);
 
             ServiceInstaller.Install(ServiceName, DisplayName, executablePath);
 
@@ -187,10 +186,12 @@ public class ServiceUpdater
         using var controller = new ServiceController(ServiceName);
 
         var wasRunning = false;
+        var extracted = false;
         try
         {
             controller.Refresh();
             wasRunning = controller.Status != ServiceControllerStatus.Stopped;
+            _logger.LogInformation("{ServiceName} status before update: {Status}.", ServiceName, controller.Status);
 
             if (wasRunning)
             {
@@ -200,14 +201,13 @@ public class ServiceUpdater
             }
 
             _logger.LogInformation("Extracting update package {Package} to {InstallDirectory}.", updatePackagePath, installDirectory);
-            ZipFile.ExtractToDirectory(updatePackagePath, installDirectory, overwriteFiles: true);
-
-            return true;
+            ZipExtraction.ExtractWithRetry(updatePackagePath, installDirectory, _logger, ServiceName);
+            extracted = true;
+            _logger.LogInformation("Extracted update package for {ServiceName} to {InstallDirectory}.", ServiceName, installDirectory);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to apply update for {ServiceName}.", ServiceName);
-            return false;
+            _logger.LogError(ex, "Failed to apply update for {ServiceName}; it will remain on its previous version until the next update check.", ServiceName);
         }
         finally
         {
@@ -222,13 +222,23 @@ public class ServiceUpdater
                         controller.Start();
                         controller.WaitForStatus(ServiceControllerStatus.Running, ServiceControlTimeout);
                     }
+
+                    _logger.LogInformation("{ServiceName} status after update: {Status}.", ServiceName, controller.Status);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to restart {ServiceName} after update.", ServiceName);
+                    _logger.LogError(ex, "Failed to restart {ServiceName} after update; it may be left stopped.", ServiceName);
                 }
             }
         }
+
+        if (!extracted)
+        {
+            return false;
+        }
+
+        _logger.LogInformation("{ServiceName} update applied.", ServiceName);
+        return true;
     }
 }
 

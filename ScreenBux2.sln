@@ -41,6 +41,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "installer", "installer", "{
 EndProject
 Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "ScreenBux.Updater.Installer", "installer\ScreenBux.Updater.Installer\ScreenBux.Updater.Installer.wixproj", "{902BA916-174E-487A-A22C-CD9DFCCD12F6}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{97B3E4B9-B204-44BB-930E-E2A653341971}"
+	ProjectSection(SolutionItems) = preProject
+		build-update-packages.ps1 = build-update-packages.ps1
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

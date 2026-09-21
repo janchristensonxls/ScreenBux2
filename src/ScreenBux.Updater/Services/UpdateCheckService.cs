@@ -56,6 +56,8 @@ public class UpdateCheckService : BackgroundService
 
     private async Task CheckAndApplyUpdatesAsync(string serverBaseUrl, CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Checking {ServerBaseUrl}/api/updates/latest for updates.", serverBaseUrl);
+
         var client = _httpClientFactory.CreateClient();
         var manifest = await client.GetFromJsonAsync<UpdateManifestDto>($"{serverBaseUrl}/api/updates/latest", stoppingToken);
         if (manifest is null)
@@ -63,6 +65,12 @@ public class UpdateCheckService : BackgroundService
             _logger.LogWarning("Update manifest request returned no content.");
             return;
         }
+
+        _logger.LogInformation(
+            "Manifest reports Service {ServiceVersion} and Agent {AgentVersion} (installed: Service {InstalledService}, Agent {InstalledAgent}).",
+            manifest.Service.Version, manifest.Agent.Version,
+            ReadInstalledVersion(_configuration["Service:InstalledVersionFile"])?.ToString() ?? "unknown",
+            ReadInstalledVersion(_configuration["Agent:InstalledVersionFile"])?.ToString() ?? "unknown");
 
         // If the Agent needs updating, the Service (and the AgentWatchdogService it hosts) must be
         // stopped *before* any Agent files are touched - otherwise the watchdog could race the update
@@ -124,6 +132,11 @@ public class UpdateCheckService : BackgroundService
                 await Task.Run(() => _serviceUpdater.StartService(), CancellationToken.None);
             }
         }
+
+        _logger.LogInformation(
+            "Update check complete. Installed versions: Service {InstalledService}, Agent {InstalledAgent}.",
+            ReadInstalledVersion(_configuration["Service:InstalledVersionFile"])?.ToString() ?? "unknown",
+            ReadInstalledVersion(_configuration["Agent:InstalledVersionFile"])?.ToString() ?? "unknown");
     }
 
     /// <summary>
@@ -157,6 +170,7 @@ public class UpdateCheckService : BackgroundService
     {
         if (string.IsNullOrWhiteSpace(update.DownloadUrl))
         {
+            _logger.LogInformation("{Component} manifest has no DownloadUrl configured; skipping.", componentName);
             return;
         }
 
@@ -169,6 +183,7 @@ public class UpdateCheckService : BackgroundService
         var installedVersion = ReadInstalledVersion(installedVersionPath);
         if (installedVersion is not null && installedVersion >= latestVersion)
         {
+            _logger.LogInformation("{Component} is up to date (installed {Installed}, manifest {Latest}).", componentName, installedVersion, latestVersion);
             return;
         }
 
@@ -194,6 +209,12 @@ public class UpdateCheckService : BackgroundService
             {
                 WriteInstalledVersion(installedVersionPath, latestVersion);
                 _logger.LogInformation("{Component} updated to version {Version}.", componentName, latestVersion);
+            }
+            else
+            {
+                _logger.LogError(
+                    "{Component} update to version {Version} was not applied; it remains on {Installed} and will be retried on the next check.",
+                    componentName, latestVersion, installedVersion?.ToString() ?? "unknown");
             }
         }
         finally

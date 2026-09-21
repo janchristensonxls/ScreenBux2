@@ -57,7 +57,7 @@ public class NotificationPresenter
                 Type = SignalGeneratorType.Sin
             };
 
-            using var wave = new WaveOutEvent();
+            using var wave = new WaveOut();
             wave.Init(signalGenerator.Take(TimeSpan.FromMilliseconds(300)));
             wave.Play();
 
