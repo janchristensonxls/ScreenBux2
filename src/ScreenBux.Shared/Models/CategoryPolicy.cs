@@ -16,7 +16,10 @@ public enum PolicyRuleAction
     Sleep = 2,
 
     /// <summary>Hibernate the device; falls back to Sleep if hibernation is unavailable/fails.</summary>
-    Hibernate = 3
+    Hibernate = 3,
+
+    /// <summary>Fully shut down (power off) the device.</summary>
+    PowerOff = 4
 }
 
 /// <summary>How a <see cref="CategoryPolicy"/> treats its category in the active mode.</summary>

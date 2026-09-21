@@ -50,4 +50,13 @@ public class PolicyConfiguration
     /// <c>ChildProfile.DailyBudgetMinutes</c>.
     /// </summary>
     public int? DailyBudgetMinutes { get; set; }
+
+    /// <summary>
+    /// Device-wide power action to take when <see cref="DailyBudgetMinutes"/> is exceeded.
+    /// Defaults to <see cref="PolicyRuleAction.Sleep"/> for backward compatibility. Only
+    /// <see cref="PolicyRuleAction.Sleep"/>, <see cref="PolicyRuleAction.Hibernate"/> and
+    /// <see cref="PolicyRuleAction.PowerOff"/> are meaningful here; other values are treated
+    /// as Sleep by the enforcement pipeline.
+    /// </summary>
+    public PolicyRuleAction DailyBudgetExceededAction { get; set; } = PolicyRuleAction.Sleep;
 }

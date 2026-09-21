@@ -86,9 +86,9 @@ public class ProcessMonitoringService : BackgroundService
                     // whichever rule system currently wins there. See
                     // docs/decisions/screen-time-usage-tracking.md.
                     _logger.LogWarning(
-                        "Daily usage budget exceeded ({TotalSeconds}s used); putting device to sleep.",
-                        _usageTracking.TotalSecondsToday);
-                    _powerAction.Sleep();
+                        "Daily usage budget exceeded ({TotalSeconds}s used); triggering {Action} action.",
+                        _usageTracking.TotalSecondsToday, config.DailyBudgetExceededAction);
+                    ExecutePowerAction(config.DailyBudgetExceededAction);
                     _lastPowerActionUtc = DateTime.UtcNow;
                 }
                 else if (!EnforceAlwaysRules())
@@ -132,7 +132,7 @@ public class ProcessMonitoringService : BackgroundService
             return false;
         }
 
-        var rule = activeRules.FirstOrDefault(r => r.Action is PolicyRuleAction.Sleep or PolicyRuleAction.Hibernate);
+        var rule = activeRules.FirstOrDefault(r => r.Action is PolicyRuleAction.Sleep or PolicyRuleAction.Hibernate or PolicyRuleAction.PowerOff);
         if (rule is null)
         {
             return false;
@@ -140,18 +140,32 @@ public class ProcessMonitoringService : BackgroundService
 
         _logger.LogWarning("Session rule {RuleName} triggered a device-wide {Action} action", rule.Name, rule.Action);
 
-        if (rule.Action == PolicyRuleAction.Hibernate)
-        {
-            _powerAction.Hibernate();
-        }
-        else
-        {
-            _powerAction.Sleep();
-        }
-
+        ExecutePowerAction(rule.Action);
         _lastPowerActionUtc = DateTime.UtcNow;
 
         return true;
+    }
+
+    /// <summary>
+    /// Dispatches to the appropriate <see cref="PowerActionService"/> method for the given
+    /// action. Any value other than Sleep/Hibernate/PowerOff (e.g. a mismatched
+    /// CloseProcess/KillProcessTree left in <see cref="PolicyConfiguration.DailyBudgetExceededAction"/>
+    /// by mistake) falls back to Sleep as the safe default.
+    /// </summary>
+    private void ExecutePowerAction(PolicyRuleAction action)
+    {
+        switch (action)
+        {
+            case PolicyRuleAction.Hibernate:
+                _powerAction.Hibernate();
+                break;
+            case PolicyRuleAction.PowerOff:
+                _powerAction.PowerOff();
+                break;
+            default:
+                _powerAction.Sleep();
+                break;
+        }
     }
 
     private async Task EnforcePoliciesAsync(PolicyConfiguration config, CancellationToken stoppingToken)
