@@ -28,6 +28,17 @@ public class ProcessMonitoringService : BackgroundService
     private readonly PolicySyncService _policySync;
     private readonly PowerActionService _powerAction;
 
+    /// <summary>
+    /// Minimum time to wait between forced Sleep/Hibernate power actions. Without this, a
+    /// wake-armed input device (keyboard/mouse) can resume the machine almost immediately
+    /// after SetSuspendState suspends it; on the very next monitoring tick the same
+    /// session-rule/budget condition is still true and the loop would suspend again right
+    /// away, producing a rapid sleep/wake oscillation instead of staying asleep.
+    /// </summary>
+    private static readonly TimeSpan PowerActionCooldown = TimeSpan.FromMinutes(2);
+
+    private DateTime? _lastPowerActionUtc;
+
     public ProcessMonitoringService(
         ILogger<ProcessMonitoringService> logger,
         PolicyService policyService,
@@ -64,6 +75,10 @@ public class ProcessMonitoringService : BackgroundService
                 {
                     _logger.LogDebug("Skipping enforcement; a time grant is active until {ExpiresAtUtc}.", _grantService.ExpiresAtUtc);
                 }
+                else if (IsPowerActionOnCooldown())
+                {
+                    _logger.LogDebug("Skipping power-action enforcement; still within cooldown after the last Sleep/Hibernate.");
+                }
                 else if (_usageTracking.IsBudgetExceeded)
                 {
                     // An independent, third enforcement check - deliberately not folded into
@@ -74,6 +89,7 @@ public class ProcessMonitoringService : BackgroundService
                         "Daily usage budget exceeded ({TotalSeconds}s used); putting device to sleep.",
                         _usageTracking.TotalSecondsToday);
                     _powerAction.Sleep();
+                    _lastPowerActionUtc = DateTime.UtcNow;
                 }
                 else if (!EnforceAlwaysRules())
                 {
@@ -97,6 +113,11 @@ public class ProcessMonitoringService : BackgroundService
     /// Returns true if a power action was executed (short-circuiting further per-process
     /// enforcement for this tick, since the device is about to suspend).
     /// </summary>
+    private bool IsPowerActionOnCooldown()
+    {
+        return _lastPowerActionUtc is { } last && DateTime.UtcNow - last < PowerActionCooldown;
+    }
+
     private bool EnforceAlwaysRules()
     {
         var activeRules = _policyService.GetActiveSessionRules();
@@ -127,6 +148,8 @@ public class ProcessMonitoringService : BackgroundService
         {
             _powerAction.Sleep();
         }
+
+        _lastPowerActionUtc = DateTime.UtcNow;
 
         return true;
     }
