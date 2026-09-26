@@ -9,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddDevExpressBlazor();
+
 // Authentication state (per-circuit JWT held in TokenProvider).
 builder.Services.AddScoped<TokenProvider>();
 builder.Services.AddScoped<TokenAuthenticationStateProvider>();

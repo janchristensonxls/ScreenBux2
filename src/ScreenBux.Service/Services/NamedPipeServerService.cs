@@ -28,6 +28,9 @@ public class NamedPipeServerService : BackgroundService
     private readonly NotificationRelayService _notificationRelay;
     private const string PipeName = "ScreenBuxServicePipe";
 
+    // How long to wait before re-checking whether another process has released the pipe name.
+    private static readonly TimeSpan PipeNameConflictRetryDelay = TimeSpan.FromSeconds(30);
+
     public NamedPipeServerService(
         ILogger<NamedPipeServerService> logger,
         PolicyService policyService,
@@ -66,81 +69,47 @@ public class NamedPipeServerService : BackgroundService
         await _policyService.LoadPolicyAsync();
         await _grantService.LoadGrantAsync();
 
+        // Until this process has created the pipe once, it asks for the *first* instance, so a
+        // name already owned by another process (typically the installed Windows Service while
+        // a dev copy runs via `dotnet run`) fails fast with one clear log message instead of an
+        // "Access to the path is denied" stack trace every second.
+        var ownsPipeName = false;
+        var pipeNameConflictLogged = false;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                PipeTransmissionMode transmissionMode = PipeTransmissionMode.Byte;
-                if (OperatingSystem.IsWindows())
-                {
-                    transmissionMode = PipeTransmissionMode.Message;
-                }
-
-                // The Service normally runs elevated (LocalSystem/Administrator via the SCM),
-                // while the Agent runs as an ordinary logged-in user. NamedPipeServerStream's
-                // default ACL only grants access to the creating account (and admins), so
-                // without an explicit, more permissive PipeSecurity here the Agent's
-                // ConnectAsync would be denied at the OS level - surfacing to the Agent only as
-                // a silent timeout/failure, never as a clear "access denied" message anywhere.
-                // Grant read/write to Authenticated Users so a normal user session can connect.
                 NamedPipeServerStream pipeServer;
-                if (OperatingSystem.IsWindows())
+                try
                 {
-                    var pipeSecurity = new PipeSecurity();
-
-                    // Grant read/write to Authenticated Users so a normal user session (the
-                    // Agent) can connect, without needing to be an administrator.
-                    var authenticatedUsers = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
-                    pipeSecurity.AddAccessRule(new PipeAccessRule(
-                        authenticatedUsers,
-                        PipeAccessRights.ReadWrite,
-                        AccessControlType.Allow));
-
-                    // A custom PipeSecurity REPLACES the default ACL entirely rather than
-                    // extending it, so the Service's own account (LocalSystem when running as
-                    // a Windows Service, or the interactive admin account when run via `dotnet
-                    // run`) must be explicitly re-granted full control here - otherwise pipe
-                    // creation itself fails with UnauthorizedAccessException, since the
-                    // creating process no longer has rights to its own pipe.
-                    var currentOwner = WindowsIdentity.GetCurrent().User;
-                    if (currentOwner is not null)
+                    pipeServer = CreatePipeServer(firstInstance: !ownsPipeName);
+                }
+                catch (UnauthorizedAccessException ex) when (!ownsPipeName && OperatingSystem.IsWindows())
+                {
+                    if (!pipeNameConflictLogged)
                     {
-                        pipeSecurity.AddAccessRule(new PipeAccessRule(
-                            currentOwner,
-                            PipeAccessRights.FullControl,
-                            AccessControlType.Allow));
+                        _logger.LogError(ex,
+                            "Cannot create named pipe '{PipeName}': it is already owned by another process. " +
+                            "Most likely the installed \"ScreenBux Parental Control Service\" (or another copy of " +
+                            "ScreenBux.Service) is running. Stop it first, e.g. from an elevated prompt: " +
+                            "Stop-Service \"ScreenBux Parental Control Service\". Agents cannot connect to this " +
+                            "instance until then. Retrying every {RetrySeconds}s.",
+                            PipeName, PipeNameConflictRetryDelay.TotalSeconds);
+                        pipeNameConflictLogged = true;
                     }
 
-                    var localSystem = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
-                    pipeSecurity.AddAccessRule(new PipeAccessRule(
-                        localSystem,
-                        PipeAccessRights.FullControl,
-                        AccessControlType.Allow));
-
-                    var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-                    pipeSecurity.AddAccessRule(new PipeAccessRule(
-                        administrators,
-                        PipeAccessRights.FullControl,
-                        AccessControlType.Allow));
-
-                    pipeServer = NamedPipeServerStreamAcl.Create(
-                        PipeName,
-                        PipeDirection.InOut,
-                        NamedPipeServerStream.MaxAllowedServerInstances,
-                        transmissionMode,
-                        PipeOptions.Asynchronous,
-                        inBufferSize: 0,
-                        outBufferSize: 0,
-                        pipeSecurity: pipeSecurity);
+                    await Task.Delay(PipeNameConflictRetryDelay, stoppingToken);
+                    continue;
                 }
-                else
+
+                if (!ownsPipeName)
                 {
-                    pipeServer = new NamedPipeServerStream(
-                        PipeName,
-                        PipeDirection.InOut,
-                        NamedPipeServerStream.MaxAllowedServerInstances,
-                        transmissionMode,
-                        PipeOptions.Asynchronous);
+                    ownsPipeName = true;
+                    if (pipeNameConflictLogged)
+                    {
+                        _logger.LogInformation("Named pipe '{PipeName}' is now available and owned by this instance", PipeName);
+                    }
                 }
 
                 try
@@ -173,6 +142,90 @@ public class NamedPipeServerService : BackgroundService
                 await Task.Delay(1000, stoppingToken); // Brief delay before retry
             }
         }
+    }
+
+    /// <summary>
+    /// Creates one server instance of the pipe. With <paramref name="firstInstance"/> (Windows
+    /// only) creation fails with <see cref="UnauthorizedAccessException"/> if any other process
+    /// already has an instance of <see cref="PipeName"/>.
+    /// </summary>
+    private static NamedPipeServerStream CreatePipeServer(bool firstInstance)
+    {
+        PipeTransmissionMode transmissionMode = PipeTransmissionMode.Byte;
+        if (OperatingSystem.IsWindows())
+        {
+            transmissionMode = PipeTransmissionMode.Message;
+        }
+
+        // The Service normally runs elevated (LocalSystem/Administrator via the SCM),
+        // while the Agent runs as an ordinary logged-in user. NamedPipeServerStream's
+        // default ACL only grants access to the creating account (and admins), so
+        // without an explicit, more permissive PipeSecurity here the Agent's
+        // ConnectAsync would be denied at the OS level - surfacing to the Agent only as
+        // a silent timeout/failure, never as a clear "access denied" message anywhere.
+        // Grant read/write to Authenticated Users so a normal user session can connect.
+        if (OperatingSystem.IsWindows())
+        {
+            var pipeSecurity = new PipeSecurity();
+
+            // Grant read/write to Authenticated Users so a normal user session (the
+            // Agent) can connect, without needing to be an administrator.
+            var authenticatedUsers = new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                authenticatedUsers,
+                PipeAccessRights.ReadWrite,
+                AccessControlType.Allow));
+
+            // A custom PipeSecurity REPLACES the default ACL entirely rather than
+            // extending it, so the Service's own account (LocalSystem when running as
+            // a Windows Service, or the interactive admin account when run via `dotnet
+            // run`) must be explicitly re-granted full control here - otherwise pipe
+            // creation itself fails with UnauthorizedAccessException, since the
+            // creating process no longer has rights to its own pipe.
+            var currentOwner = WindowsIdentity.GetCurrent().User;
+            if (currentOwner is not null)
+            {
+                pipeSecurity.AddAccessRule(new PipeAccessRule(
+                    currentOwner,
+                    PipeAccessRights.FullControl,
+                    AccessControlType.Allow));
+            }
+
+            var localSystem = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                localSystem,
+                PipeAccessRights.FullControl,
+                AccessControlType.Allow));
+
+            var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+            pipeSecurity.AddAccessRule(new PipeAccessRule(
+                administrators,
+                PipeAccessRights.FullControl,
+                AccessControlType.Allow));
+
+            var options = PipeOptions.Asynchronous;
+            if (firstInstance)
+            {
+                options |= PipeOptions.FirstPipeInstance;
+            }
+
+            return NamedPipeServerStreamAcl.Create(
+                PipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                transmissionMode,
+                options,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                pipeSecurity: pipeSecurity);
+        }
+
+        return new NamedPipeServerStream(
+            PipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            transmissionMode,
+            PipeOptions.Asynchronous);
     }
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)

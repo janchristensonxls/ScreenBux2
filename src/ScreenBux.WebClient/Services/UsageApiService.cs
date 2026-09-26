@@ -36,6 +36,21 @@ public class UsageApiService
         return await response.Content.ReadFromJsonAsync<UsageSummaryDto>();
     }
 
+    /// <summary>Per-day summaries for every effective day from <paramref name="startDate"/> to <paramref name="endDate"/> (inclusive), oldest first.</summary>
+    public async Task<List<UsageSummaryDto>> GetRangeAsync(Guid childProfileId, DateOnly startDate, DateOnly endDate)
+    {
+        var url = $"api/usage/{childProfileId}/history?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+
+        using var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new List<UsageSummaryDto>();
+        }
+
+        var history = await response.Content.ReadFromJsonAsync<List<UsageSummaryDto>>();
+        return history ?? new List<UsageSummaryDto>();
+    }
+
     public async Task<List<UsageSummaryDto>> GetHistoryAsync(Guid childProfileId, int days = 7, DateOnly? endDate = null)
     {
         var url = $"api/usage/{childProfileId}/history?days={days}";

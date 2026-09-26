@@ -1,10 +1,14 @@
 @page "/usage-stats"
 @attribute [Authorize]
+@using System.Globalization
+@using Color = System.Drawing.Color
+@using ColorTranslator = System.Drawing.ColorTranslator
 @using ScreenBux.Shared.Models
 @using ScreenBux.Shared.Models.Devices
 @using ScreenBux.WebClient.Services
 @inject UsageApiService UsageApiService
 @inject ChildProfilesApiService ChildProfilesApiService
+@inject ILogger<UsageStats> Logger
 
 <PageTitle>Usage Stats</PageTitle>
 
@@ -20,15 +24,74 @@ else if (!_children.Any())
 }
 else
 {
-    <div class="mb-3">
-        <label class="form-label">Child</label>
-        <select class="form-select" style="max-width: 300px;" value="@_selectedChildId" @onchange="OnChildChanged">
-            @foreach (var child in _children)
-            {
-                <option value="@child.Id">@child.DisplayName</option>
-            }
-        </select>
+    @* Filters: one row above the chart *@
+    <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+        <div>
+            <label class="form-label">Child</label>
+            <select class="form-select" style="min-width: 200px;" value="@_selectedChildId" @onchange="OnChildChanged">
+                @foreach (var child in _children)
+                {
+                    <option value="@child.Id">@child.DisplayName</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label class="form-label">Period</label>
+            <div class="btn-group d-flex" role="group">
+                @foreach (var preset in Presets)
+                {
+                    <button type="button"
+                            class="btn btn-sm @(_activePreset == preset.Key ? "btn-primary" : "btn-outline-primary")"
+                            @onclick="() => ApplyPresetAsync(preset.Key)">
+                        @preset.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div style="width: 260px;">
+            <label class="form-label">Date range</label>
+            <DxDateRangePicker T="DateOnly"
+                               StartDate="_startDate"
+                               EndDate="_endDate"
+                               StartDateChanged="OnStartDateChanged"
+                               EndDateChanged="OnEndDateChanged"
+                               MaxDate="DateTime.Today"
+                               FirstDayOfWeek="DayOfWeek.Monday"
+                               DisplayFormat="yyyy-MM-dd" />
+        </div>
+
+        <div>
+            <label class="form-label">Group by</label>
+            <select class="form-select" value="@_granularity" @onchange="OnGranularityChanged">
+                @foreach (var g in Enum.GetValues<Granularity>())
+                {
+                    <option value="@g">@g</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label class="form-label">Chart</label>
+            <select class="form-select" value="@_chartType" @onchange="OnChartTypeChanged">
+                <option value="@ChartSeriesType.StackedBar">Stacked bar</option>
+                <option value="@ChartSeriesType.StackedArea">Stacked area</option>
+                <option value="@ChartSeriesType.FullStackedBar">100% bar</option>
+                <option value="@ChartSeriesType.FullStackedArea">100% area</option>
+            </select>
+        </div>
     </div>
+
+    @if (_rangeError is not null)
+    {
+        <div class="alert alert-warning py-2">@_rangeError</div>
+    }
+
+    @if (_loadError is not null)
+    {
+        <div class="alert alert-danger py-2">@_loadError</div>
+    }
 
     @if (_isLoadingStats)
     {
@@ -36,76 +99,216 @@ else
     }
     else
     {
-        <div class="card mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Today</h5>
-                @if (_today is null)
-                {
-                    <p class="text-muted">No usage recorded today.</p>
-                }
-                else
-                {
-                    <p><strong>Total:</strong> @FormatDuration(_today.TotalSeconds)</p>
-
-                    @if (_today.ByCategory.Any())
-                    {
-                        <h6>By category</h6>
-                        @foreach (var category in _today.ByCategory.OrderByDescending(c => c.Seconds))
-                        {
-                            var percent = _today.TotalSeconds > 0 ? (int)(100 * category.Seconds / _today.TotalSeconds) : 0;
-                            <div class="mb-2">
-                                <div class="d-flex justify-content-between">
-                                    <span>@category.AppCategoryName</span>
-                                    <span class="text-muted">@FormatDuration(category.Seconds)</span>
-                                </div>
-                                <div class="progress" style="height: 8px;">
-                                    <div class="progress-bar" role="progressbar" style="width: @(percent)%;"></div>
-                                </div>
-                            </div>
-                        }
-                    }
-                }
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="card h-100"><div class="card-body">
+                    <div class="text-muted small">Total</div>
+                    <div class="fs-3 fw-semibold">@FormatDuration(_totalSeconds)</div>
+                    <div class="text-muted small">@_startDate.ToString("MMM d") – @_endDate.ToString("MMM d")</div>
+                </div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card h-100"><div class="card-body">
+                    <div class="text-muted small">Average per day</div>
+                    <div class="fs-3 fw-semibold">@FormatDuration(_averageSeconds)</div>
+                    <div class="text-muted small">over @_dayCount day@(_dayCount == 1 ? "" : "s")</div>
+                </div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card h-100"><div class="card-body">
+                    <div class="text-muted small">Busiest day</div>
+                    <div class="fs-3 fw-semibold">@(_busiestDay is null ? "–" : FormatDuration(_busiestDay.TotalSeconds))</div>
+                    <div class="text-muted small">@(_busiestDay?.EffectiveDate.ToString("ddd, MMM d") ?? "No usage")</div>
+                </div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="card h-100"><div class="card-body">
+                    <div class="text-muted small">Top category</div>
+                    <div class="fs-3 fw-semibold text-truncate">@(_categoryTotals.FirstOrDefault()?.Name ?? "–")</div>
+                    <div class="text-muted small">@(_categoryTotals.Any() ? FormatDuration(_categoryTotals[0].Seconds) : "No usage")</div>
+                </div></div>
             </div>
         </div>
 
         <div class="card mb-3">
             <div class="card-body">
-                <h5 class="card-title">Last @_historyDays days</h5>
-                @if (!_history.Any())
+                <h5 class="card-title">Usage by category</h5>
+                @if (_totalSeconds == 0)
                 {
-                    <p class="text-muted">No history yet.</p>
+                    <p class="text-muted mb-0">No usage recorded in this period.</p>
                 }
                 else
                 {
-                    var maxSeconds = Math.Max(1, _history.Max(h => h.TotalSeconds));
-                    <div class="d-flex align-items-end gap-2" style="height: 160px;">
-                        @foreach (var day in _history)
+                    <DxChart Data="_chartPoints" Width="100%" Height="380px" BarGroupPadding="0.3">
+                        @foreach (var category in _categories)
                         {
-                            var barHeight = (int)(140 * day.TotalSeconds / maxSeconds);
-                            <div class="d-flex flex-column align-items-center" style="width: 48px;">
-                                <div class="text-muted small">@FormatDuration(day.TotalSeconds)</div>
-                                <div class="bg-primary" style="width: 24px; height: @(barHeight)px;" title="@day.EffectiveDate.ToString("yyyy-MM-dd")"></div>
-                                <div class="small">@day.EffectiveDate.ToString("MMM d")</div>
-                            </div>
+                            // One explicit series per category (not DxChartCommonSeries/NameField)
+                            // so each category gets its own fixed color.
+                            var name = category.Name;
+                            switch (_chartType)
+                            {
+                                case ChartSeriesType.StackedArea:
+                                    <DxChartStackedAreaSeries T="ChartPoint" TArgument="string" TValue="double"
+                                                              Name="@name" Color="category.Color"
+                                                              Filter="p => p.Category == name"
+                                                              ArgumentField="p => p.Period" ValueField="p => p.Minutes" />
+                                    break;
+                                case ChartSeriesType.FullStackedBar:
+                                    <DxChartFullStackedBarSeries T="ChartPoint" TArgument="string" TValue="double"
+                                                                 Name="@name" Color="category.Color"
+                                                                 Filter="p => p.Category == name"
+                                                                 ArgumentField="p => p.Period" ValueField="p => p.Minutes" />
+                                    break;
+                                case ChartSeriesType.FullStackedArea:
+                                    <DxChartFullStackedAreaSeries T="ChartPoint" TArgument="string" TValue="double"
+                                                                  Name="@name" Color="category.Color"
+                                                                  Filter="p => p.Category == name"
+                                                                  ArgumentField="p => p.Period" ValueField="p => p.Minutes" />
+                                    break;
+                                default:
+                                    <DxChartStackedBarSeries T="ChartPoint" TArgument="string" TValue="double"
+                                                             Name="@name" Color="category.Color"
+                                                             Filter="p => p.Category == name"
+                                                             ArgumentField="p => p.Period" ValueField="p => p.Minutes" />
+                                    break;
+                            }
                         }
-                    </div>
+                        <DxChartArgumentAxis>
+                            <DxChartAxisLabel Overlap="ChartAxisLabelOverlap.Hide" />
+                        </DxChartArgumentAxis>
+                        <DxChartValueAxis>
+                            <DxChartAxisTitle Text="@(IsFullStacked ? "Share of time" : "Minutes")" />
+                        </DxChartValueAxis>
+                        <DxChartLegend Position="RelativePosition.Outside"
+                                       HorizontalAlignment="HorizontalAlignment.Center"
+                                       VerticalAlignment="VerticalEdge.Bottom"
+                                       AllowToggleSeries="true" />
+                        <DxChartTooltip Enabled="true" Position="RelativePosition.Outside">
+                            <div class="p-2">
+                                <div class="small text-muted">@context.Point.Argument</div>
+                                <div><strong>@context.Point.SeriesName</strong>: @FormatDuration((long)(Convert.ToDouble(context.Point.Value) * 60))</div>
+                                <div class="small text-muted">Period total: @FormatDuration(PeriodTotalSeconds(context.Point.Argument?.ToString()))</div>
+                            </div>
+                        </DxChartTooltip>
+                    </DxChart>
                 }
             </div>
         </div>
+
+        @if (_categoryTotals.Any())
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Category totals</h5>
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-end">Time</th>
+                                <th class="text-end">Per day</th>
+                                <th style="width: 40%;">Share</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var category in _categoryTotals)
+                            {
+                                var percent = _totalSeconds > 0 ? 100.0 * category.Seconds / _totalSeconds : 0;
+                                <tr>
+                                    <td>
+                                        <span class="d-inline-block rounded-1 me-2" style="width: 10px; height: 10px; background: @ColorTranslator.ToHtml(category.Color);"></span>
+                                        @category.Name
+                                    </td>
+                                    <td class="text-end">@FormatDuration(category.Seconds)</td>
+                                    <td class="text-end">@FormatDuration(category.Seconds / Math.Max(1, _dayCount))</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 8px;">
+                                                <div class="progress-bar" role="progressbar"
+                                                     style="width: @(percent.ToString("0.#", CultureInfo.InvariantCulture))%; background: @ColorTranslator.ToHtml(category.Color);"></div>
+                                            </div>
+                                            <span class="text-muted small" style="width: 3.5em; text-align: right;">@percent.ToString("0")%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
     }
 }
 
 @code {
+    private enum Granularity { Auto, Day, Week, Month }
+
+    private record ChartPoint(string Period, string Category, double Minutes);
+
+    private record CategoryInfo(string Name, long Seconds, Color Color);
+
+    private record Preset(string Key, string Label);
+
+    private static readonly Preset[] Presets =
+    {
+        new("today", "Today"),
+        new("7d", "7 days"),
+        new("30d", "30 days"),
+        new("90d", "90 days"),
+        new("month", "This month"),
+        new("year", "12 months")
+    };
+
+    // Validated categorical palette (fixed order, CVD-safe on adjacent pairs). Categories beyond
+    // the palette size are folded into "Other" rather than generating new hues.
+    private static readonly Color[] Palette =
+    {
+        ColorTranslator.FromHtml("#2a78d6"), // blue
+        ColorTranslator.FromHtml("#eb6834"), // orange
+        ColorTranslator.FromHtml("#1baf7a"), // aqua
+        ColorTranslator.FromHtml("#eda100"), // yellow
+        ColorTranslator.FromHtml("#e87ba4"), // magenta
+        ColorTranslator.FromHtml("#008300"), // green
+        ColorTranslator.FromHtml("#4a3aa7"), // violet
+        ColorTranslator.FromHtml("#e34948")  // red
+    };
+
+    private static readonly Color OtherColor = ColorTranslator.FromHtml("#8a8984");
+
+    private const string OtherCategoryName = "Other";
+    private const int MaxRangeDays = 366;
+
     private List<ChildProfileDto> _children = new();
     private Guid? _selectedChildId;
-    private UsageSummaryDto? _today;
-    private List<UsageSummaryDto> _history = new();
     private bool _isLoadingChildren = true;
     private bool _isLoadingStats;
-    private const int _historyDays = 7;
+    private string? _rangeError;
+    private string? _loadError;
+    private int _loadVersion;
+
+    private DateOnly _startDate;
+    private DateOnly _endDate;
+    private string? _activePreset = "7d";
+    private Granularity _granularity = Granularity.Auto;
+    private ChartSeriesType _chartType = ChartSeriesType.StackedBar;
+
+    private List<UsageSummaryDto> _history = new();
+    private List<ChartPoint> _chartPoints = new();
+    private List<CategoryInfo> _categories = new();
+    private List<CategoryInfo> _categoryTotals = new();
+    private Dictionary<string, long> _periodTotals = new();
+    private long _totalSeconds;
+    private long _averageSeconds;
+    private int _dayCount;
+    private UsageSummaryDto? _busiestDay;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private bool IsFullStacked => _chartType is ChartSeriesType.FullStackedBar or ChartSeriesType.FullStackedArea;
 
     protected override async Task OnInitializedAsync()
     {
+        SetPresetRange("7d");
+
         _isLoadingChildren = true;
         _children = (await ChildProfilesApiService.ListProfilesAsync()).ToList();
         _isLoadingChildren = false;
@@ -126,6 +329,65 @@ else
         }
     }
 
+    private async Task ApplyPresetAsync(string key)
+    {
+        SetPresetRange(key);
+        await LoadStatsAsync();
+    }
+
+    private void SetPresetRange(string key)
+    {
+        var today = Today;
+        _activePreset = key;
+        _endDate = today;
+        _startDate = key switch
+        {
+            "today" => today,
+            "30d" => today.AddDays(-29),
+            "90d" => today.AddDays(-89),
+            "month" => new DateOnly(today.Year, today.Month, 1),
+            "year" => today.AddMonths(-12).AddDays(1),
+            _ => today.AddDays(-6)
+        };
+    }
+
+    private async Task OnStartDateChanged(DateOnly value)
+    {
+        _startDate = value;
+        _activePreset = null;
+        if (_endDate >= _startDate)
+        {
+            await LoadStatsAsync();
+        }
+    }
+
+    private async Task OnEndDateChanged(DateOnly value)
+    {
+        _endDate = value;
+        _activePreset = null;
+        if (_endDate >= _startDate)
+        {
+            await LoadStatsAsync();
+        }
+    }
+
+    private void OnGranularityChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<Granularity>(args.Value?.ToString(), out var granularity))
+        {
+            _granularity = granularity;
+            BuildChartData();
+        }
+    }
+
+    private void OnChartTypeChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<ChartSeriesType>(args.Value?.ToString(), out var chartType))
+        {
+            _chartType = chartType;
+        }
+    }
+
     private async Task LoadStatsAsync()
     {
         if (_selectedChildId is not Guid childId)
@@ -133,14 +395,163 @@ else
             return;
         }
 
+        _rangeError = null;
+        if (_endDate.DayNumber - _startDate.DayNumber + 1 > MaxRangeDays)
+        {
+            _startDate = _endDate.AddDays(-(MaxRangeDays - 1));
+            _rangeError = $"Ranges are limited to {MaxRangeDays} days; the start date was adjusted.";
+        }
+
+        // Picking a range in the date picker raises StartDateChanged and EndDateChanged back to
+        // back, so two loads can overlap; only the most recent one may apply its result.
+        var loadVersion = ++_loadVersion;
+        var startDate = _startDate;
+        var endDate = _endDate;
+
+        _loadError = null;
         _isLoadingStats = true;
         StateHasChanged();
 
-        _today = await UsageApiService.GetSummaryAsync(childId);
-        _history = await UsageApiService.GetHistoryAsync(childId, _historyDays);
+        try
+        {
+            var history = await UsageApiService.GetRangeAsync(childId, startDate, endDate);
+            if (loadVersion != _loadVersion)
+            {
+                return;
+            }
 
-        _isLoadingStats = false;
+            _history = history;
+            BuildChartData();
+        }
+        catch (Exception ex)
+        {
+            if (loadVersion != _loadVersion)
+            {
+                return;
+            }
+
+            // Keep the circuit alive: show the failure on the page instead of terminating it.
+            Logger.LogError(ex, "Failed to load usage for child {ChildId} from {StartDate} to {EndDate}", childId, startDate, endDate);
+            _history = new();
+            BuildChartData();
+            _loadError = $"Could not load usage: {ex.Message}";
+        }
+        finally
+        {
+            if (loadVersion == _loadVersion)
+            {
+                _isLoadingStats = false;
+            }
+        }
     }
+
+    private void BuildChartData()
+    {
+        _dayCount = Math.Max(1, _endDate.DayNumber - _startDate.DayNumber + 1);
+        _totalSeconds = _history.Sum(h => h.TotalSeconds);
+        _averageSeconds = _totalSeconds / _dayCount;
+        _busiestDay = _history.Where(h => h.TotalSeconds > 0).MaxBy(h => h.TotalSeconds);
+
+        // Colors follow the category (alphabetical, "Other" last), never its rank, so a
+        // category keeps its color when the range changes its position in the totals.
+        var secondsByCategory = _history
+            .SelectMany(h => h.ByCategory)
+            .GroupBy(c => c.AppCategoryName)
+            .ToDictionary(g => g.Key, g => g.Sum(c => c.Seconds));
+
+        var named = secondsByCategory.Keys
+            .Where(n => n != OtherCategoryName)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Keep the biggest categories as their own series; fold the rest into "Other".
+        var kept = named
+            .OrderByDescending(n => secondsByCategory[n])
+            .Take(Palette.Length)
+            .ToHashSet();
+
+        var categoryMap = new Dictionary<string, string>();
+        foreach (var name in secondsByCategory.Keys)
+        {
+            categoryMap[name] = kept.Contains(name) ? name : OtherCategoryName;
+        }
+
+        var paletteIndex = 0;
+        var colors = new Dictionary<string, Color>();
+        foreach (var name in named.Where(kept.Contains))
+        {
+            colors[name] = Palette[paletteIndex++];
+        }
+
+        var hasOther = categoryMap.Values.Contains(OtherCategoryName);
+        if (hasOther)
+        {
+            colors[OtherCategoryName] = OtherColor;
+        }
+
+        _categories = colors
+            .Select(kv => new CategoryInfo(
+                kv.Key,
+                secondsByCategory.Where(s => categoryMap[s.Key] == kv.Key).Sum(s => s.Value),
+                kv.Value))
+            .ToList();
+
+        _categoryTotals = _categories
+            .Where(c => c.Seconds > 0)
+            .OrderByDescending(c => c.Seconds)
+            .ToList();
+
+        // One point per (period, category) - zero-filled so stacked areas don't collapse
+        // across gaps.
+        var effective = _granularity == Granularity.Auto ? ResolveAutoGranularity(_dayCount) : _granularity;
+        var periods = _history
+            .GroupBy(h => PeriodStart(h.EffectiveDate, effective))
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        _chartPoints = new List<ChartPoint>();
+        _periodTotals = new Dictionary<string, long>();
+        foreach (var period in periods)
+        {
+            var label = FormatPeriod(period.Key, effective);
+            var byCategory = period
+                .SelectMany(h => h.ByCategory)
+                .GroupBy(c => categoryMap[c.AppCategoryName])
+                .ToDictionary(g => g.Key, g => g.Sum(c => c.Seconds));
+
+            _periodTotals[label] = byCategory.Values.Sum();
+
+            foreach (var category in _categories)
+            {
+                var seconds = byCategory.GetValueOrDefault(category.Name);
+                _chartPoints.Add(new ChartPoint(label, category.Name, Math.Round(seconds / 60.0, 1)));
+            }
+        }
+    }
+
+    private long PeriodTotalSeconds(string? label) =>
+        label is not null ? _periodTotals.GetValueOrDefault(label) : 0;
+
+    private static Granularity ResolveAutoGranularity(int days) => days switch
+    {
+        <= 45 => Granularity.Day,
+        <= 180 => Granularity.Week,
+        _ => Granularity.Month
+    };
+
+    private static DateOnly PeriodStart(DateOnly date, Granularity granularity) => granularity switch
+    {
+        Granularity.Week => date.AddDays(-(((int)date.DayOfWeek + 6) % 7)), // Monday-based weeks
+        Granularity.Month => new DateOnly(date.Year, date.Month, 1),
+        _ => date
+    };
+
+    private static string FormatPeriod(DateOnly start, Granularity granularity) => granularity switch
+    {
+        Granularity.Week => $"W{ISOWeek.GetWeekOfYear(start.ToDateTime(TimeOnly.MinValue))} ({start:MMM d})",
+        Granularity.Month => start.ToString("MMM yyyy"),
+        _ => start.ToString("ddd MMM d")
+    };
 
     private static string FormatDuration(long seconds)
     {

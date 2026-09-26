@@ -16,6 +16,8 @@ namespace ScreenBux.WebServer.Controllers;
 [Authorize]
 public class UsageController : ControllerBase
 {
+    private const int MaxHistoryDays = 366;
+
     private readonly ILogger<UsageController> _logger;
     private readonly IUsageStore _usageStore;
     private readonly IHubContext<MonitoringHub> _hubContext;
@@ -89,9 +91,13 @@ public class UsageController : ControllerBase
         }
     }
 
-    /// <summary>Parent (or a device token for one of the child's devices) fetches a short usage history, ending today (or an optional end date), for stats/trend views.</summary>
+    /// <summary>
+    /// Parent (or a device token for one of the child's devices) fetches a usage history, ending
+    /// today (or an optional end date), for stats/trend views. Either <paramref name="days"/> or an
+    /// explicit <paramref name="startDate"/> (which takes precedence) sets the range length.
+    /// </summary>
     [HttpGet("{childProfileId:guid}/history")]
-    public async Task<ActionResult<List<UsageSummaryDto>>> GetHistory(Guid childProfileId, [FromQuery] int days = 7, [FromQuery] DateOnly? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<List<UsageSummaryDto>>> GetHistory(Guid childProfileId, [FromQuery] int days = 7, [FromQuery] DateOnly? endDate = null, [FromQuery] DateOnly? startDate = null, CancellationToken cancellationToken = default)
     {
         var accountId = User.GetAccountId();
         if (accountId is null)
@@ -99,12 +105,22 @@ public class UsageController : ControllerBase
             return Unauthorized();
         }
 
-        if (days is < 1 or > 90)
+        var end = endDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        if (startDate is DateOnly start)
         {
-            return BadRequest(new { message = "Days must be between 1 and 90." });
+            if (start > end)
+            {
+                return BadRequest(new { message = "StartDate must not be after EndDate." });
+            }
+
+            days = end.DayNumber - start.DayNumber + 1;
         }
 
-        var end = endDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        if (days is < 1 or > MaxHistoryDays)
+        {
+            return BadRequest(new { message = $"The range must be between 1 and {MaxHistoryDays} days." });
+        }
 
         try
         {
