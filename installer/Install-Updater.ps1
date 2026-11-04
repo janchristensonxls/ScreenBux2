@@ -112,7 +112,27 @@ function Assert-Administrator {
 	}
 }
 
+function Assert-DotNetDesktopRuntime {
+	# One prerequisite for the whole client: the .NET Desktop Runtime 10 (x64). The Agent (WPF)
+	# needs Microsoft.WindowsDesktop.App; the Updater and Service only need Microsoft.NETCore.App,
+	# which the Desktop Runtime installer includes. Installing only the plain ".NET Runtime" lets
+	# the Updater/Service start but leaves the Agent unable to run.
+	$major = 10
+	$dotnetRoot = if ($env:DOTNET_ROOT) { $env:DOTNET_ROOT } else { Join-Path $env:ProgramFiles 'dotnet' }
+	$desktopDir = Join-Path $dotnetRoot 'shared\Microsoft.WindowsDesktop.App'
+	$found = (Test-Path $desktopDir) -and (Get-ChildItem -Path $desktopDir -Directory -Filter "$major.*" -ErrorAction SilentlyContinue)
+	if (-not $found) {
+		throw ("The .NET Desktop Runtime $major (x64) is not installed. It is required by the ScreenBux Agent " +
+			"and also covers the Updater and Service.`n" +
+			"Install it with:  winget install Microsoft.DotNet.DesktopRuntime.$major`n" +
+			"or download "".NET Desktop Runtime $major.x - Windows x64"" from https://dotnet.microsoft.com/download/dotnet/$major.0")
+	}
+	Write-Host "Found .NET Desktop Runtime $major (x64)."
+}
+
 function Install-Updater {
+	Assert-DotNetDesktopRuntime
+
 	if (-not $PublishedOutputPath) {
 		throw "-PublishedOutputPath is required for install. Run 'dotnet publish src/ScreenBux.Updater -c Release -o <path>' first."
 	}
