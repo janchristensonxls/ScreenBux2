@@ -8,10 +8,11 @@
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
         Background="Transparent" SizeToContent="WidthAndHeight"
         WindowStartupLocation="Manual">
-    <Border Background="#E6202020" CornerRadius="8" Padding="18" MinWidth="280" MaxWidth="420">
+    <Border x:Name="RootBorder" Background="#E6202020" CornerRadius="8" Padding="18" MinWidth="280" MaxWidth="420">
         <StackPanel>
             <TextBlock x:Name="TitleText" FontSize="17" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"/>
-            <TextBlock x:Name="MessageText" FontSize="13" Foreground="#DDDDDD" Margin="0,6,0,12" TextWrapping="Wrap"/>
+            <TextBlock x:Name="MessageText" FontSize="13" Foreground="#DDDDDD" Margin="0,6,0,4" TextWrapping="Wrap"/>
+            <TextBlock x:Name="TimeText" FontSize="11" Foreground="#999999" Margin="0,0,0,10"/>
             <Button x:Name="DismissButton" Content="OK" HorizontalAlignment="Right"
                     Padding="16,4" Click="DismissButton_Click"/>
         </StackPanel>

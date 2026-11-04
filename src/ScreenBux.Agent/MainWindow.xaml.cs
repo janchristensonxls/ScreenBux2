@@ -48,6 +48,8 @@ public partial class MainWindow : Window
 
         _monitoringService.StatusChanged += OnStatusChanged;
         _monitoringService.ProcessDetected += OnProcessDetected;
+        _monitoringService.NotificationShown += OnNotificationShown;
+        RefreshMessages();
 
         InitializeNotifyIcon();
 
@@ -69,11 +71,13 @@ public partial class MainWindow : Window
 
         var contextMenu = new Forms.ContextMenuStrip();
         var showItem = new Forms.ToolStripMenuItem("Show", null, (_, _) => ShowMainWindow());
+        var messagesItem = new Forms.ToolStripMenuItem("Messages...", null, (_, _) => ShowMessages());
         _linkDeviceMenuItem = new Forms.ToolStripMenuItem("Link Device...", null, (_, _) => OpenLinkDeviceWindow())
         {
             Visible = false
         };
         contextMenu.Items.Add(showItem);
+        contextMenu.Items.Add(messagesItem);
         contextMenu.Items.Add(new Forms.ToolStripSeparator());
         contextMenu.Items.Add(_linkDeviceMenuItem);
 
@@ -157,6 +161,43 @@ public partial class MainWindow : Window
         catch (ArgumentOutOfRangeException)
         {
             _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+        }
+    }
+
+    /// <summary>Opens the main window on the Messages tab.</summary>
+    private void ShowMessages()
+    {
+        ShowMainWindow();
+        MainTabs.SelectedItem = MessagesTab;
+    }
+
+    private void RefreshMessages()
+    {
+        var entries = _monitoringService.MessageHistory.Entries;
+        MessagesList.ItemsSource = entries;
+        MessagesHint.Text = entries.Count == 0
+            ? "Messages from your parent and time warnings appear here."
+            : $"{entries.Count} message{(entries.Count == 1 ? "" : "s")} (newest first)";
+    }
+
+    private void OnNotificationShown(object? sender, ScreenBux.Agent.Services.MessageHistoryEntry entry)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            RefreshMessages();
+            if (entry.Severity == ScreenBux.Shared.Messages.NotificationSeverity.ParentMessage)
+            {
+                MainTabs.SelectedItem = MessagesTab;
+            }
+        });
+    }
+
+    private void ClearMessages_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.MessageBox.Show(this, "Clear all messages?", "ScreenBux", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        {
+            _monitoringService.MessageHistory.Clear();
+            RefreshMessages();
         }
     }
 
@@ -448,7 +489,7 @@ public partial class MainWindow : Window
     {
         var linked = PolicyStorage.IsDeviceLinked();
         NotLinkedPanel.Visibility = linked ? Visibility.Collapsed : Visibility.Visible;
-        LogPanel.Visibility = linked ? Visibility.Visible : Visibility.Collapsed;
+        MainTabs.Visibility = linked ? Visibility.Visible : Visibility.Collapsed;
         if (_linkDeviceMenuItem is not null)
         {
             _linkDeviceMenuItem.Visible = !linked;

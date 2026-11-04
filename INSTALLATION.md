@@ -3,7 +3,12 @@
 ## Prerequisites
 
 - Windows 10/11 (for Service and Agent components)
-- .NET 10 Runtime or SDK
+- **.NET Desktop Runtime 10 (x64)** on every child PC. This one package covers all three client
+  parts: the Agent (WPF) needs the *Desktop* runtime, and it includes the base .NET runtime that
+  the Updater and Service use. The plain ".NET Runtime 10" is **not** enough - the Service starts
+  but the Agent won't. Install with `winget install Microsoft.DotNet.DesktopRuntime.10`, or
+  download ".NET Desktop Runtime 10.x – Windows x64" from https://dotnet.microsoft.com/download/dotnet/10.0.
+  `Install-Updater.ps1` checks for it before installing.
 - Administrator privileges (for installing the Windows Service)
 
 ## Installation Steps
@@ -213,7 +218,8 @@ a version upgrade.
 
 1. Check Windows Event Viewer for error messages
 2. Verify the service executable path is correct
-3. Ensure .NET 10.0 runtime is installed
+3. Ensure the .NET Desktop Runtime 10 (x64) is installed (`dotnet --list-runtimes` should list
+   `Microsoft.WindowsDesktop.App 10.x`)
 4. Check that the service account has appropriate permissions
 
 ### Agent can't connect to Service

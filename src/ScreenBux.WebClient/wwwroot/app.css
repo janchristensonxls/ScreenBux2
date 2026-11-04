@@ -78,3 +78,10 @@ h1:focus {
 .pe-legend { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: middle; }
 .pe-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #dc3545; }
 .pe-daystart { position: absolute; top: 0; bottom: 0; border-left: 2px dashed #fd7e14; }
+.pe-assign-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; }
+.pe-assign-card { border: 1px solid #e3e6ea; border-radius: .5rem; padding: .6rem .75rem; background: #fff; }
+.pe-assign-default { background: #f8f9fa; border-style: dashed; }
+.pe-user-chip { background: #e7f1ff; color: #0a58ca; font-weight: 500; }
+.list-group-item.active .pe-user-chip { background: rgba(255,255,255,.25); color: #fff; }
+.pe-shared-banner { background: #fff8e1; }
+.pe-msgbox { border-top: 1px solid #e3e6ea; padding-top: .5rem; }

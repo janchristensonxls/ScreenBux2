@@ -66,9 +66,26 @@ public class PolicyApiService
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task ActivateProfileAsync(Guid profileId)
+    /// <summary>Activates a mode for one child, or (childProfileId null) as the account default.</summary>
+    public async Task ActivateProfileAsync(Guid profileId, Guid? childProfileId = null)
     {
-        var response = await _httpClient.PostAsync($"api/policy/profiles/{profileId}/activate", null);
+        var url = childProfileId is Guid childId
+            ? $"api/policy/profiles/{profileId}/activate?childProfileId={childId}"
+            : $"api/policy/profiles/{profileId}/activate";
+        var response = await _httpClient.PostAsync(url, null);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Makes a mode the default and puts every child on it.</summary>
+    public async Task ActivateProfileForEveryoneAsync(Guid profileId)
+    {
+        var response = await _httpClient.PostAsync($"api/policy/profiles/{profileId}/activate-all", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<PolicyAssignmentsDto> GetAssignmentsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<PolicyAssignmentsDto>("api/policy/assignments", PolicyJsonOptions.Default)
+               ?? new PolicyAssignmentsDto();
     }
 }

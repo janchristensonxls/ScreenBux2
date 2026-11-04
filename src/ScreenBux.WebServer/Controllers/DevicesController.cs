@@ -265,6 +265,69 @@ public class DevicesController : ControllerBase
         return Ok();
     }
 
+    /// <summary>
+    /// Parent sends a message to all of a child's devices, or to one device. Delivered live over
+    /// each device's SignalR group ("ParentMessage"); the Service queues it and the Agent shows it
+    /// as a pop-up with a sound. Devices that are offline right now do not get it later.
+    /// </summary>
+    [HttpPost("messages")]
+    [Authorize]
+    public async Task<ActionResult<SendMessageResult>> SendMessage([FromBody] SendMessageRequest request, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        // Parents only - a device token must not be able to message other devices.
+        if (User.GetDeviceId() is not null)
+        {
+            return Forbid();
+        }
+
+        var text = request.Message?.Trim() ?? string.Empty;
+        if (text.Length == 0 || text.Length > 500)
+        {
+            return BadRequest(new { message = "Message must be 1-500 characters." });
+        }
+
+        if ((request.ChildProfileId is null) == (request.DeviceId is null))
+        {
+            return BadRequest(new { message = "Specify either a child or a device." });
+        }
+
+        var deviceIds = await _db.Devices
+            .Where(d => d.AccountId == accountId
+                        && (request.DeviceId != null ? d.Id == request.DeviceId : d.ChildProfileId == request.ChildProfileId))
+            .Select(d => d.Id)
+            .ToListAsync(cancellationToken);
+
+        if (deviceIds.Count == 0)
+        {
+            return NotFound(new { message = "No matching devices." });
+        }
+
+        var notification = new Shared.Messages.PendingNotification
+        {
+            Severity = Shared.Messages.NotificationSeverity.ParentMessage,
+            Title = string.IsNullOrWhiteSpace(request.Title) ? "Message from parent" : request.Title.Trim(),
+            Message = text,
+            AutoDismissSeconds = null, // Stays until the child clicks OK.
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        foreach (var deviceId in deviceIds)
+        {
+            await _hubContext.Clients.Group(MonitoringHub.GetDeviceGroupName(deviceId)).SendAsync("ParentMessage", notification, cancellationToken);
+        }
+
+        _logger.LogInformation("Parent message {NotificationId} sent to {DeviceCount} device(s) on account {AccountId}",
+            notification.NotificationId, deviceIds.Count, accountId);
+
+        return Ok(new SendMessageResult { NotificationId = notification.NotificationId, DeviceCount = deviceIds.Count });
+    }
+
     /// <summary>Parent sets (or clears, with a null/past value) the absolute grant expiry for a device.</summary>
     [HttpPut("{id:guid}/grant")]
     [Authorize]

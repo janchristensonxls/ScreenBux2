@@ -46,5 +46,14 @@ public interface IPolicyStore
     /// <c>PolicyDocument</c> at it, so downstream consumers (Service via REST/SignalR) see the
     /// change immediately.
     /// </summary>
-    Task<PolicyConfiguration?> SetActiveProfileAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default);
+    /// <summary>Activates a mode for one child, or (childProfileId null) as the account default.</summary>
+    Task<PolicyConfiguration?> SetActiveProfileAsync(string accountId, Guid profileId, Guid? childProfileId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Makes a mode the account default and puts every child back on the default.</summary>
+    Task<PolicyConfiguration?> SetActiveProfileForEveryoneAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default);
+
+    Task<PolicyAssignmentsDto> GetAssignmentsAsync(string accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>Effective mode id per linked device of the account.</summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetDeviceProfileMapAsync(string accountId, CancellationToken cancellationToken = default);
 }

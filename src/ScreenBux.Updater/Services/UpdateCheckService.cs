@@ -43,6 +43,7 @@ public class UpdateCheckService : BackgroundService
         {
             try
             {
+                WarnIfDesktopRuntimeMissing();
                 await CheckAndApplyUpdatesAsync(serverBaseUrl, stoppingToken);
             }
             catch (Exception ex)
@@ -51,6 +52,24 @@ public class UpdateCheckService : BackgroundService
             }
 
             await Task.Delay(checkInterval, stoppingToken);
+        }
+    }
+
+    /// <summary>
+    /// The Updater and Service only need the base .NET runtime, but the Agent is WPF and needs the
+    /// .NET Desktop Runtime - a separate download. The Desktop Runtime includes the base runtime,
+    /// so it is the single prerequisite for the whole client. Without it the Agent installs fine
+    /// but fails to start, so say so loudly in the log.
+    /// </summary>
+    private void WarnIfDesktopRuntimeMissing()
+    {
+        if (!DotNetRuntimeCheck.IsDesktopRuntimeInstalled(Environment.Version.Major))
+        {
+            _logger.LogError(
+                "The .NET Desktop Runtime {Major} (x64) is not installed, so the ScreenBux Agent cannot start. " +
+                "Install it from https://dotnet.microsoft.com/download/dotnet/{Major}.0 (\".NET Desktop Runtime\", x64) " +
+                "or with: winget install Microsoft.DotNet.DesktopRuntime.{Major}",
+                Environment.Version.Major, Environment.Version.Major, Environment.Version.Major);
         }
     }
 

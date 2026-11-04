@@ -1,0 +1,137 @@
+@using ScreenBux.Shared.Models
+@using ScreenBux.Shared.Models.Devices
+@implements IDisposable
+@inject ScreenBux.WebClient.Services.DevicesApiService DevicesApi
+@inject ScreenBux.WebClient.Services.MonitoringService Monitoring
+
+@* Compose a pop-up message for one child (all their devices, or one of them). *@
+<div class="pe-msgbox mt-2">
+    <div class="d-flex flex-wrap gap-1 mb-1">
+        @foreach (var phrase in QuickPhrases)
+        {
+            <button type="button" class="btn btn-sm btn-light border" @onclick="() => _text = phrase">@phrase</button>
+        }
+    </div>
+    <textarea class="form-control form-control-sm" rows="2" maxlength="500" placeholder="Write a message to @ChildName…"
+              @bind="_text" @bind:event="oninput"></textarea>
+    <div class="d-flex align-items-center gap-2 mt-1">
+        @if (_devices.Count > 1)
+        {
+            <select class="form-select form-select-sm w-auto" @bind="_target">
+                <option value="">All @ChildName's devices</option>
+                @foreach (var d in _devices)
+                {
+                    <option value="@d.Id">@d.Name</option>
+                }
+            </select>
+        }
+        <button type="button" class="btn btn-sm btn-primary ms-auto" disabled="@(_sending || string.IsNullOrWhiteSpace(_text))" @onclick="SendAsync">
+            @(_sending ? "Sending…" : "Send")
+        </button>
+    </div>
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <div class="small mt-1 @(_statusIsError ? "text-danger" : "text-success")">@_status</div>
+    }
+    @foreach (var seen in _seen)
+    {
+        <div class="small text-muted">✓ @seen</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ChildProfileId { get; set; }
+    [Parameter, EditorRequired] public string ChildName { get; set; } = string.Empty;
+
+    private static readonly string[] QuickPhrases =
+    {
+        "5 minutes left – start finishing up.",
+        "Dinner is ready!",
+        "Time to stop and get ready for bed.",
+        "Please come downstairs."
+    };
+
+    private List<DeviceDto> _devices = new();
+    private string _text = string.Empty;
+    private string _target = string.Empty;
+    private bool _sending;
+    private string _status = string.Empty;
+    private bool _statusIsError;
+    private Guid? _lastNotificationId;
+    private readonly List<string> _seen = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _devices = (await DevicesApi.ListDevicesAsync()).Where(d => d.ChildProfileId == ChildProfileId).ToList();
+        }
+        catch
+        {
+            // Device picker is optional; sending to the whole child still works.
+        }
+
+        // Read receipts ("seen on <device>") come back over the monitoring hub.
+        Monitoring.NotificationAcknowledged += OnAcknowledged;
+        try
+        {
+            if (!Monitoring.IsConnected)
+            {
+                await Monitoring.StartAsync();
+            }
+        }
+        catch
+        {
+            // Without the hub we just don't show receipts.
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        _sending = true;
+        _seen.Clear();
+        try
+        {
+            var request = new SendMessageRequest { Message = _text.Trim() };
+            if (Guid.TryParse(_target, out var deviceId))
+            {
+                request.DeviceId = deviceId;
+            }
+            else
+            {
+                request.ChildProfileId = ChildProfileId;
+            }
+
+            var result = await DevicesApi.SendMessageAsync(request);
+            _lastNotificationId = result?.NotificationId;
+            _status = $"Sent to {result?.DeviceCount ?? 0} device(s) – waiting for {ChildName} to click OK. Devices that are switched off won't get it.";
+            _statusIsError = false;
+            _text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _status = $"Could not send: {ex.Message}";
+            _statusIsError = true;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private void OnAcknowledged(object? sender, NotificationAcknowledgedDto ack)
+    {
+        if (ack.NotificationId != _lastNotificationId)
+        {
+            return;
+        }
+
+        var device = _devices.FirstOrDefault(d => d.Id == ack.DeviceId)?.Name ?? "a device";
+        _seen.Add(ack.Shown
+            ? $"Confirmed (OK clicked) on {device} at {ack.AcknowledgedAtUtc.ToLocalTime():HH:mm}"
+            : $"Received by {device}, but the pop-up could not be shown (it's in the Agent's message list)");
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Monitoring.NotificationAcknowledged -= OnAcknowledged;
+}

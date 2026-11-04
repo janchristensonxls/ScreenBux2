@@ -14,7 +14,10 @@ public enum NotificationSeverity
     Warning = 1,
 
     /// <summary>Hard stop notice - requires explicit dismissal.</summary>
-    TimeUp = 2
+    TimeUp = 2,
+
+    /// <summary>A free-text message a parent sent from the WebClient (e.g. "Dinner in 5 minutes").</summary>
+    ParentMessage = 3
 }
 
 /// <summary>
@@ -35,6 +38,9 @@ public class PendingNotification
 
     /// <summary>Category this relates to, if any - lets the WebClient link back to policy.</summary>
     public string? CategoryName { get; set; }
+
+    /// <summary>When the notification was created (server time for parent messages), shown in the Agent's message history.</summary>
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
