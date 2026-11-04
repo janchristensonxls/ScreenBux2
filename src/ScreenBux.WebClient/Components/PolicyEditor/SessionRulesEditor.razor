@@ -1,0 +1,44 @@
+@using ScreenBux.Shared.Models
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+<p class="text-muted small">
+    Whole-device actions on a schedule, e.g. a bedtime lockout. While a rule's time window is active the device is put to sleep / hibernated / powered off.
+    A rule <strong>without</strong> time windows is always active.
+</p>
+
+@foreach (var rule in Policy.SessionRules.ToList())
+{
+    <div class="card mb-3 @(rule.Enabled ? "" : "pe-disabled")">
+        <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+            <DxTextBox Text="@rule.Name" TextChanged="(string v) => Set(() => rule.Name = v)" Width="280px" NullText="Rule name" />
+            <select class="form-select form-select-sm w-auto" value="@rule.Action" @onchange="e => Set(() => rule.Action = Enum.Parse<PolicyRuleAction>((string)e.Value!))">
+                @foreach (var a in PowerActions) { <option value="@a">@ActionLabel(a)</option> }
+            </select>
+            <DxCheckBox T="bool" CheckType="CheckType.Switch" Checked="rule.Enabled" CheckedChanged="(bool v) => Set(() => rule.Enabled = v)">Enabled</DxCheckBox>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @onclick="() => Set(() => Policy.SessionRules.Remove(rule))">Delete</button>
+        </div>
+        <div class="card-body">
+            @if (rule.Enabled && rule.Schedule.Count == 0)
+            {
+                <div class="alert alert-warning py-1 small">No schedule – this rule is active all the time!</div>
+            }
+            <TimeWindowsEditor Windows="rule.Schedule" Changed="Changed" EmptyText="Always active." />
+        </div>
+    </div>
+}
+
+<button type="button" class="btn btn-primary" @onclick="Add">+ Add session rule</button>
+
+@code {
+    [Parameter, EditorRequired] public PolicyConfiguration Policy { get; set; } = new();
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task Set(Action change) { change(); return Changed.InvokeAsync(); }
+
+    private Task Add() => Set(() => Policy.SessionRules.Add(new SessionRule
+    {
+        Name = "Bedtime",
+        Action = PolicyRuleAction.Sleep,
+        Schedule = { new TimeWindow { StartTime = TimeSpan.FromHours(21), EndTime = TimeSpan.FromHours(7) } }
+    }));
+}

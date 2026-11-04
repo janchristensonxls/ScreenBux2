@@ -200,6 +200,31 @@ public class UsageTrackingService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// For display only (Agent status panel): synced cross-device total plus this device's
+    /// not-yet-flushed seconds - either for all categories (<paramref name="categoryNames"/> null)
+    /// or summed over the given ones. Enforcement keeps using the synced-only totals above.
+    /// </summary>
+    public long GetDisplaySecondsToday(IReadOnlyList<string>? categoryNames = null)
+    {
+        lock (_lock)
+        {
+            if (categoryNames is null)
+            {
+                return _totalSecondsToday + _pendingSecondsByCategory.Values.Sum();
+            }
+
+            long total = 0;
+            foreach (var categoryName in categoryNames)
+            {
+                total += _totalSecondsTodayByCategory.GetValueOrDefault(categoryName);
+                total += _pendingSecondsByCategory.GetValueOrDefault(categoryName);
+            }
+
+            return total;
+        }
+    }
+
     /// <summary>True once the cross-device total for today reaches the child's configured daily budget.</summary>
     public bool IsBudgetExceeded
     {
@@ -247,10 +272,12 @@ public class UsageTrackingService : BackgroundService
                 // enforcement, not accounting. See docs/decisions/screen-time-usage-tracking.md.
                 // While the session is locked, no category is credited at all (not even "Other") -
                 // see SetSessionLocked. While idle-paused, only the current category is skipped -
-                // see IsIdlePaused.
+                // see IsIdlePaused. A policy with TrackUsage = false (e.g. an "Open" mode used by a
+                // parent) credits nothing at all.
+                var trackUsage = _policyService.GetConfiguration().TrackUsage;
                 lock (_lock)
                 {
-                    if (!_isSessionLocked && !_isIdlePausedForCurrentCategory)
+                    if (trackUsage && !_isSessionLocked && !_isIdlePausedForCurrentCategory)
                     {
                         _pendingSecondsByCategory.TryGetValue(_currentCategoryName, out var pending);
                         _pendingSecondsByCategory[_currentCategoryName] = pending + 1;

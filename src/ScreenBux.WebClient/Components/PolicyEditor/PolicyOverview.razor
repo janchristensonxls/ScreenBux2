@@ -1,0 +1,164 @@
+@using ScreenBux.Shared.Models
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="pe-stat">
+            <div class="pe-stat-label">Total screen time / day</div>
+            <div class="pe-stat-value">@(Policy.DailyBudgetMinutes is null ? "Unlimited" : FormatMinutes(Policy.DailyBudgetMinutes))</div>
+            @if (Policy.DailyBudgetMinutes is not null)
+            {
+                <div class="small text-muted">then: @ActionLabel(Policy.DailyBudgetExceededAction)</div>
+            }
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="pe-stat">
+            <div class="pe-stat-label">Day starts at</div>
+            <div class="pe-stat-value">@($"{Policy.DayStartHour:00}:00")</div>
+            <div class="small text-muted">usage counters reset</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="pe-stat">
+            <div class="pe-stat-label">Categories</div>
+            <div class="pe-stat-value">@Policy.AppCategories.Count</div>
+            <div class="small text-muted">@Policy.AppCategories.Sum(c => c.Rules.Count(r => r.Enabled)) active rule(s)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="pe-stat">
+            <div class="pe-stat-label">Monitoring</div>
+            <div class="pe-stat-value">@(Policy.EnableMonitoring ? "On" : "Off")</div>
+            <div class="small text-muted">every @Policy.CheckIntervalSeconds s · usage @(Policy.TrackUsage ? "counted" : "NOT counted")</div>
+        </div>
+    </div>
+</div>
+
+<h6 class="mt-2">Per category</h6>
+<div class="table-responsive mb-3">
+    <table class="table table-sm align-middle">
+        <thead><tr><th>Category</th><th>Treatment</th><th>Budget</th><th>Allowed during</th><th>When blocked</th></tr></thead>
+        <tbody>
+            @foreach (var name in CategoryNames)
+            {
+                var cp = Policy.CategoryPolicies.FirstOrDefault(p => p.CategoryNames.Contains(name, StringComparer.OrdinalIgnoreCase));
+                var enforcement = cp?.Enforcement ?? CategoryPolicyEnforcement.Allowed;
+                <tr>
+                    <td class="fw-semibold">@name</td>
+                    <td><span class="badge @EnforcementBadge(enforcement)">@EnforcementLabel(enforcement)</span></td>
+                    <td>
+                        @if (cp?.Enforcement == CategoryPolicyEnforcement.TimeLimited)
+                        {
+                            @FormatMinutes(cp.DailyBudgetMinutes)
+                            @if (cp.CategoryNames.Count > 1)
+                            {
+                                <span class="small text-muted"> shared with @string.Join(", ", cp.CategoryNames.Where(n => !n.Equals(name, StringComparison.OrdinalIgnoreCase)))</span>
+                            }
+                        }
+                        else { <span class="text-muted">–</span> }
+                    </td>
+                    <td>
+                        @if (cp is null || cp.Enforcement == CategoryPolicyEnforcement.Blocked || cp.AllowedWindows.Count == 0)
+                        {
+                            <span class="text-muted">@(cp?.Enforcement == CategoryPolicyEnforcement.Blocked ? "never" : "any time")</span>
+                        }
+                        else
+                        {
+                            @string.Join("; ", cp.AllowedWindows.Select(FormatWindow))
+                        }
+                    </td>
+                    <td>@(cp is null || (enforcement == CategoryPolicyEnforcement.Allowed && cp.AllowedWindows.Count == 0) ? "–" : ActionLabel(cp.Action))</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<h6>Week at a glance</h6>
+<div class="pe-week">
+    <div class="pe-week-row pe-week-axis">
+        <div class="pe-week-day"></div>
+        <div class="pe-week-track">
+            @for (var h = 0; h <= 24; h += 3)
+            {
+                <span class="pe-tick" style="left:@Pct(h)">@($"{h:00}")</span>
+            }
+        </div>
+    </div>
+    @foreach (var day in WeekOrder)
+    {
+        var isToday = DateTime.Now.DayOfWeek == day;
+        <div class="pe-week-row">
+            <div class="pe-week-day @(isToday ? "fw-bold" : "")">@ShortDay(day)</div>
+            <div class="pe-week-track" style="height:@(Math.Max(28, Lanes.Count * 14 + 6))px">
+                @foreach (var lane in Lanes)
+                {
+                    @foreach (var seg in lane.Windows.SelectMany(Segments).Where(s => s.Day == day))
+                    {
+                        <div class="pe-seg @lane.Css" style="left:@Pct(seg.StartHour);width:@Pct(seg.EndHour - seg.StartHour);top:@(lane.Index * 14 + 2)px"
+                             title="@lane.Label: @($"{seg.StartHour:00.##}")–@($"{seg.EndHour:00.##}") h"></div>
+                    }
+                }
+                @if (Policy.DayStartHour > 0)
+                {
+                    <div class="pe-daystart" style="left:@Pct(Policy.DayStartHour)" title="Day reset"></div>
+                }
+                @if (isToday)
+                {
+                    <div class="pe-now" style="left:@Pct(DateTime.Now.TimeOfDay.TotalHours)" title="Now"></div>
+                }
+            </div>
+        </div>
+    }
+    <div class="d-flex flex-wrap gap-3 mt-2 small">
+        @foreach (var lane in Lanes)
+        {
+            <span><span class="pe-legend @lane.Css"></span> @lane.Label</span>
+        }
+        @if (Lanes.Count == 0)
+        {
+            <span class="text-muted">No scheduled rules or time windows in this mode.</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PolicyConfiguration Policy { get; set; } = new();
+
+    private sealed record Lane(int Index, string Label, string Css, IReadOnlyList<TimeWindow> Windows);
+
+    private IEnumerable<string> CategoryNames
+    {
+        get
+        {
+            var names = Policy.AppCategories.Select(c => c.Name).ToList();
+            if (!names.Contains("Other", StringComparer.OrdinalIgnoreCase)) names.Add("Other");
+            return names;
+        }
+    }
+
+    private List<Lane> Lanes
+    {
+        get
+        {
+            var lanes = new List<Lane>();
+            foreach (var rule in Policy.SessionRules.Where(r => r.Enabled))
+            {
+                var windows = rule.Schedule.Count == 0
+                    ? new List<TimeWindow> { new() { StartTime = TimeSpan.Zero, EndTime = TimeSpan.FromHours(23.999) } }
+                    : rule.Schedule;
+                lanes.Add(new Lane(lanes.Count, $"{rule.Name} ({ActionLabel(rule.Action)})", "pe-seg-lock", windows));
+            }
+
+            foreach (var cp in Policy.CategoryPolicies.Where(p => p.Enforcement != CategoryPolicyEnforcement.Blocked && p.AllowedWindows.Count > 0))
+            {
+                lanes.Add(new Lane(lanes.Count, $"{string.Join(", ", cp.CategoryNames)} allowed", "pe-seg-allow", cp.AllowedWindows));
+            }
+
+            return lanes;
+        }
+    }
+
+    private static string Pct(double hours) => $"{hours / 24 * 100:0.###}%".Replace(',', '.');
+}

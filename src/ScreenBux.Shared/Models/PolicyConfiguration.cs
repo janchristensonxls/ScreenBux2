@@ -37,6 +37,15 @@ public class PolicyConfiguration
     public bool LogActivity { get; set; } = true;
 
     /// <summary>
+    /// Whether foreground usage time is accumulated (and counted towards the daily/category
+    /// budgets) while this policy is active. Defaults to true. Turn off for an unrestricted mode
+    /// (e.g. "Open") used by a parent on the same device, so their time doesn't eat into the
+    /// child's budget after switching back to a restricted mode. Since policies apply per device
+    /// (not per Windows user), any use while this is off goes uncounted.
+    /// </summary>
+    public bool TrackUsage { get; set; } = true;
+
+    /// <summary>
     /// Hour (0-23, device-local time) at which the "day" resets for usage-tracking purposes.
     /// 0 = ordinary midnight. Mirrors <c>ChildProfile.DayStartHour</c> - piggybacks on the
     /// existing policy sync pipeline as a stopgap until per-child config has its own sync path.

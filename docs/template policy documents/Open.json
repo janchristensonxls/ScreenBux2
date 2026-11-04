@@ -41,6 +41,7 @@
 	"enableMonitoring": true,
 	"checkIntervalSeconds": 5,
 	"logActivity": true,
+	"trackUsage": false,
 	"dayStartHour": 6,
 	"dailyBudgetMinutes": null
 }

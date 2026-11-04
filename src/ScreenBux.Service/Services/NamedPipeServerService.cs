@@ -315,6 +315,9 @@ public class NamedPipeServerService : BackgroundService
                 case "GrantStatusRequest":
                     return new GrantStatusResponse { ExpiresAtUtc = _grantService.ExpiresAtUtc };
 
+                case "UsageStatusRequest":
+                    return UsageStatusBuilder.Build(_policyService.GetConfiguration(), _usageTracking, DateTime.Now);
+
                 case "WindowListReport":
                     var windowListReport = JsonSerializer.Deserialize<WindowListReportMessage>(messageJson);
                     return HandleWindowListReport(windowListReport);

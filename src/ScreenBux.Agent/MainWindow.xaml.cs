@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private bool? _lastKnownConnected;
     private string _trayBaseText = "ScreenBux Agent";
     private string _grantRemainingText = string.Empty;
+    private string _usageTrayText = string.Empty;
 
     public MainWindow()
     {
@@ -145,11 +146,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var text = string.IsNullOrEmpty(_grantRemainingText)
-            ? _trayBaseText
-            : $"{_trayBaseText}{Environment.NewLine}{_grantRemainingText}";
+        var text = string.Join(Environment.NewLine,
+            new[] { _trayBaseText, _usageTrayText, _grantRemainingText }.Where(t => !string.IsNullOrEmpty(t)));
 
-        _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+        try
+        {
+            // .NET (Core) WinForms allows 127 characters; fall back to the classic 63 if not.
+            _notifyIcon.Text = text.Length > 127 ? text[..127] : text;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+        }
     }
 
     private void ShowMainWindow()
@@ -231,6 +239,7 @@ public partial class MainWindow : Window
         await CheckServiceStatusAsync();
         await CheckGrantStatusAsync();
         await CheckPolicyNameAsync();
+        await CheckUsageStatusAsync();
     }
 
     private async Task CheckPolicyNameAsync()
@@ -247,6 +256,133 @@ public partial class MainWindow : Window
         {
             // Best-effort; leave the previous text on transient failure.
         }
+    }
+
+    /// <summary>
+    /// Asks the Service for today's usage vs. limits and renders it in the "Today" panel and the
+    /// tray tooltip. Hidden entirely when the Service isn't reachable.
+    /// </summary>
+    private async Task CheckUsageStatusAsync()
+    {
+        try
+        {
+            var status = await _pipeClient.SendMessageAsync<ScreenBux.Shared.Messages.UsageStatusResponse>(
+                new ScreenBux.Shared.Messages.UsageStatusRequest());
+
+            if (status is null)
+            {
+                UsagePanel.Visibility = Visibility.Collapsed;
+                _usageTrayText = string.Empty;
+                return;
+            }
+
+            RenderUsageStatus(status);
+        }
+        catch
+        {
+            // Best-effort; leave the previous status on transient failure.
+        }
+        finally
+        {
+            RefreshTrayTooltip();
+        }
+    }
+
+    private void RenderUsageStatus(ScreenBux.Shared.Messages.UsageStatusResponse status)
+    {
+        UsageItems.Children.Clear();
+
+        if (!status.TrackUsage)
+        {
+            UsageItems.Children.Add(new TextBlock
+            {
+                Text = "Usage is not counted in this mode.",
+                FontStyle = FontStyles.Italic,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+        }
+
+        // Total for the day.
+        if (status.DailyBudgetMinutes is int budget)
+        {
+            AddUsageRow("Total screen time", status.UsedSecondsToday, budget,
+                $"then {status.DailyBudgetExceededAction.ToLowerInvariant()}", isBlocked: false);
+            var left = Math.Max(0, budget * 60L - status.UsedSecondsToday);
+            _usageTrayText = status.TrackUsage
+                ? $"Used {FormatDuration(status.UsedSecondsToday)} of {FormatDuration(budget * 60L)} ({FormatDuration(left)} left)"
+                : "Usage not counted";
+        }
+        else
+        {
+            UsageItems.Children.Add(new TextBlock
+            {
+                Text = $"Total screen time: {FormatDuration(status.UsedSecondsToday)} (no daily limit)",
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            _usageTrayText = status.TrackUsage ? $"Used today: {FormatDuration(status.UsedSecondsToday)}" : "Usage not counted";
+        }
+
+        foreach (var category in status.Categories)
+        {
+            if (category.BudgetMinutes is int categoryBudget)
+            {
+                AddUsageRow(category.Label, category.UsedSeconds, categoryBudget, category.WindowNote, category.IsBlockedNow);
+            }
+            else
+            {
+                var state = category.IsBlockedNow ? "blocked now" : "allowed now";
+                var note = string.IsNullOrEmpty(category.WindowNote) ? string.Empty : $", {category.WindowNote}";
+                UsageItems.Children.Add(new TextBlock
+                {
+                    Text = $"{category.Label}: {state}{note}",
+                    Foreground = category.IsBlockedNow ? System.Windows.Media.Brushes.Firebrick : System.Windows.Media.Brushes.Black,
+                    Margin = new Thickness(0, 2, 0, 4)
+                });
+            }
+        }
+
+        if (!string.IsNullOrEmpty(status.NextEvent))
+        {
+            UsageItems.Children.Add(new TextBlock
+            {
+                Text = $"Next: {status.NextEvent}",
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+        }
+
+        UsagePanel.Visibility = UsageItems.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AddUsageRow(string label, long usedSeconds, int budgetMinutes, string? note, bool isBlocked)
+    {
+        var budgetSeconds = Math.Max(1L, budgetMinutes * 60L);
+        var exhausted = usedSeconds >= budgetSeconds;
+        var left = Math.Max(0, budgetSeconds - usedSeconds);
+
+        var header = $"{label}: {FormatDuration(usedSeconds)} of {FormatDuration(budgetSeconds)}"
+                     + (exhausted ? " - time is up" : $" ({FormatDuration(left)} left)")
+                     + (isBlocked && !exhausted ? " - blocked now" : string.Empty)
+                     + (string.IsNullOrEmpty(note) ? string.Empty : $", {note}");
+
+        UsageItems.Children.Add(new TextBlock { Text = header, Margin = new Thickness(0, 2, 0, 1) });
+
+        var fraction = Math.Min(1.0, (double)usedSeconds / budgetSeconds);
+        UsageItems.Children.Add(new System.Windows.Controls.ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 1,
+            Value = fraction,
+            Height = 10,
+            Margin = new Thickness(0, 0, 0, 4),
+            Foreground = exhausted || isBlocked ? System.Windows.Media.Brushes.Firebrick : fraction >= 0.85 ? System.Windows.Media.Brushes.DarkOrange : System.Windows.Media.Brushes.SeaGreen
+        });
+    }
+
+    private static string FormatDuration(long seconds)
+    {
+        var minutes = seconds / 60;
+        return minutes >= 60 ? $"{minutes / 60}h {minutes % 60:00}m" : $"{minutes}m";
     }
 
     private async Task CheckGrantStatusAsync()
