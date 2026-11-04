@@ -151,23 +151,36 @@
                                     CheckedChanged="(bool v) => _policy.DailyBudgetMinutes = v ? (_policy.DailyBudgetMinutes ?? 240) : null">
                             Limit total screen time per day (all apps, across the child's devices)
                         </DxCheckBox>
-                        @if (_policy.DailyBudgetMinutes is not null)
-                        {
-                            <div class="row g-2 mt-1 mb-2">
-                                <div class="col-sm-6">
-                                    <label class="form-label small mb-0">Budget (minutes)</label>
+                        @{ var hasDailyBudget = _policy.DailyBudgetMinutes is not null; }
+                        <div class="row g-2 mt-1 mb-2">
+                            <div class="col-sm-6">
+                                <label class="form-label small mb-0">Budget (minutes)</label>
+                                @if (hasDailyBudget)
+                                {
                                     <DxSpinEdit T="int?" @bind-Value="_policy.DailyBudgetMinutes" MinValue="0" MaxValue="1440" Increment="15" />
                                     <div class="small text-muted">@PolicyEditorHelpers.FormatMinutes(_policy.DailyBudgetMinutes)</div>
-                                </div>
-                                <div class="col-sm-6">
-                                    <label class="form-label small mb-0">When exceeded</label>
-                                    <select class="form-select form-select-sm" value="@_policy.DailyBudgetExceededAction"
-                                            @onchange="e => _policy.DailyBudgetExceededAction = Enum.Parse<PolicyRuleAction>((string)e.Value!)">
-                                        @foreach (var a in PolicyEditorHelpers.PowerActions) { <option value="@a">@PolicyEditorHelpers.ActionLabel(a)</option> }
-                                    </select>
+                                }
+                                else
+                                {
+                                    <div class="form-control form-control-sm text-muted">Unlimited</div>
+                                }
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small mb-0">When exceeded (dailyBudgetExceededAction)</label>
+                                <select class="form-select form-select-sm" value="@_policy.DailyBudgetExceededAction" disabled="@(!hasDailyBudget)"
+                                        @onchange="e => _policy.DailyBudgetExceededAction = Enum.Parse<PolicyRuleAction>((string)e.Value!)">
+                                    @if (!PolicyEditorHelpers.PowerActions.Contains(_policy.DailyBudgetExceededAction))
+                                    {
+                                        @* Legacy value from hand-edited JSON - keep it visible instead of showing a blank select. *@
+                                        <option value="@_policy.DailyBudgetExceededAction">@PolicyEditorHelpers.ActionLabel(_policy.DailyBudgetExceededAction) (not a power action)</option>
+                                    }
+                                    @foreach (var a in PolicyEditorHelpers.PowerActions) { <option value="@a">@PolicyEditorHelpers.ActionLabel(a)</option> }
+                                </select>
+                                <div class="small text-muted">
+                                    @(hasDailyBudget ? "What the device does when the total daily time is used up." : "Only used when a total daily limit is switched on.")
                                 </div>
                             </div>
-                        }
+                        </div>
 
                         <h6 class="mt-3">Usage counting</h6>
                         <DxCheckBox T="bool" CheckType="CheckType.Switch" @bind-Checked="_policy.TrackUsage">Count usage time while this mode is active</DxCheckBox>
