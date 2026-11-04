@@ -17,7 +17,7 @@
     1. Set the new version in root/Directory.Build.props.
     2. Run this script: (./build-update-packages.ps1) to build the zips and README.md.
     3. Open the folder /latest.
-    4. Upload agent.zip & service.zip to the SBX blobstorage, container "latest"
+    4. Upload agent.zip & service.zip to the SBX blobstorage, container "latest" : https://portal.azure.com/#view/Microsoft_Azure_Storage/ContainerMenuBlade/~/overview/storageAccountId/%2Fsubscriptions%2F3788be2b-e7f6-45de-8b2c-3141ceee92ac%2FresourceGroups%2FDefault-Web-NorthEurope%2Fproviders%2FMicrosoft.Storage%2FstorageAccounts%2Fsbx/path/latest/etag/%220x8DF157CA636734A%22/defaultId//publicAccessVal/None
     5. Update ScreenBux.WebServer's appsettings.json "Updates" section with the new version, blob URLs, and SHA-256 hashes, found in the readme.md
     6. Publish the new ScreenBux.WebServer build to Azure App Service (or wherever it's hosted) - the new "Updates" section will be picked up automatically.
 
