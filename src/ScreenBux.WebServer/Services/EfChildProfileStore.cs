@@ -81,6 +81,8 @@ public class EfChildProfileStore : IChildProfileStore
             return false;
         }
 
+        // Drop the child's own mode assignment, if any (PolicyDocument has no FK to ChildProfile).
+        _db.PolicyDocuments.RemoveRange(_db.PolicyDocuments.Where(d => d.AccountId == accountId && d.ChildProfileId == childProfileId));
         _db.ChildProfiles.Remove(profile);
         await _db.SaveChangesAsync(cancellationToken);
         return true;

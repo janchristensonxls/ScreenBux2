@@ -24,6 +24,11 @@ public class MonitoringService
     public event EventHandler<string>? StatusChanged;
     public event EventHandler<ProcessInfo>? ProcessDetected;
 
+    /// <summary>Raised (on the UI thread) after a notification was shown and added to <see cref="MessageHistory"/>.</summary>
+    public event EventHandler<MessageHistoryEntry>? NotificationShown;
+
+    public MessageHistoryStore MessageHistory { get; } = new();
+
     public MonitoringService()
     {
         _windowDetector = new ForegroundWindowDetector();
@@ -260,13 +265,16 @@ public class MonitoringService
     /// sends a <see cref="NotificationAckMessage"/> back to the Service as its own transactional
     /// pipe call so the acknowledgement reaches the WebServer/parent promptly rather than
     /// waiting for the next 2s tick.
+    /// Parent messages are acknowledged only once the child closes the pop-up ("OK"), so the
+    /// parent's receipt means "confirmed", not merely "popped up". Everything else is
+    /// acknowledged as soon as it is shown.
     /// </summary>
     private async Task PresentAndAckNotificationAsync(PendingNotification notification)
     {
-        var shown = false;
+        NotificationOverlayWindow? window = null;
         try
         {
-            shown = _notificationPresenter.Present(notification);
+            window = _notificationPresenter.Present(notification);
         }
         catch (Exception ex)
         {
@@ -275,9 +283,32 @@ public class MonitoringService
 
         try
         {
+            var entry = MessageHistory.Add(notification);
+            NotificationShown?.Invoke(this, entry);
+        }
+        catch (Exception ex)
+        {
+            RaiseStatusChanged($"Error saving message history: {ex.Message}");
+        }
+
+        if (window is not null && notification.Severity == NotificationSeverity.ParentMessage)
+        {
+            // Defer the receipt until the child dismisses the pop-up.
+            window.Closed += (_, _) => _ = SendNotificationAckAsync(notification.NotificationId, shown: true);
+            return;
+        }
+
+        await SendNotificationAckAsync(notification.NotificationId, shown: window is not null);
+    }
+
+    private async Task SendNotificationAckAsync(Guid notificationId, bool shown)
+    {
+        try
+        {
+            // Constructed here so AcknowledgedAtUtc is the moment of the ack (e.g. when "OK" was clicked).
             await _pipeClient.SendMessageAsync<object>(new NotificationAckMessage
             {
-                NotificationId = notification.NotificationId,
+                NotificationId = notificationId,
                 Shown = shown
             });
         }

@@ -40,13 +40,42 @@
                            Text="This device is not yet linked to a parent account. Right-click the ScreenBux Agent icon in the notification area and choose 'Link Device...' to link it."/>
             </GroupBox>
 
-            <GroupBox x:Name="LogPanel" Header="Activity Log">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBox x:Name="LogTextBox" IsReadOnly="True" 
-                             TextWrapping="Wrap" BorderThickness="0"
-                             VerticalScrollBarVisibility="Auto"/>
-                </ScrollViewer>
-            </GroupBox>
+            <TabControl x:Name="MainTabs">
+                <TabItem x:Name="MessagesTab" Header="Messages">
+                    <DockPanel Margin="4">
+                        <DockPanel DockPanel.Dock="Bottom" Margin="0,6,0,0" LastChildFill="False">
+                            <TextBlock x:Name="MessagesHint" DockPanel.Dock="Left" Foreground="Gray" VerticalAlignment="Center"
+                                       Text="Messages from your parent and time warnings appear here."/>
+                            <Button DockPanel.Dock="Right" Content="Clear" Padding="12,2" Click="ClearMessages_Click"/>
+                        </DockPanel>
+                        <ListBox x:Name="MessagesList" HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8,6" Margin="0,0,0,4" CornerRadius="4" Background="#F3F6FA">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding When}" Foreground="Gray"/>
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <Run Text="{Binding Kind, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Title, Mode=OneWay}"/>
+                                                </TextBlock>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,3,0,0" FontSize="14"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </TabItem>
+                <TabItem Header="Activity Log">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBox x:Name="LogTextBox" IsReadOnly="True" 
+                                 TextWrapping="Wrap" BorderThickness="0"
+                                 VerticalScrollBarVisibility="Auto"/>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
         </Grid>
 
         <!-- Status Bar -->

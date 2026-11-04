@@ -14,28 +14,28 @@ public class NotificationPresenter
 {
     /// <summary>
     /// Shows the overlay (best-effort) and plays the audio cue for the given notification.
-    /// Returns true if the overlay was successfully shown, false if it could not be (e.g. blocked
-    /// by an exclusive-fullscreen app) - the audio cue is attempted either way.
+    /// Returns the overlay window if it was successfully shown, or null if it could not be (e.g.
+    /// blocked by an exclusive-fullscreen app) - the audio cue is attempted either way.
     /// </summary>
-    public bool Present(PendingNotification notification)
+    public NotificationOverlayWindow? Present(PendingNotification notification)
     {
-        var shown = TryShowOverlay(notification);
+        var window = TryShowOverlay(notification);
         PlayAudioCue(notification.Severity);
-        return shown;
+        return window;
     }
 
-    private static bool TryShowOverlay(PendingNotification notification)
+    private static NotificationOverlayWindow? TryShowOverlay(PendingNotification notification)
     {
         try
         {
             var window = new NotificationOverlayWindow(notification);
             window.Show();
-            return true;
+            return window;
         }
         catch
         {
             // Best-effort only - e.g. exclusive-fullscreen compositing blocked it.
-            return false;
+            return null;
         }
     }
 
@@ -59,6 +59,17 @@ public class NotificationPresenter
                     PlayTone(880, TimeSpan.FromMilliseconds(150));
                     Thread.Sleep(80);
                     PlayTone(1175, TimeSpan.FromMilliseconds(220));
+                    break;
+                case NotificationSeverity.ParentMessage:
+                    // A friendly "ding-dong" chime, played twice so it's heard over game audio -
+                    // distinct from the rising "time is running out" beeps.
+                    for (var i = 0; i < 2; i++)
+                    {
+                        PlayTone(1047, TimeSpan.FromMilliseconds(180));
+                        Thread.Sleep(40);
+                        PlayTone(784, TimeSpan.FromMilliseconds(320));
+                        Thread.Sleep(250);
+                    }
                     break;
                 case NotificationSeverity.TimeUp:
                     PlayTone(440, TimeSpan.FromMilliseconds(300));

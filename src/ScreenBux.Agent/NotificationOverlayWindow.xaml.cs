@@ -17,6 +17,15 @@ public partial class NotificationOverlayWindow : Window
 
         TitleText.Text = notification.Title;
         MessageText.Text = notification.Message;
+        TimeText.Text = $"{notification.CreatedAtUtc.ToLocalTime():HH:mm} · see all messages in the ScreenBux Agent";
+
+        if (notification.Severity == NotificationSeverity.ParentMessage)
+        {
+            // Parent messages stand out from the Service's own (dark grey) time warnings.
+            RootBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xF0, 0x1B, 0x4F, 0x8C));
+            MessageText.FontSize = 16;
+            MessageText.Foreground = System.Windows.Media.Brushes.White;
+        }
 
         // Bottom-right corner of the primary screen, clear of the taskbar.
         var workArea = SystemParameters.WorkArea;

@@ -65,7 +65,7 @@ public class MonitoringHub : Hub
         await base.OnDisconnectedAsync(exception);
     }
 
-    private static string GetDeviceGroupName(Guid deviceId) => $"device:{deviceId}";
+    internal static string GetDeviceGroupName(Guid deviceId) => $"device:{deviceId}";
 
     /// <summary>
     /// Client requests to get current status
@@ -107,18 +107,6 @@ public class MonitoringHub : Hub
         if (!string.IsNullOrEmpty(accountId))
         {
             await Clients.Group(accountId).SendAsync("ProcessDetected", processInfo);
-        }
-    }
-
-    /// <summary>
-    /// Server broadcasts policy update to the owning account's clients
-    /// </summary>
-    public async Task BroadcastPolicyUpdate(PolicyConfiguration config)
-    {
-        var accountId = Context.User?.GetAccountId();
-        if (!string.IsNullOrEmpty(accountId))
-        {
-            await Clients.Group(accountId).SendAsync("PolicyUpdated", config);
         }
     }
 

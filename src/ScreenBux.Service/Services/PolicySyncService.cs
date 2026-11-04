@@ -22,6 +22,7 @@ public class PolicySyncService : BackgroundService
     private readonly PendingScreenCaptureRequestCoordinator _screenCaptureCoordinator;
     private readonly PendingVersionInfoRequestCoordinator _versionInfoCoordinator;
     private readonly UsageActivityLogWriter _activityLog;
+    private readonly NotificationQueueService _notificationQueue;
     private readonly IHttpClientFactory _httpClientFactory;
     private HubConnection? _hubConnection;
 
@@ -39,7 +40,8 @@ public class PolicySyncService : BackgroundService
         PendingScreenCaptureRequestCoordinator screenCaptureCoordinator,
         PendingVersionInfoRequestCoordinator versionInfoCoordinator,
         UsageActivityLogWriter activityLog,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        NotificationQueueService notificationQueue)
     {
         _logger = logger;
         _configuration = configuration;
@@ -51,6 +53,7 @@ public class PolicySyncService : BackgroundService
         _screenCaptureCoordinator = screenCaptureCoordinator;
         _versionInfoCoordinator = versionInfoCoordinator;
         _activityLog = activityLog;
+        _notificationQueue = notificationQueue;
         _httpClientFactory = httpClientFactory;
     }
 
@@ -86,6 +89,15 @@ public class PolicySyncService : BackgroundService
             {
                 _logger.LogError(ex, "Failed to apply policy update received from SignalR");
             }
+        });
+
+        // A message a parent typed in the WebClient. Queued like the Service's own budget
+        // warnings, so the Agent picks it up on its next poll (~2s) and shows it with a sound.
+        _hubConnection.On<ScreenBux.Shared.Messages.PendingNotification>("ParentMessage", notification =>
+        {
+            _logger.LogInformation("Parent message {NotificationId} received from SignalR", notification.NotificationId);
+            notification.Severity = ScreenBux.Shared.Messages.NotificationSeverity.ParentMessage;
+            _notificationQueue.Enqueue(notification);
         });
 
         _hubConnection.On<GrantDto>("GrantUpdated", async grant =>

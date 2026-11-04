@@ -28,6 +28,14 @@ public class DevicesApiService
         return await response.Content.ReadFromJsonAsync<LinkCodeResponse>();
     }
 
+    /// <summary>Sends a pop-up message to all of a child's devices, or to one device.</summary>
+    public async Task<SendMessageResult?> SendMessageAsync(SendMessageRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/devices/messages", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SendMessageResult>();
+    }
+
     public async Task<IReadOnlyList<DeviceDto>> ListDevicesAsync()
     {
         var devices = await _httpClient.GetFromJsonAsync<List<DeviceDto>>("api/devices");

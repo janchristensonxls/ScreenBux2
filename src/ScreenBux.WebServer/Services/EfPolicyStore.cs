@@ -8,9 +8,10 @@ using ScreenBux.Shared.Utilities;
 namespace ScreenBux.WebServer.Services;
 
 /// <summary>
-/// EF Core-backed <see cref="IPolicyStore"/>. Each account has a single unscoped
-/// <see cref="PolicyDocument"/> that points at the currently active <see cref="PolicyProfile"/>
-/// ("mode"). <see cref="PolicyProfile.PolicyJson"/> is the *only* place policy JSON is stored -
+/// EF Core-backed <see cref="IPolicyStore"/>. Modes (<see cref="PolicyProfile"/>) are shared
+/// across the account. Each account has one unscoped <see cref="PolicyDocument"/> pointing at the
+/// default mode, plus optionally one per child (<see cref="PolicyDocument.ChildProfileId"/>)
+/// pointing at that child's own mode; a child without one follows the default. <see cref="PolicyProfile.PolicyJson"/> is the *only* place policy JSON is stored -
 /// the raw "Save policy" editor, per-profile edits, and profile activation all read/write
 /// through the single active profile row, so there is no separate cache that can drift out of
 /// sync.
@@ -50,25 +51,74 @@ public class EfPolicyStore : IPolicyStore
 
     public async Task<PolicyConfiguration> GetDevicePolicyAsync(Guid deviceId, string accountId, CancellationToken cancellationToken = default)
     {
-        var deviceDoc = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.DeviceId == deviceId)
-            .FirstOrDefaultAsync(cancellationToken);
+        var map = await GetDeviceProfileMapAsync(accountId, cancellationToken);
+        var defaultProfile = await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
+        var profileId = map.TryGetValue(deviceId, out var id) ? id : defaultProfile.Id;
 
-        if (deviceDoc?.ActivePolicyProfileId is Guid deviceProfileId)
+        var profile = await _db.PolicyProfiles
+            .Where(p => p.AccountId == accountId && p.Id == profileId)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? defaultProfile;
+
+        var policy = Deserialize(profile.PolicyJson);
+        policy.Name = profile.Name;
+        return policy;
+    }
+
+    /// <summary>
+    /// Effective mode per linked device, resolved most-specific first: a device-scoped
+    /// <see cref="PolicyDocument"/>, then the device's child's document, then the account default.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetDeviceProfileMapAsync(string accountId, CancellationToken cancellationToken = default)
+    {
+        var defaultId = (await GetOrCreateActiveProfileAsync(accountId, cancellationToken)).Id;
+        var existingProfileIds = await _db.PolicyProfiles.Where(p => p.AccountId == accountId).Select(p => p.Id).ToListAsync(cancellationToken);
+        var documents = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && d.ActivePolicyProfileId != null)
+            .ToListAsync(cancellationToken);
+        var devices = await _db.Devices
+            .Where(d => d.AccountId == accountId)
+            .Select(d => new { d.Id, d.ChildProfileId })
+            .ToListAsync(cancellationToken);
+
+        var byDevice = documents
+            .Where(d => d.DeviceId != null && existingProfileIds.Contains(d.ActivePolicyProfileId!.Value))
+            .GroupBy(d => d.DeviceId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().ActivePolicyProfileId!.Value);
+        var byChild = ChildAssignments(documents, existingProfileIds);
+
+        return devices.ToDictionary(
+            d => d.Id,
+            d => byDevice.TryGetValue(d.Id, out var deviceProfile) ? deviceProfile
+                : d.ChildProfileId is Guid childId && byChild.TryGetValue(childId, out var childProfile) ? childProfile
+                : defaultId);
+    }
+
+    public async Task<PolicyAssignmentsDto> GetAssignmentsAsync(string accountId, CancellationToken cancellationToken = default)
+    {
+        var state = await LoadAssignmentStateAsync(accountId, cancellationToken);
+        var deviceCounts = await _db.Devices
+            .Where(d => d.AccountId == accountId)
+            .GroupBy(d => d.ChildProfileId)
+            .Select(g => new { ChildProfileId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return new PolicyAssignmentsDto
         {
-            var deviceProfile = await _db.PolicyProfiles
-                .Where(p => p.AccountId == accountId && p.Id == deviceProfileId)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (deviceProfile is not null)
-            {
-                var devicePolicy = Deserialize(deviceProfile.PolicyJson);
-                devicePolicy.Name = deviceProfile.Name;
-                return devicePolicy;
-            }
-        }
-
-        return await GetPolicyAsync(accountId, cancellationToken);
+            DefaultProfileId = state.DefaultProfileId,
+            UnassignedDeviceCount = deviceCounts.FirstOrDefault(c => c.ChildProfileId == null)?.Count ?? 0,
+            Children = state.Children
+                .OrderBy(c => c.DisplayName)
+                .Select(c => new ChildModeAssignmentDto
+                {
+                    ChildProfileId = c.Id,
+                    DisplayName = c.DisplayName,
+                    DeviceCount = deviceCounts.FirstOrDefault(x => x.ChildProfileId == c.Id)?.Count ?? 0,
+                    AssignedProfileId = state.ChildAssigned.TryGetValue(c.Id, out var assigned) ? assigned : null,
+                    EffectiveProfileId = state.EffectiveFor(c.Id)
+                })
+                .ToList()
+        };
     }
 
     public async Task<IReadOnlyList<PolicyProfileDto>> GetProfilesAsync(string accountId, CancellationToken cancellationToken = default)
@@ -82,14 +132,11 @@ public class EfPolicyStore : IPolicyStore
             profiles = await SeedDefaultProfilesAsync(accountId, cancellationToken);
         }
 
-        var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
-            .FirstOrDefaultAsync(cancellationToken);
-        var activeProfileId = document?.ActivePolicyProfileId;
+        var state = await LoadAssignmentStateAsync(accountId, cancellationToken);
 
         return profiles
             .OrderBy(p => p.Name)
-            .Select(p => ToDto(p, p.Id == activeProfileId))
+            .Select(p => ToDto(p, state))
             .ToList();
     }
 
@@ -106,7 +153,7 @@ public class EfPolicyStore : IPolicyStore
         _db.PolicyProfiles.Add(profile);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return ToDto(profile, isActive: false);
+        return ToDto(profile, await LoadAssignmentStateAsync(accountId, cancellationToken));
     }
 
     public async Task<PolicyProfileDto?> UpdateProfileAsync(string accountId, Guid profileId, string name, PolicyConfiguration policy, CancellationToken cancellationToken = default)
@@ -124,15 +171,9 @@ public class EfPolicyStore : IPolicyStore
         profile.PolicyJson = JsonSerializer.Serialize(policy, SerializerOptions);
         profile.UpdatedAt = DateTime.UtcNow;
 
-        var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var isActive = document?.ActivePolicyProfileId == profileId;
-
         await _db.SaveChangesAsync(cancellationToken);
 
-        return ToDto(profile, isActive);
+        return ToDto(profile, await LoadAssignmentStateAsync(accountId, cancellationToken));
     }
 
     public async Task<bool> DeleteProfileAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default)
@@ -146,13 +187,11 @@ public class EfPolicyStore : IPolicyStore
             return false;
         }
 
-        var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (document?.ActivePolicyProfileId == profileId)
+        // Don't delete a mode that is in use anywhere (the default, a child, or a device).
+        var inUse = await _db.PolicyDocuments
+            .AnyAsync(d => d.AccountId == accountId && d.ActivePolicyProfileId == profileId, cancellationToken);
+        if (inUse)
         {
-            // Don't delete the currently active profile.
             return false;
         }
 
@@ -161,7 +200,7 @@ public class EfPolicyStore : IPolicyStore
         return true;
     }
 
-    public async Task<PolicyConfiguration?> SetActiveProfileAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default)
+    public async Task<PolicyConfiguration?> SetActiveProfileAsync(string accountId, Guid profileId, Guid? childProfileId = null, CancellationToken cancellationToken = default)
     {
         var profile = await _db.PolicyProfiles
             .Where(p => p.AccountId == accountId && p.Id == profileId)
@@ -172,15 +211,22 @@ public class EfPolicyStore : IPolicyStore
             return null;
         }
 
+        if (childProfileId is Guid childId
+            && !await _db.ChildProfiles.AnyAsync(c => c.AccountId == accountId && c.Id == childId, cancellationToken))
+        {
+            return null;
+        }
+
         var document = await _db.PolicyDocuments
-            .Where(p => p.AccountId == accountId && p.ChildProfileId == null && p.DeviceId == null)
+            .Where(p => p.AccountId == accountId && p.ChildProfileId == childProfileId && p.DeviceId == null)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (document is null)
         {
             document = new PolicyDocument
             {
-                AccountId = accountId
+                AccountId = accountId,
+                ChildProfileId = childProfileId
             };
             _db.PolicyDocuments.Add(document);
         }
@@ -194,6 +240,47 @@ public class EfPolicyStore : IPolicyStore
         policy.Name = profile.Name;
         return policy;
     }
+
+    public async Task<PolicyConfiguration?> SetActiveProfileForEveryoneAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default)
+    {
+        var policy = await SetActiveProfileAsync(accountId, profileId, childProfileId: null, cancellationToken);
+        if (policy is null)
+        {
+            return null;
+        }
+
+        // Children go back to following the default. Device-scoped documents are left alone.
+        var childDocuments = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && d.ChildProfileId != null && d.DeviceId == null)
+            .ToListAsync(cancellationToken);
+        _db.PolicyDocuments.RemoveRange(childDocuments);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return policy;
+    }
+
+    private sealed record AssignmentState(Guid DefaultProfileId, Dictionary<Guid, Guid> ChildAssigned, List<ChildProfile> Children)
+    {
+        public Guid EffectiveFor(Guid childId) => ChildAssigned.TryGetValue(childId, out var id) ? id : DefaultProfileId;
+    }
+
+    private async Task<AssignmentState> LoadAssignmentStateAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var defaultId = (await GetOrCreateActiveProfileAsync(accountId, cancellationToken)).Id;
+        var existingProfileIds = await _db.PolicyProfiles.Where(p => p.AccountId == accountId).Select(p => p.Id).ToListAsync(cancellationToken);
+        var documents = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && d.ChildProfileId != null && d.DeviceId == null && d.ActivePolicyProfileId != null)
+            .ToListAsync(cancellationToken);
+        var children = await _db.ChildProfiles.Where(c => c.AccountId == accountId).ToListAsync(cancellationToken);
+
+        return new AssignmentState(defaultId, ChildAssignments(documents, existingProfileIds), children);
+    }
+
+    private static Dictionary<Guid, Guid> ChildAssignments(IEnumerable<PolicyDocument> documents, ICollection<Guid> existingProfileIds) =>
+        documents
+            .Where(d => d.ChildProfileId != null && d.DeviceId == null && d.ActivePolicyProfileId is Guid p && existingProfileIds.Contains(p))
+            .GroupBy(d => d.ChildProfileId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().ActivePolicyProfileId!.Value);
 
     /// <summary>
     /// Resolves the <see cref="PolicyProfile"/> that is currently active for the account's
@@ -284,17 +371,21 @@ public class EfPolicyStore : IPolicyStore
         return profiles;
     }
 
-    private static PolicyProfileDto ToDto(PolicyProfile profile, bool isActive)
+    private static PolicyProfileDto ToDto(PolicyProfile profile, AssignmentState state)
     {
         var policy = Deserialize(profile.PolicyJson);
         policy.Name = profile.Name;
+        var usedBy = state.Children.Where(c => state.EffectiveFor(c.Id) == profile.Id).Select(c => c.Id).ToList();
+        var isDefault = state.DefaultProfileId == profile.Id;
         return new()
         {
             Id = profile.Id,
             ChildProfileId = profile.ChildProfileId,
             Name = profile.Name,
             IsBuiltIn = profile.IsBuiltIn,
-            IsActive = isActive,
+            IsDefault = isDefault,
+            IsActive = isDefault || usedBy.Count > 0,
+            UsedByChildIds = usedBy,
             Policy = policy,
             UpdatedAt = profile.UpdatedAt
         };

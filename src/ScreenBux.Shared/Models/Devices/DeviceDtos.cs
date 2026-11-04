@@ -44,3 +44,24 @@ public class AddGrantMinutesRequest
 {
     public int Minutes { get; set; }
 }
+
+/// <summary>
+/// Parent → child message. Target either all of a child's devices (<see cref="ChildProfileId"/>)
+/// or a single device (<see cref="DeviceId"/>); exactly one must be set.
+/// </summary>
+public class SendMessageRequest
+{
+    public Guid? ChildProfileId { get; set; }
+    public Guid? DeviceId { get; set; }
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>Optional heading; defaults to "Message from parent".</summary>
+    public string? Title { get; set; }
+}
+
+public class SendMessageResult
+{
+    /// <summary>Shared by all targeted devices; acks come back per device with this id.</summary>
+    public Guid NotificationId { get; set; }
+    public int DeviceCount { get; set; }
+}
