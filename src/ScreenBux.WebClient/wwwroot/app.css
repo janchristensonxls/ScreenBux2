@@ -49,3 +49,32 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* ---- Policy editor ---- */
+.pe-mono, .pe-mono textarea { font-family: Consolas, 'Cascadia Mono', monospace; font-size: .85rem; }
+.pe-invalid textarea { border-color: #dc3545 !important; background: #fff5f5; }
+.pe-rule { border: 1px solid #e3e6ea; border-radius: .4rem; padding: .6rem; margin-bottom: .6rem; background: #fbfcfd; }
+.pe-disabled { opacity: .55; }
+.pe-chips { display: flex; flex-wrap: wrap; gap: .2rem; margin-top: .25rem; }
+.pe-chips .badge { font-weight: 400; color: #333; }
+.pe-window { border-left: 3px solid #1b6ec2; padding: .35rem .5rem; margin-bottom: .5rem; background: #f6f9fc; border-radius: 0 .3rem .3rem 0; }
+.pe-tester { background: #f4f8ff; }
+.pe-policy { border-left: 5px solid #adb5bd; }
+.pe-policy.pe-enf-Allowed { border-left-color: #198754; }
+.pe-policy.pe-enf-Blocked { border-left-color: #dc3545; }
+.pe-policy.pe-enf-TimeLimited { border-left-color: #ffc107; }
+.pe-stat { border: 1px solid #e3e6ea; border-radius: .5rem; padding: .75rem 1rem; height: 100%; background: #fff; }
+.pe-stat-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: #6c757d; }
+.pe-stat-value { font-size: 1.5rem; font-weight: 600; }
+.pe-week { border: 1px solid #e3e6ea; border-radius: .5rem; padding: .75rem; background: #fff; }
+.pe-week-row { display: flex; align-items: stretch; margin-bottom: 4px; }
+.pe-week-day { width: 3rem; flex: none; font-size: .85rem; padding-top: 4px; }
+.pe-week-track { position: relative; flex: 1; min-height: 28px; background: repeating-linear-gradient(90deg, #f1f3f5 0, #f1f3f5 calc(100%/8 - 1px), #dee2e6 calc(100%/8 - 1px), #dee2e6 calc(100%/8)); border-radius: .25rem; }
+.pe-week-axis .pe-week-track { background: none; min-height: 18px; height: 18px; }
+.pe-tick { position: absolute; transform: translateX(-50%); font-size: .7rem; color: #6c757d; }
+.pe-seg { position: absolute; height: 12px; border-radius: 3px; }
+.pe-seg-lock, .pe-legend.pe-seg-lock { background: #6f42c1; }
+.pe-seg-allow, .pe-legend.pe-seg-allow { background: #20c997; }
+.pe-legend { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.pe-now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #dc3545; }
+.pe-daystart { position: absolute; top: 0; bottom: 0; border-left: 2px dashed #fd7e14; }

@@ -18,6 +18,11 @@
         </Grid.RowDefinitions>
 
        
+        <!-- Today's usage status (filled from code-behind) -->
+        <GroupBox Grid.Row="0" x:Name="UsagePanel" Header="Today" Margin="0,0,0,10" Visibility="Collapsed">
+            <StackPanel x:Name="UsageItems" Margin="6"/>
+        </GroupBox>
+
         <!-- Status -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock x:Name="ServiceStatusText" VerticalAlignment="Center" 

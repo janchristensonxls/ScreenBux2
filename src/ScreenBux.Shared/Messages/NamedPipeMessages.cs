@@ -193,3 +193,60 @@ public class SessionLockStateMessage : Contracts.INamedPipeMessage
     public bool IsLocked { get; set; }
 }
 
+
+/// <summary>
+/// Sent from Agent to Service to ask for today's usage vs. the active policy's limits, so the
+/// Agent can show "time used / time left" to whoever is at the device.
+/// </summary>
+public class UsageStatusRequest : Contracts.INamedPipeMessage
+{
+    public string MessageType => "UsageStatusRequest";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Today's usage status, as seen by the Service. Totals are the last cross-device sync plus
+/// this device's not-yet-synced seconds, so time from other devices may lag slightly.
+/// </summary>
+public class UsageStatusResponse : Contracts.INamedPipeMessage
+{
+    public string MessageType => "UsageStatusResponse";
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    public string PolicyName { get; set; } = string.Empty;
+
+    /// <summary>False when the active policy has <c>TrackUsage</c> off - totals are then frozen.</summary>
+    public bool TrackUsage { get; set; } = true;
+
+    public long UsedSecondsToday { get; set; }
+
+    /// <summary>Whole-device daily budget; null = unlimited.</summary>
+    public int? DailyBudgetMinutes { get; set; }
+
+    /// <summary>Display label of what happens when the daily budget runs out (e.g. "Sleep").</summary>
+    public string DailyBudgetExceededAction { get; set; } = string.Empty;
+
+    /// <summary>One entry per category policy that restricts something (time-limited, blocked or windowed).</summary>
+    public List<UsageStatusCategoryItem> Categories { get; set; } = new();
+
+    /// <summary>Upcoming/ongoing scheduled session action, e.g. "Bedtime (Sleep) at 21:00"; null if none within a week.</summary>
+    public string? NextEvent { get; set; }
+}
+
+public class UsageStatusCategoryItem
+{
+    /// <summary>Joined category names, e.g. "Games, Social-media".</summary>
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>"Allowed", "Blocked" or "TimeLimited".</summary>
+    public string Enforcement { get; set; } = string.Empty;
+
+    public long UsedSeconds { get; set; }
+
+    public int? BudgetMinutes { get; set; }
+
+    public bool IsBlockedNow { get; set; }
+
+    /// <summary>Time-window note, e.g. "allowed until 22:00" or "allowed from Fri 18:00".</summary>
+    public string? WindowNote { get; set; }
+}

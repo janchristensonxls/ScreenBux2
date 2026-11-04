@@ -1,0 +1,152 @@
+@using ScreenBux.Shared.Models
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+<p class="text-muted small">
+    How each category is treated in this mode. A policy can govern several categories – a time budget is then shared across them.
+    Categories without a policy are <strong>Allowed</strong>. If a category appears in more than one policy, the first one wins.
+</p>
+
+@{
+    var ungoverned = AllCategoryNames.Where(n => !Policy.CategoryPolicies.Any(cp => cp.CategoryNames.Contains(n, StringComparer.OrdinalIgnoreCase))).ToList();
+}
+@if (ungoverned.Count > 0)
+{
+    <div class="small mb-3">
+        Not governed (always allowed):
+        @foreach (var n in ungoverned) { <span class="badge bg-success-subtle text-success-emphasis border me-1">@n</span> }
+    </div>
+}
+
+@for (var i = 0; i < Policy.CategoryPolicies.Count; i++)
+{
+    var index = i;
+    var cp = Policy.CategoryPolicies[i];
+    <div class="card mb-3 pe-policy pe-enf-@cp.Enforcement">
+        <div class="card-body">
+            <div class="d-flex align-items-start gap-2 mb-3">
+                <div class="flex-grow-1">
+                    <label class="form-label small mb-0">Categories</label>
+                    <DxTagBox Data="AllCategoryNames" TData="string" TValue="string"
+                              Values="cp.CategoryNames" ValuesChanged="(IEnumerable<string> v) => Set(() => cp.CategoryNames = v.ToList())"
+                              AllowCustomTags="false" NullText="Select categories…" />
+                </div>
+                <div class="btn-group btn-group-sm mt-3">
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(index == 0)" title="Move up (higher priority)" @onclick="() => Move(index, -1)">↑</button>
+                    <button type="button" class="btn btn-outline-secondary" disabled="@(index == Policy.CategoryPolicies.Count - 1)" title="Move down" @onclick="() => Move(index, 1)">↓</button>
+                    <button type="button" class="btn btn-outline-danger" @onclick="() => Set(() => Policy.CategoryPolicies.Remove(cp))">Delete</button>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small mb-0 d-block">Enforcement</label>
+                    <div class="btn-group" role="group">
+                        @foreach (var e in Enum.GetValues<CategoryPolicyEnforcement>())
+                        {
+                            var active = cp.Enforcement == e;
+                            <button type="button" class="btn btn-sm @(active ? EnforcementButton(e) : "btn-outline-secondary")" @onclick="() => SetEnforcement(cp, e)">@EnforcementLabel(e)</button>
+                        }
+                    </div>
+                </div>
+
+                @if (cp.Enforcement == CategoryPolicyEnforcement.TimeLimited)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Daily budget (minutes)</label>
+                        <DxSpinEdit T="int?" Value="cp.DailyBudgetMinutes" ValueChanged="(int? v) => Set(() => cp.DailyBudgetMinutes = v)" MinValue="0" MaxValue="1440" Increment="15" />
+                        <div class="small text-muted">@FormatMinutes(cp.DailyBudgetMinutes)@(cp.CategoryNames.Count > 1 ? " shared" : "") per day</div>
+                    </div>
+                }
+
+                @if (cp.Enforcement != CategoryPolicyEnforcement.Allowed || cp.AllowedWindows.Count > 0)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Action when blocked</label>
+                        <select class="form-select form-select-sm" value="@cp.Action" @onchange="e => Set(() => cp.Action = Enum.Parse<PolicyRuleAction>((string)e.Value!))">
+                            @foreach (var a in ProcessActions) { <option value="@a">@ActionLabel(a)</option> }
+                        </select>
+                    </div>
+                }
+            </div>
+
+            @if (cp.Enforcement != CategoryPolicyEnforcement.Blocked)
+            {
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Allowed only during</label>
+                        <TimeWindowsEditor Windows="cp.AllowedWindows" Changed="Changed" EmptyText="Any time (no restriction)." />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Idle handling</label>
+                        <DxCheckBox T="bool" CheckType="CheckType.Switch" Checked="cp.IdleTimeOutMode == IdleTimeOutMode.AfterNoInput"
+                                    CheckedChanged="(bool v) => SetIdle(cp, v)">
+                            Stop counting usage when there's no keyboard/mouse input
+                        </DxCheckBox>
+                        @if (cp.IdleTimeOutMode == IdleTimeOutMode.AfterNoInput)
+                        {
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <span class="small">after</span>
+                                <DxSpinEdit T="int" Value="(int)(cp.IdleTimeOut?.TotalMinutes ?? 0)" ValueChanged="(int v) => Set(() => cp.IdleTimeOut = TimeSpan.FromMinutes(v))" MinValue="1" MaxValue="240" Width="100px" />
+                                <span class="small">minutes</span>
+                            </div>
+                        }
+                        <div class="small text-muted">Turn off for categories used passively, e.g. watching videos.</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<button type="button" class="btn btn-primary" @onclick="Add">+ Add category policy</button>
+
+@code {
+    [Parameter, EditorRequired] public PolicyConfiguration Policy { get; set; } = new();
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private List<string> AllCategoryNames
+    {
+        get
+        {
+            var names = Policy.AppCategories.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+            if (!names.Contains("Other", StringComparer.OrdinalIgnoreCase)) names.Add("Other");
+            // Keep any referenced-but-unknown names visible so they can be removed.
+            names.AddRange(Policy.CategoryPolicies.SelectMany(cp => cp.CategoryNames).Where(n => !names.Contains(n, StringComparer.OrdinalIgnoreCase)).Distinct());
+            return names;
+        }
+    }
+
+    private static string EnforcementButton(CategoryPolicyEnforcement e) => e switch
+    {
+        CategoryPolicyEnforcement.Allowed => "btn-success",
+        CategoryPolicyEnforcement.Blocked => "btn-danger",
+        _ => "btn-warning"
+    };
+
+    private Task Set(Action change) { change(); return Changed.InvokeAsync(); }
+
+    private Task SetEnforcement(CategoryPolicy cp, CategoryPolicyEnforcement e) => Set(() =>
+    {
+        cp.Enforcement = e;
+        if (e == CategoryPolicyEnforcement.TimeLimited && cp.DailyBudgetMinutes is null) cp.DailyBudgetMinutes = 60;
+    });
+
+    private Task SetIdle(CategoryPolicy cp, bool on) => Set(() =>
+    {
+        cp.IdleTimeOutMode = on ? IdleTimeOutMode.AfterNoInput : IdleTimeOutMode.Never;
+        if (on && cp.IdleTimeOut is null) cp.IdleTimeOut = TimeSpan.FromMinutes(5);
+    });
+
+    private Task Move(int index, int delta) => Set(() =>
+    {
+        var item = Policy.CategoryPolicies[index];
+        Policy.CategoryPolicies.RemoveAt(index);
+        Policy.CategoryPolicies.Insert(index + delta, item);
+    });
+
+    private Task Add() => Set(() => Policy.CategoryPolicies.Add(new CategoryPolicy
+    {
+        Enforcement = CategoryPolicyEnforcement.TimeLimited,
+        DailyBudgetMinutes = 60
+    }));
+}

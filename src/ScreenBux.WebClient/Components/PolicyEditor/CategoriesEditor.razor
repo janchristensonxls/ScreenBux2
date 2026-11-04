@@ -1,0 +1,141 @@
+@using ScreenBux.Shared.Models
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+<p class="text-muted small">
+    Categories classify running apps by regex (case-insensitive) on the process name or the foreground window title.
+    The first enabled matching rule wins, in the order listed. Anything unmatched falls into the implicit <strong>Other</strong> category.
+    Note: categories are stored per mode – changes here only affect the mode being edited.
+</p>
+
+<div class="card mb-3 pe-tester">
+    <div class="card-body py-2">
+        <div class="fw-semibold mb-1">Test classification</div>
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4"><DxTextBox @bind-Text="_testProcess" BindValueMode="BindValueMode.OnInput" NullText="Process name, e.g. RobloxPlayerBeta" /></div>
+            <div class="col-md-5"><DxTextBox @bind-Text="_testTitle" BindValueMode="BindValueMode.OnInput" NullText="Window title, e.g. YouTube - Google Chrome" /></div>
+            <div class="col-md-3">
+                @if (!string.IsNullOrEmpty(_testProcess) || !string.IsNullOrEmpty(_testTitle))
+                {
+                    <span>→ <span class="badge bg-primary fs-6">@ClassifyName(Policy, _testProcess ?? string.Empty, _testTitle)</span></span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@for (var ci = 0; ci < Policy.AppCategories.Count; ci++)
+{
+    var index = ci;
+    var category = Policy.AppCategories[ci];
+    <div class="card mb-3">
+        <div class="card-header d-flex align-items-center gap-2">
+            <DxTextBox Text="@category.Name" TextChanged="(string v) => Rename(category, v)" Width="260px" NullText="Category name" />
+            <span class="text-muted small">@category.Rules.Count rule(s)</span>
+            <div class="ms-auto btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary" disabled="@(index == 0)" title="Move up (earlier = higher priority)" @onclick="() => Move(index, -1)">↑</button>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(index == Policy.AppCategories.Count - 1)" title="Move down" @onclick="() => Move(index, 1)">↓</button>
+                <button type="button" class="btn btn-outline-danger" title="Delete category" @onclick="() => RemoveCategory(category)">Delete</button>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (category.Rules.Count == 0)
+            {
+                <div class="text-muted small fst-italic mb-2">No rules – nothing is classified into this category.</div>
+            }
+            @foreach (var rule in category.Rules.ToList())
+            {
+                var pErr = RegexError(rule.ProcessNameRegex);
+                var wErr = RegexError(rule.WindowTitleRegex);
+                <div class="pe-rule @(rule.Enabled ? "" : "pe-disabled")">
+                    <div class="row g-2">
+                        <div class="col-lg-5">
+                            <label class="form-label small mb-0">Process name regex</label>
+                            <DxMemo Text="@rule.ProcessNameRegex" TextChanged="(string v) => Set(() => rule.ProcessNameRegex = Empty(v))" Rows="2" NullText="(none)" CssClass="@(pErr is null ? "pe-mono" : "pe-mono pe-invalid")" />
+                            @if (pErr is not null) { <div class="text-danger small">@pErr</div> }
+                            <div class="pe-chips">@foreach (var t in Tokens(rule.ProcessNameRegex)) { <span class="badge rounded-pill text-bg-light border">@t</span> }</div>
+                        </div>
+                        <div class="col-lg-5">
+                            <label class="form-label small mb-0">Window title regex</label>
+                            <DxMemo Text="@rule.WindowTitleRegex" TextChanged="(string v) => Set(() => rule.WindowTitleRegex = Empty(v))" Rows="2" NullText="(none)" CssClass="@(wErr is null ? "pe-mono" : "pe-mono pe-invalid")" />
+                            @if (wErr is not null) { <div class="text-danger small">@wErr</div> }
+                            <div class="pe-chips">@foreach (var t in Tokens(rule.WindowTitleRegex)) { <span class="badge rounded-pill text-bg-light border">@t</span> }</div>
+                        </div>
+                        <div class="col-lg-2 d-flex flex-column gap-2 justify-content-center">
+                            <DxCheckBox T="bool" Checked="rule.Enabled" CheckedChanged="(bool v) => Set(() => rule.Enabled = v)" CheckType="CheckType.Switch">Enabled</DxCheckBox>
+                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => Set(() => category.Rules.Remove(rule))">Remove rule</button>
+                        </div>
+                    </div>
+                </div>
+            }
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => Set(() => category.Rules.Add(new AppCategoryRuleConfig()))">+ Add rule</button>
+        </div>
+    </div>
+}
+
+<button type="button" class="btn btn-primary" @onclick="AddCategory">+ Add category</button>
+
+@code {
+    [Parameter, EditorRequired] public PolicyConfiguration Policy { get; set; } = new();
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string? _testProcess;
+    private string? _testTitle;
+
+    private Task Set(Action change) { change(); return Changed.InvokeAsync(); }
+
+    private static string? Empty(string? v) => string.IsNullOrEmpty(v) ? null : v;
+
+    private static IEnumerable<string> Tokens(string? pattern) =>
+        string.IsNullOrEmpty(pattern) || RegexError(pattern) is not null
+            ? Enumerable.Empty<string>()
+            : pattern.Split('|').Select(t => t.Trim()).Where(t => t.Length > 0);
+
+    private Task Rename(AppCategoryConfig category, string name)
+    {
+        var oldName = category.Name;
+        category.Name = name.Trim();
+        // Keep category policies pointing at the renamed category.
+        foreach (var cp in Policy.CategoryPolicies)
+        {
+            for (var i = 0; i < cp.CategoryNames.Count; i++)
+            {
+                if (string.Equals(cp.CategoryNames[i], oldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    cp.CategoryNames[i] = category.Name;
+                }
+            }
+        }
+
+        return Changed.InvokeAsync();
+    }
+
+    private Task Move(int index, int delta)
+    {
+        var item = Policy.AppCategories[index];
+        Policy.AppCategories.RemoveAt(index);
+        Policy.AppCategories.Insert(index + delta, item);
+        return Changed.InvokeAsync();
+    }
+
+    private Task RemoveCategory(AppCategoryConfig category)
+    {
+        Policy.AppCategories.Remove(category);
+        foreach (var cp in Policy.CategoryPolicies)
+        {
+            cp.CategoryNames.RemoveAll(n => string.Equals(n, category.Name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Changed.InvokeAsync();
+    }
+
+    private Task AddCategory()
+    {
+        var n = 1;
+        while (Policy.AppCategories.Any(c => c.Name == $"New category {n}")) n++;
+        // Insert before a trailing "Other" so new categories get matched first.
+        var otherIndex = Policy.AppCategories.FindIndex(c => c.Name.Equals("Other", StringComparison.OrdinalIgnoreCase));
+        var category = new AppCategoryConfig { Name = $"New category {n}", Rules = { new AppCategoryRuleConfig() } };
+        if (otherIndex >= 0) Policy.AppCategories.Insert(otherIndex, category); else Policy.AppCategories.Add(category);
+        return Changed.InvokeAsync();
+    }
+}

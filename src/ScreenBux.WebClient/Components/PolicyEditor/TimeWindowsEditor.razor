@@ -1,0 +1,107 @@
+@using ScreenBux.Shared.Models
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+<div class="pe-windows">
+    @if (Windows.Count == 0)
+    {
+        <div class="text-muted small fst-italic mb-2">@EmptyText</div>
+    }
+    @foreach (var window in Windows.ToList())
+    {
+        <div class="pe-window">
+            <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Days">
+                @foreach (var day in WeekOrder)
+                {
+                    var on = window.DaysOfWeek.Count == 0 || window.DaysOfWeek.Contains(day);
+                    <button type="button" class="btn @(on ? "btn-primary" : "btn-outline-secondary")"
+                            title="@day" @onclick="() => ToggleDay(window, day)">@ShortDay(day)</button>
+                }
+            </div>
+            <div class="btn-group btn-group-sm ms-1" role="group" aria-label="Presets">
+                @foreach (var (label, days) in Presets)
+                {
+                    var match = Matches(window, days);
+                    <button type="button" class="btn btn-sm @(match ? "btn-secondary" : "btn-outline-secondary")" aria-pressed="@match"
+                            @onclick="() => SetDays(window, days)">@label</button>
+                }
+            </div>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <DxTimeEdit T="TimeSpan" Time="window.StartTime" TimeChanged="(TimeSpan t) => SetStart(window, t)"
+                            Format="HH:mm" DisplayFormat="HH:mm" ScrollPickerFormat="HH mm" MinuteIncrement="5" Width="110px" />
+                <span>to</span>
+                <DxTimeEdit T="TimeSpan" Time="window.EndTime" TimeChanged="(TimeSpan t) => SetEnd(window, t)"
+                            Format="HH:mm" DisplayFormat="HH:mm" ScrollPickerFormat="HH mm" MinuteIncrement="5" Width="110px" />
+                @if (window.EndTime < window.StartTime)
+                {
+                    <span class="badge bg-info text-dark" title="Wraps past midnight into the next day">overnight</span>
+                }
+                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" title="Remove window" @onclick="() => Remove(window)">✕</button>
+            </div>
+        </div>
+    }
+    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="Add">+ Add time window</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<TimeWindow> Windows { get; set; } = new();
+    [Parameter] public string EmptyText { get; set; } = "No time windows.";
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private static readonly (string Label, DayOfWeek[] Days)[] Presets =
+    {
+        ("Weekdays", WeekOrder.Take(5).ToArray()),
+        ("Weekend", new[] { DayOfWeek.Saturday, DayOfWeek.Sunday }),
+        ("Every day", Array.Empty<DayOfWeek>())
+    };
+
+    /// <summary>Empty and all-seven both mean "every day".</summary>
+    private static bool Matches(TimeWindow window, DayOfWeek[] days)
+    {
+        var current = window.DaysOfWeek.Count == 7 ? new HashSet<DayOfWeek>() : window.DaysOfWeek.ToHashSet();
+        return current.SetEquals(days);
+    }
+
+    private Task Notify() => Changed.InvokeAsync();
+
+    private Task ToggleDay(TimeWindow window, DayOfWeek day)
+    {
+        // An empty list means "every day"; expand it before toggling so the click removes one day.
+        if (window.DaysOfWeek.Count == 0)
+        {
+            window.DaysOfWeek = WeekOrder.ToList();
+        }
+
+        if (!window.DaysOfWeek.Remove(day))
+        {
+            window.DaysOfWeek.Add(day);
+        }
+
+        if (window.DaysOfWeek.Count == 7)
+        {
+            window.DaysOfWeek.Clear();
+        }
+
+        window.DaysOfWeek = window.DaysOfWeek.OrderBy(d => Array.IndexOf(WeekOrder, d)).ToList();
+        return Notify();
+    }
+
+    private Task SetDays(TimeWindow window, IEnumerable<DayOfWeek> days)
+    {
+        window.DaysOfWeek = days.ToList();
+        return Notify();
+    }
+
+    private Task SetStart(TimeWindow window, TimeSpan t) { window.StartTime = Trim(t); return Notify(); }
+
+    private Task SetEnd(TimeWindow window, TimeSpan t) { window.EndTime = Trim(t); return Notify(); }
+
+    private static TimeSpan Trim(TimeSpan t) => new(t.Hours, t.Minutes, 0);
+
+    private Task Remove(TimeWindow window) { Windows.Remove(window); return Notify(); }
+
+    private Task Add()
+    {
+        Windows.Add(new TimeWindow { StartTime = TimeSpan.FromHours(18), EndTime = TimeSpan.FromHours(20) });
+        return Notify();
+    }
+}
