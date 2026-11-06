@@ -187,7 +187,29 @@ public class PolicyController : ControllerBase
         return Ok(policy);
     }
 
-    /// <summary>Makes a mode the default and puts every child on it ("Set everyone to...").</summary>
+    /// <summary>Removes a child's own mode so it follows the account default again.</summary>
+    [HttpDelete("children/{childProfileId}/assignment")]
+    public async Task<IActionResult> ClearChildAssignment(Guid childProfileId, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var before = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
+        if (!await _policyStore.ClearChildAssignmentAsync(accountId, childProfileId, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        await PushChangedDevicesAsync(accountId, before, cancellationToken);
+        _logger.LogInformation("Child {ChildProfileId} on account {AccountId} now follows the default mode", childProfileId, accountId);
+
+        return NoContent();
+    }
+
+    /// <summary>Makes a mode the default and puts every child and device on it ("Set everyone to...").</summary>
     [HttpPost("profiles/{profileId}/activate-all")]
     public async Task<ActionResult<PolicyConfiguration>> ActivateProfileForEveryone(Guid profileId, CancellationToken cancellationToken)
     {

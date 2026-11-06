@@ -49,8 +49,17 @@ public interface IPolicyStore
     /// <summary>Activates a mode for one child, or (childProfileId null) as the account default.</summary>
     Task<PolicyConfiguration?> SetActiveProfileAsync(string accountId, Guid profileId, Guid? childProfileId = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Makes a mode the account default and puts every child back on the default.</summary>
+    /// <summary>
+    /// Makes a mode the account default and removes every child and device override, so every
+    /// device of the account ends up on it.
+    /// </summary>
     Task<PolicyConfiguration?> SetActiveProfileForEveryoneAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Removes one child's own mode assignment so the child follows the account default again.
+    /// Returns false if the child doesn't belong to the account.
+    /// </summary>
+    Task<bool> ClearChildAssignmentAsync(string accountId, Guid childProfileId, CancellationToken cancellationToken = default);
 
     Task<PolicyAssignmentsDto> GetAssignmentsAsync(string accountId, CancellationToken cancellationToken = default);
 

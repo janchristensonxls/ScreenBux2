@@ -42,6 +42,12 @@
                     {
                         <span class="small text-muted">Follows the default mode</span>
                     }
+                    else
+                    {
+                        <button type="button" class="btn btn-sm btn-link px-0" disabled="@Busy"
+                                title="@($"Remove {child.DisplayName}'s own mode so they switch along with the default mode")"
+                                @onclick="() => OnFollowDefault.InvokeAsync(child.ChildProfileId)">↺ Follow default</button>
+                    }
                     <button type="button" class="btn btn-sm btn-link ms-auto px-0" disabled="@(child.DeviceCount == 0)"
                             title="@(child.DeviceCount == 0 ? "No devices linked" : $"Send a pop-up message to {child.DisplayName}")"
                             @onclick="() => ToggleMessage(child.ChildProfileId)">
@@ -82,6 +88,9 @@
     [Parameter] public EventCallback<(Guid ProfileId, Guid? ChildProfileId)> OnActivate { get; set; }
 
     [Parameter] public EventCallback<Guid> OnActivateAll { get; set; }
+
+    /// <summary>Child id whose own mode should be removed so it follows the default again.</summary>
+    [Parameter] public EventCallback<Guid> OnFollowDefault { get; set; }
 
     private string _everyoneProfileId = string.Empty;
     private readonly HashSet<Guid> _messageOpenFor = new();

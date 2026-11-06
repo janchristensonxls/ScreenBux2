@@ -243,20 +243,36 @@ public class EfPolicyStore : IPolicyStore
 
     public async Task<PolicyConfiguration?> SetActiveProfileForEveryoneAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default)
     {
-        var policy = await SetActiveProfileAsync(accountId, profileId, childProfileId: null, cancellationToken);
-        if (policy is null)
+        if (!await _db.PolicyProfiles.AnyAsync(p => p.AccountId == accountId && p.Id == profileId, cancellationToken))
         {
             return null;
         }
 
-        // Children go back to following the default. Device-scoped documents are left alone.
-        var childDocuments = await _db.PolicyDocuments
-            .Where(d => d.AccountId == accountId && d.ChildProfileId != null && d.DeviceId == null)
+        // "Everyone" really means every device: drop all child AND device-scoped overrides, since a
+        // device-scoped document takes precedence over the default and would otherwise keep that
+        // device on its old mode (e.g. outside "Sleep") while the UI reports everyone switched.
+        // Removed here and saved together with the default's repointing in SetActiveProfileAsync.
+        var overrides = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && (d.ChildProfileId != null || d.DeviceId != null))
             .ToListAsync(cancellationToken);
-        _db.PolicyDocuments.RemoveRange(childDocuments);
-        await _db.SaveChangesAsync(cancellationToken);
+        _db.PolicyDocuments.RemoveRange(overrides);
 
-        return policy;
+        return await SetActiveProfileAsync(accountId, profileId, childProfileId: null, cancellationToken);
+    }
+
+    public async Task<bool> ClearChildAssignmentAsync(string accountId, Guid childProfileId, CancellationToken cancellationToken = default)
+    {
+        if (!await _db.ChildProfiles.AnyAsync(c => c.AccountId == accountId && c.Id == childProfileId, cancellationToken))
+        {
+            return false;
+        }
+
+        var documents = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && d.ChildProfileId == childProfileId && d.DeviceId == null)
+            .ToListAsync(cancellationToken);
+        _db.PolicyDocuments.RemoveRange(documents);
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private sealed record AssignmentState(Guid DefaultProfileId, Dictionary<Guid, Guid> ChildAssigned, List<ChildProfile> Children)

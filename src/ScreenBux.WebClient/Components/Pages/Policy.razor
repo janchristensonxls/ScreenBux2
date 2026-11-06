@@ -26,7 +26,7 @@
 @if (_profiles.Count > 0)
 {
     <ModeAssignments Profiles="_profiles" Assignments="_assignments" UsageByChild="_usageByChild" Busy="_busy"
-                     OnActivate="ActivateAsync" OnActivateAll="ActivateForEveryoneAsync" />
+                     OnActivate="ActivateAsync" OnActivateAll="ActivateForEveryoneAsync" OnFollowDefault="FollowDefaultAsync" />
 }
 
 <div class="row g-3">
@@ -408,6 +408,28 @@
         {
             await PolicyApiService.ActivateProfileAsync(request.ProfileId, request.ChildProfileId);
             Status(who is null ? $"Default mode is now \"{mode}\"." : $"{who} switched to \"{mode}\".");
+            await RefreshListsAsync();
+        }
+        catch (Exception ex)
+        {
+            Status($"Failed to switch mode: {ex.Message}", true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task FollowDefaultAsync(Guid childProfileId)
+    {
+        var who = _assignments.Children.FirstOrDefault(c => c.ChildProfileId == childProfileId)?.DisplayName ?? "Child";
+        var mode = _profiles.FirstOrDefault(p => p.Id == _assignments.DefaultProfileId)?.Name ?? "the default mode";
+
+        _busy = true;
+        try
+        {
+            await PolicyApiService.FollowDefaultAsync(childProfileId);
+            Status($"{who} now follows the default mode (\"{mode}\").");
             await RefreshListsAsync();
         }
         catch (Exception ex)

@@ -83,6 +83,13 @@ public class PolicyApiService
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>Removes a child's own mode so it follows the default mode again.</summary>
+    public async Task FollowDefaultAsync(Guid childProfileId)
+    {
+        var response = await _httpClient.DeleteAsync($"api/policy/children/{childProfileId}/assignment");
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<PolicyAssignmentsDto> GetAssignmentsAsync()
     {
         return await _httpClient.GetFromJsonAsync<PolicyAssignmentsDto>("api/policy/assignments", PolicyJsonOptions.Default)
