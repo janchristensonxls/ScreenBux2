@@ -1,0 +1,80 @@
+@using ScreenBux.Shared.Models
+
+@* Inline "switch to mode X for ..." form used on each child card and for everyone. *@
+<div class="pe-mode-switch mt-2">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+        <select class="form-select form-select-sm w-auto" @bind="_profileId">
+            @foreach (var p in Profiles)
+            {
+                <option value="@p.Id">@p.Name</option>
+            }
+        </select>
+        <select class="form-select form-select-sm w-auto" @bind="_end">
+            <option value="@ModeSwitchEnd.Duration">for…</option>
+            <option value="@ModeSwitchEnd.UntilTime">until…</option>
+            @if (HasSchedule)
+            {
+                <option value="@ModeSwitchEnd.NextScheduleChange">until the schedule changes</option>
+            }
+            <option value="@ModeSwitchEnd.Pin">until I end it</option>
+            <option value="@ModeSwitchEnd.Permanent">as default mode</option>
+        </select>
+        @if (_end == ModeSwitchEnd.Duration)
+        {
+            <select class="form-select form-select-sm w-auto" @bind="_minutes">
+                @foreach (var m in DurationChoices)
+                {
+                    <option value="@m">@(m < 60 ? $"{m} min" : $"{m / 60} h")</option>
+                }
+            </select>
+        }
+        else if (_end == ModeSwitchEnd.UntilTime)
+        {
+            <DxTimeEdit T="TimeSpan" @bind-Time="_untilTime" Format="HH:mm" DisplayFormat="HH:mm" ScrollPickerFormat="HH mm" MinuteIncrement="5" Width="110px" />
+        }
+    </div>
+    <div class="small text-muted mt-1">@Explanation</div>
+    <div class="d-flex gap-2 mt-2">
+        <button type="button" class="btn btn-sm btn-primary" disabled="@Busy" @onclick="ApplyAsync">Switch</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OnCancel.InvokeAsync()">Cancel</button>
+    </div>
+</div>
+
+@code {
+    private static readonly int[] DurationChoices = { 15, 30, 60, 90, 120, 180, 240 };
+
+    [Parameter, EditorRequired] public IReadOnlyList<PolicyProfileDto> Profiles { get; set; } = Array.Empty<PolicyProfileDto>();
+    [Parameter] public Guid InitialProfileId { get; set; }
+    [Parameter] public bool HasSchedule { get; set; }
+    [Parameter] public bool IsEveryone { get; set; }
+    /// <summary>The mode in effect now, used to warn that a new default waits for a scheduled slot to end.</summary>
+    [Parameter] public ModeResolution? Current { get; set; }
+    [Parameter] public string? CurrentUntil { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<ModeSwitchChoice> OnApply { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Guid _profileId;
+    private ModeSwitchEnd _end = ModeSwitchEnd.Duration;
+    private int _minutes = 60;
+    private TimeSpan _untilTime = new(20, 0, 0);
+
+    protected override void OnInitialized() => _profileId = InitialProfileId;
+
+    private string Explanation => _end switch
+    {
+        ModeSwitchEnd.NextScheduleChange => "Switches now and ends when the schedule moves to another mode.",
+        ModeSwitchEnd.Pin => "Switches now and stays until you end it - the schedule (including Sleep) is ignored meanwhile.",
+        ModeSwitchEnd.Permanent when Current?.Source == ModeSource.Schedule =>
+            $"Changes the default mode. A scheduled mode is active{(CurrentUntil is null ? "" : $" until {CurrentUntil}")} - the new default applies after that. Pick another option to switch now.",
+        ModeSwitchEnd.Permanent when Current?.Source == ModeSource.Override =>
+            "Changes the default mode. A temporary switch is active - the new default applies when it ends.",
+        ModeSwitchEnd.Permanent => IsEveryone
+            ? "Makes this the default for everyone, ends all temporary switches, and removes children's own default modes (schedules are kept)."
+            : "Changes the default mode - what applies when nothing is scheduled.",
+        _ => "Switches now; afterwards the schedule or default mode applies again."
+    };
+
+    private Task ApplyAsync() =>
+        OnApply.InvokeAsync(new ModeSwitchChoice(_profileId, _end, _minutes, _untilTime));
+}

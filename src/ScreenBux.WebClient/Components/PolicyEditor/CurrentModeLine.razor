@@ -1,0 +1,35 @@
+@using ScreenBux.Shared.Models
+
+@* "Now: School · scheduled until 15:00, then Normal" (+ End now for a temporary switch). *@
+@{
+    var current = Status.Current;
+    var now = DateTime.UtcNow;
+    var until = current.UntilUtc is DateTime u ? ModeUi.FormatLocal(u, Status.TimeZoneId, now) : null;
+    var next = current.NextProfileId is Guid n ? NameOf(n) : null;
+    var isOverride = current.Source == ModeSource.Override;
+    var canEnd = isOverride && Status.OwnOverride is not null;
+}
+<div class="small mt-1 d-flex align-items-center flex-wrap gap-1">
+    <span>Now:</span>
+    <span class="badge @(isOverride ? "bg-warning text-dark" : current.Source == ModeSource.Schedule ? "bg-info text-dark" : "bg-secondary")">@NameOf(current.ProfileId)</span>
+    <span class="text-muted">
+        @(isOverride && !canEnd ? "temporary (everyone)" : ModeUi.SourceLabel(current.Source))@(until is null
+            ? (isOverride ? ", until ended" : "")
+            : $" until {until}")@(next is null ? "" : $", then {next}")
+    </span>
+    @if (canEnd)
+    {
+        <button type="button" class="btn btn-sm btn-link py-0 px-1" disabled="@Busy"
+                title="@(EveryoneOverride ? "End the temporary switch for everyone now" : "End the temporary switch now")"
+                @onclick="() => OnEndOverride.InvokeAsync()">End now</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ModeScopeStatusDto Status { get; set; } = new();
+    [Parameter, EditorRequired] public Func<Guid, string> NameOf { get; set; } = _ => string.Empty;
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>True on the account card, where an override is the "everyone" switch.</summary>
+    [Parameter] public bool EveryoneOverride { get; set; }
+    [Parameter] public EventCallback OnEndOverride { get; set; }
+}

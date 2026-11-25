@@ -85,3 +85,4 @@ h1:focus {
 .list-group-item.active .pe-user-chip { background: rgba(255,255,255,.25); color: #fff; }
 .pe-shared-banner { background: #fff8e1; }
 .pe-msgbox { border-top: 1px solid #e3e6ea; padding-top: .5rem; }
+.pe-mode-switch { border-top: 1px dashed #dee2e6; padding-top: .5rem; }

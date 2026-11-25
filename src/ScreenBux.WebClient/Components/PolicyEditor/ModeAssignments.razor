@@ -1,26 +1,31 @@
 @using ScreenBux.Shared.Models
 @using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
 
-@* "Who is in which mode" - switching modes per child happens here, never in the mode editor below. *@
+@* "Who is in which mode" - switching modes per child happens here, never in the mode editor below.
+   Which mode is in effect: temporary switch > schedule > default mode
+   (docs/decisions/mode-scheduling-and-temporary-overrides.md). *@
 <div class="pe-assign mb-3">
     <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
         <h5 class="mb-0 me-auto">Children</h5>
-        <span class="small text-muted">Set everyone to</span>
-        <select class="form-select form-select-sm w-auto" @bind="_everyoneProfileId">
-            <option value="">Choose mode…</option>
-            @foreach (var p in Profiles)
-            {
-                <option value="@p.Id">@p.Name</option>
-            }
-        </select>
-        <button type="button" class="btn btn-sm btn-outline-primary" disabled="@(!Guid.TryParse(_everyoneProfileId, out _) || Busy)"
-                @onclick="SetEveryoneAsync">Apply</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" disabled="@Busy"
+                @onclick="() => _switchFor = _switchFor == EveryoneKey ? null : EveryoneKey">Switch everyone…</button>
     </div>
+    @if (_switchFor == EveryoneKey)
+    {
+        <div class="pe-assign-card mb-2">
+            <span class="fw-semibold">Switch everyone</span>
+            <ModeSwitchPanel Profiles="Profiles" InitialProfileId="AccountStatus?.Current.ProfileId ?? Assignments.DefaultProfileId"
+                             HasSchedule="Modes.Any(m => m.EffectiveSchedule.Count > 0)" IsEveryone="true" Busy="Busy"
+                             OnApply="c => ApplySwitchAsync(null, c)" OnCancel="() => _switchFor = null" />
+        </div>
+    }
 
     <div class="pe-assign-cards">
         @foreach (var child in Assignments.Children)
         {
             var used = UsageByChild.TryGetValue(child.ChildProfileId, out var s) ? s : (long?)null;
+            var status = StatusOf(child.ChildProfileId);
+            var currentId = status?.Current.ProfileId ?? child.EffectiveProfileId;
             <div class="pe-assign-card">
                 <div class="d-flex align-items-baseline gap-2">
                     <span class="fw-semibold">@child.DisplayName</span>
@@ -28,26 +33,43 @@
                         @child.DeviceCount device@(child.DeviceCount == 1 ? "" : "s")@(used is long u ? $" · {FormatMinutes((int)(u / 60))} today" : "")
                     </span>
                 </div>
+
+                @if (status is not null)
+                {
+                    <CurrentModeLine Status="status" NameOf="NameOf" Busy="Busy" OnEndOverride="() => OnEndOverride.InvokeAsync(child.ChildProfileId)" />
+                }
+
                 <div class="d-flex flex-wrap gap-1 mt-2">
                     @foreach (var p in Profiles)
                     {
-                        var current = p.Id == child.EffectiveProfileId;
+                        var current = p.Id == currentId;
                         <button type="button" class="btn btn-sm @(current ? "btn-primary" : "btn-outline-secondary")" disabled="@Busy"
-                                title="@(current ? $"{child.DisplayName} is in {p.Name}" : $"Switch {child.DisplayName} to {p.Name}")"
-                                @onclick="() => OnActivate.InvokeAsync((p.Id, child.ChildProfileId))">@p.Name</button>
+                                title="@(current ? $"{child.DisplayName} is in {p.Name}" : $"Switch {child.DisplayName} to {p.Name}…")"
+                                @onclick="() => OpenSwitch(child.ChildProfileId, p.Id)">@p.Name</button>
                     }
                 </div>
-                <div class="d-flex align-items-center mt-1">
-                    @if (child.AssignedProfileId is null)
-                    {
-                        <span class="small text-muted">Follows the default mode</span>
-                    }
-                    else
+                @if (_switchFor == child.ChildProfileId)
+                {
+                    <ModeSwitchPanel @key="_switchProfileId" Profiles="Profiles" InitialProfileId="_switchProfileId"
+                                     HasSchedule="status?.EffectiveSchedule.Count > 0" Current="status?.Current"
+                                     CurrentUntil="UntilText(status)" Busy="Busy"
+                                     OnApply="c => ApplySwitchAsync(child.ChildProfileId, c)" OnCancel="() => _switchFor = null" />
+                }
+
+                <div class="small text-muted mt-2">
+                    Default: <strong>@NameOf(child.AssignedProfileId ?? Assignments.DefaultProfileId)</strong>
+                    @(child.AssignedProfileId is null ? "(follows the default mode)" : "")
+                    · Schedule: @ScheduleText(status)
+                </div>
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                    @if (child.AssignedProfileId is not null)
                     {
                         <button type="button" class="btn btn-sm btn-link px-0" disabled="@Busy"
-                                title="@($"Remove {child.DisplayName}'s own mode so they switch along with the default mode")"
+                                title="@($"Remove {child.DisplayName}'s own default mode so they switch along with the default mode")"
                                 @onclick="() => OnFollowDefault.InvokeAsync(child.ChildProfileId)">↺ Follow default</button>
                     }
+                    <button type="button" class="btn btn-sm btn-link px-0" disabled="@(status is null)"
+                            @onclick="() => ToggleSchedule(child.ChildProfileId)">🗓 Schedule</button>
                     <button type="button" class="btn btn-sm btn-link ms-auto px-0" disabled="@(child.DeviceCount == 0)"
                             title="@(child.DeviceCount == 0 ? "No devices linked" : $"Send a pop-up message to {child.DisplayName}")"
                             @onclick="() => ToggleMessage(child.ChildProfileId)">
@@ -66,6 +88,11 @@
                 <span class="fw-semibold">Default mode</span>
                 <span class="small text-muted ms-auto">@Assignments.UnassignedDeviceCount unassigned device@(Assignments.UnassignedDeviceCount == 1 ? "" : "s")</span>
             </div>
+            @if (AccountStatus is not null)
+            {
+                <CurrentModeLine Status="AccountStatus" NameOf="NameOf" Busy="Busy" EveryoneOverride="true"
+                                 OnEndOverride="() => OnEndOverride.InvokeAsync(null)" />
+            }
             <select class="form-select form-select-sm mt-2" value="@Assignments.DefaultProfileId" disabled="@Busy"
                     @onchange="e => OnActivate.InvokeAsync((Guid.Parse((string)e.Value!), (Guid?)null))">
                 @foreach (var p in Profiles)
@@ -73,42 +100,120 @@
                     <option value="@p.Id">@p.Name</option>
                 }
             </select>
-            <div class="small text-muted mt-1">Used by devices not linked to a child, and by children that follow the default.</div>
+            <div class="small text-muted mt-1">
+                Used by devices not linked to a child, and by children that follow the default. · Schedule: @ScheduleText(AccountStatus)
+            </div>
+            <button type="button" class="btn btn-sm btn-link px-0" disabled="@(AccountStatus is null)"
+                    @onclick="() => ToggleSchedule(null)">🗓 Account schedule</button>
         </div>
     </div>
+
+    @if (_scheduleOpen && (_scheduleFor is null ? AccountStatus : StatusOf(_scheduleFor.Value)) is { } scheduleStatus)
+    {
+        <div class="mt-3">
+            <ModeScheduleEditor @key="_scheduleFor" Profiles="Profiles" Status="scheduleStatus" Busy="Busy"
+                                Title="@(scheduleStatus.DisplayName ?? "account (children that follow it, and unassigned devices)")"
+                                OnSave="s => SaveScheduleAsync(scheduleStatus.ChildProfileId, s)" OnCancel="() => _scheduleOpen = false" />
+        </div>
+    }
 </div>
 
 @code {
+    /// <summary>Key for the "Switch everyone" panel (no child has an empty id).</summary>
+    private static readonly Guid EveryoneKey = Guid.Empty;
+
     [Parameter, EditorRequired] public IReadOnlyList<PolicyProfileDto> Profiles { get; set; } = Array.Empty<PolicyProfileDto>();
     [Parameter, EditorRequired] public PolicyAssignmentsDto Assignments { get; set; } = new();
+    /// <summary>Mode status per scope: the account (ChildProfileId null) and each child.</summary>
+    [Parameter] public IReadOnlyList<ModeScopeStatusDto> Modes { get; set; } = Array.Empty<ModeScopeStatusDto>();
     [Parameter] public IReadOnlyDictionary<Guid, long> UsageByChild { get; set; } = new Dictionary<Guid, long>();
     [Parameter] public bool Busy { get; set; }
 
-    /// <summary>(mode id, child id or null for the account default)</summary>
+    /// <summary>(mode id, child id or null for the account default) - sets the default mode.</summary>
     [Parameter] public EventCallback<(Guid ProfileId, Guid? ChildProfileId)> OnActivate { get; set; }
 
+    /// <summary>Sets the default mode for everyone ("Set everyone to...").</summary>
     [Parameter] public EventCallback<Guid> OnActivateAll { get; set; }
 
     /// <summary>Child id whose own mode should be removed so it follows the default again.</summary>
     [Parameter] public EventCallback<Guid> OnFollowDefault { get; set; }
 
-    private string _everyoneProfileId = string.Empty;
+    /// <summary>Temporary switch for a child, or (null) everyone.</summary>
+    [Parameter] public EventCallback<(Guid? ChildProfileId, SetModeOverrideRequest Request)> OnOverride { get; set; }
+
+    /// <summary>Ends the temporary switch of a child, or (null) the account's.</summary>
+    [Parameter] public EventCallback<Guid?> OnEndOverride { get; set; }
+
+    /// <summary>Saves a schedule; null schedule = child follows the account schedule.</summary>
+    [Parameter] public EventCallback<(Guid? ChildProfileId, List<ModeScheduleEntry>? Schedule)> OnSaveSchedule { get; set; }
+
     private readonly HashSet<Guid> _messageOpenFor = new();
+    private Guid? _switchFor;
+    private Guid _switchProfileId;
+    private bool _scheduleOpen;
+    private Guid? _scheduleFor;
+
+    private ModeScopeStatusDto? AccountStatus => Modes.FirstOrDefault(m => m.ChildProfileId is null);
+
+    private ModeScopeStatusDto? StatusOf(Guid childId) => Modes.FirstOrDefault(m => m.ChildProfileId == childId);
+
+    private string NameOf(Guid profileId) => Profiles.FirstOrDefault(p => p.Id == profileId)?.Name ?? "(deleted mode)";
+
+    private static string? UntilText(ModeScopeStatusDto? status) =>
+        status?.Current.UntilUtc is DateTime until ? ModeUi.FormatLocal(until, status.TimeZoneId, DateTime.UtcNow) : null;
+
+    private static string ScheduleText(ModeScopeStatusDto? status) => status switch
+    {
+        null => "–",
+        { ChildProfileId: not null, OwnSchedule: null } => status.EffectiveSchedule.Count == 0 ? "none (follows account)" : "follows account",
+        _ when status.EffectiveSchedule.Count == 0 => "none",
+        _ => $"{status.EffectiveSchedule.Count} slot{(status.EffectiveSchedule.Count == 1 ? "" : "s")}"
+    };
+
+    private void OpenSwitch(Guid childId, Guid profileId)
+    {
+        _switchFor = childId;
+        _switchProfileId = profileId;
+    }
+
+    private async Task ApplySwitchAsync(Guid? childId, ModeSwitchChoice choice)
+    {
+        var timeZoneId = (childId is Guid c ? StatusOf(c) : AccountStatus)?.TimeZoneId ?? "UTC";
+        var request = ModeUi.ToRequest(choice, timeZoneId, DateTime.UtcNow);
+
+        if (request is not null)
+        {
+            await OnOverride.InvokeAsync((childId, request));
+        }
+        else if (childId is null)
+        {
+            await OnActivateAll.InvokeAsync(choice.ProfileId);
+        }
+        else
+        {
+            await OnActivate.InvokeAsync((choice.ProfileId, childId));
+        }
+
+        _switchFor = null;
+    }
+
+    private void ToggleSchedule(Guid? childId)
+    {
+        _scheduleOpen = !(_scheduleOpen && _scheduleFor == childId);
+        _scheduleFor = childId;
+    }
+
+    private async Task SaveScheduleAsync(Guid? childId, List<ModeScheduleEntry>? schedule)
+    {
+        await OnSaveSchedule.InvokeAsync((childId, schedule));
+        _scheduleOpen = false;
+    }
 
     private void ToggleMessage(Guid childId)
     {
         if (!_messageOpenFor.Remove(childId))
         {
             _messageOpenFor.Add(childId);
-        }
-    }
-
-    private async Task SetEveryoneAsync()
-    {
-        if (Guid.TryParse(_everyoneProfileId, out var id))
-        {
-            await OnActivateAll.InvokeAsync(id);
-            _everyoneProfileId = string.Empty;
         }
     }
 }

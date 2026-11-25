@@ -310,8 +310,8 @@ public class PolicyService
         var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(_timeProvider.GetUtcNow().UtcDateTime, timeZone);
 
         return local.Date == nowLocal.Date
-            ? $"until {local:HH:mm}"
-            : $"until {local:ddd HH:mm}";
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"until {local:HH:mm}")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"until {local:ddd HH:mm}");
     }
 
     private void TryDeleteBundleFile()

@@ -1,7 +1,7 @@
 # Decision Record: Mode Scheduling and Temporary Mode Overrides
 
-Status: **Accepted**. Phases 1-4 implemented (Shared model/resolver, database, WebServer,
-Service); phase 5 (WebClient) pending. Endpoints are listed in `API.md`.
+Status: **Accepted and implemented** (phases 1-5: Shared model/resolver, database, WebServer,
+Service, WebClient). Endpoints are listed in `API.md`.
 Related: `docs/decisions/group-based-policy-model.md` (decision 3, third bullet, deferred
 "auto-selecting the active mode by schedule" - this record is that follow-up).
 
@@ -146,6 +146,22 @@ schedules/overrides (proposal: clears child overrides, keeps child schedules).
 - A change of mode (not the first resolution after startup) is logged, raised as
   `PolicyService.ModeChanged`, and queued as an `Info` notification for the Agent:
   "School mode is now active until 15:00."
+
+### 7. WebClient (phase 5, as implemented)
+
+On the Policy page's children strip (`ModeAssignments`):
+- Each card shows **Now: Mode** with its source (default / scheduled / temporary), "until
+  15:00, then Normal" in the device's time zone, and **End now** for the child's own temporary
+  switch. Refreshed after every change and once a minute.
+- Clicking a mode button opens `ModeSwitchPanel` (it no longer switches immediately): for N
+  minutes, until a time, until the schedule changes (only offered when there is a schedule),
+  until ended (pin), or **as default mode** - the permanent assignment, with a note when a
+  scheduled slot or temporary switch means it won't be visible yet.
+- **Switch everyone…** offers the same choices: temporary ones use `override/everyone`,
+  "as default mode" uses `activate-all`.
+- **🗓 Schedule** (per child: follow account / own schedule) and **🗓 Account schedule** open
+  `ModeScheduleEditor`: rows of mode + days + time range, on/off, reorder, with a warning
+  listing overlapping slots of different modes (first row wins).
 
 ## Unchanged / orthogonal
 

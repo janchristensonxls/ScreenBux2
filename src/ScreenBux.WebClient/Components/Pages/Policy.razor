@@ -8,6 +8,7 @@
 @inject ScreenBux.WebClient.Services.PolicyApiService PolicyApiService
 @inject ScreenBux.WebClient.Services.UsageApiService UsageApiService
 @inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>Policy</PageTitle>
 
@@ -25,8 +26,9 @@
 
 @if (_profiles.Count > 0)
 {
-    <ModeAssignments Profiles="_profiles" Assignments="_assignments" UsageByChild="_usageByChild" Busy="_busy"
-                     OnActivate="ActivateAsync" OnActivateAll="ActivateForEveryoneAsync" OnFollowDefault="FollowDefaultAsync" />
+    <ModeAssignments Profiles="_profiles" Assignments="_assignments" Modes="_modes" UsageByChild="_usageByChild" Busy="_busy"
+                     OnActivate="ActivateAsync" OnActivateAll="ActivateForEveryoneAsync" OnFollowDefault="FollowDefaultAsync"
+                     OnOverride="OverrideAsync" OnEndOverride="EndOverrideAsync" OnSaveSchedule="SaveScheduleAsync" />
 }
 
 <div class="row g-3">
@@ -259,6 +261,8 @@
     private bool _busy;
     private PolicyAssignmentsDto _assignments = new();
     private Dictionary<Guid, long> _usageByChild = new();
+    private List<ModeScopeStatusDto> _modes = new();
+    private Timer? _modesTimer;
 
     private bool IsDirty => _policy is not null && (PolicyEditorHelpers.Serialize(_policy) != _snapshot || _name != _snapshotName);
 
@@ -267,7 +271,23 @@
         await LoadProfilesAsync(selectId: null);
         _loading = false;
         await LoadUsageAsync();
+
+        // "Now: School until 15:00" goes stale as time passes; refresh it once a minute.
+        _modesTimer = new Timer(_ => InvokeAsync(async () =>
+        {
+            try
+            {
+                _modes = await PolicyApiService.GetModesAsync();
+                StateHasChanged();
+            }
+            catch
+            {
+                // Best-effort refresh; the next action or tick tries again.
+            }
+        }), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
     }
+
+    public void Dispose() => _modesTimer?.Dispose();
 
     /// <summary>Today's usage per child, for the children strip. Best-effort.</summary>
     private async Task LoadUsageAsync()
@@ -310,6 +330,7 @@
     {
         _profiles = await PolicyApiService.GetProfilesAsync();
         _assignments = await PolicyApiService.GetAssignmentsAsync();
+        _modes = await PolicyApiService.GetModesAsync();
         if (_selected is not null)
         {
             _selected = _profiles.FirstOrDefault(p => p.Id == _selected.Id) ?? _selected;
@@ -328,6 +349,7 @@
         {
             _profiles = await PolicyApiService.GetProfilesAsync();
             _assignments = await PolicyApiService.GetAssignmentsAsync();
+            _modes = await PolicyApiService.GetModesAsync();
             var target = _profiles.FirstOrDefault(p => p.Id == selectId)
                          ?? _profiles.FirstOrDefault(p => p.IsDefault)
                          ?? _profiles.FirstOrDefault();
@@ -407,7 +429,7 @@
         try
         {
             await PolicyApiService.ActivateProfileAsync(request.ProfileId, request.ChildProfileId);
-            Status(who is null ? $"Default mode is now \"{mode}\"." : $"{who} switched to \"{mode}\".");
+            Status(who is null ? $"Default mode is now \"{mode}\"." : $"{who}'s default mode is now \"{mode}\".");
             await RefreshListsAsync();
         }
         catch (Exception ex)
@@ -445,13 +467,13 @@
     private async Task ActivateForEveryoneAsync(Guid profileId)
     {
         var mode = _profiles.FirstOrDefault(p => p.Id == profileId)?.Name ?? "mode";
-        if (!await JS.InvokeAsync<bool>("confirm", $"Switch every child (and unassigned devices) to \"{mode}\"?")) return;
+        if (!await JS.InvokeAsync<bool>("confirm", $"Make \"{mode}\" the default mode for every child (and unassigned devices) and end all temporary switches?")) return;
 
         _busy = true;
         try
         {
             await PolicyApiService.ActivateProfileForEveryoneAsync(profileId);
-            Status($"Everyone switched to \"{mode}\".");
+            Status($"\"{mode}\" is now everyone's default mode.");
             await RefreshListsAsync();
         }
         catch (Exception ex)
@@ -463,6 +485,61 @@
             _busy = false;
         }
     }
+
+    private string ChildName(Guid? childProfileId) => childProfileId is Guid id
+        ? _assignments.Children.FirstOrDefault(c => c.ChildProfileId == id)?.DisplayName ?? "Child"
+        : "Everyone";
+
+    private string ModeName(Guid profileId) => _profiles.FirstOrDefault(p => p.Id == profileId)?.Name ?? "mode";
+
+    /// <summary>Runs a mode change with the busy flag, a status message, and a refresh of the lists.</summary>
+    private async Task RunModeChangeAsync(Func<Task> change, string success)
+    {
+        _busy = true;
+        try
+        {
+            await change();
+            Status(success);
+            await RefreshListsAsync();
+        }
+        catch (Exception ex)
+        {
+            Status($"Failed to change mode: {ex.Message}", true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task OverrideAsync((Guid? ChildProfileId, SetModeOverrideRequest Request) change)
+    {
+        var who = ChildName(change.ChildProfileId);
+        var how = change.Request switch
+        {
+            { DurationMinutes: int m } => $" for {PolicyEditorHelpers.FormatMinutes(m)}",
+            { ExpiresAtUtc: not null } => " until the chosen time",
+            { EndsAtNextScheduleChange: true } => " until the schedule changes",
+            _ => " until you end it"
+        };
+        return RunModeChangeAsync(
+            () => PolicyApiService.SetOverrideAsync(change.ChildProfileId, change.Request),
+            $"{who} switched to \"{ModeName(change.Request.ProfileId)}\"{how}.");
+    }
+
+    private Task EndOverrideAsync(Guid? childProfileId) =>
+        RunModeChangeAsync(
+            () => PolicyApiService.ClearOverrideAsync(childProfileId),
+            childProfileId is null ? "Temporary switch for everyone ended." : $"{ChildName(childProfileId)}'s temporary switch ended.");
+
+    private Task SaveScheduleAsync((Guid? ChildProfileId, List<ModeScheduleEntry>? Schedule) change) =>
+        RunModeChangeAsync(
+            () => PolicyApiService.SetScheduleAsync(change.ChildProfileId, change.Schedule),
+            change.ChildProfileId is null
+                ? "Account schedule saved."
+                : change.Schedule is null
+                    ? $"{ChildName(change.ChildProfileId)} now follows the account schedule."
+                    : $"{ChildName(change.ChildProfileId)}'s schedule saved.");
 
     /// <summary>Copies the selected mode as "Mode (Child)", switches that child to the copy, and opens it.</summary>
     private async Task CustomizeForChildAsync(ChildModeAssignmentDto child)
