@@ -2,10 +2,9 @@ namespace ScreenBux.Shared.Models;
 
 /// <summary>
 /// A recurring, device-local schedule window (e.g. "Fri-Sun 18:00-22:00", or an overnight
-/// "22:00-06:00" bedtime range). Reused in two places today - <see cref="CategoryPolicy.AllowedWindows"/>
-/// and <see cref="SessionRule.Schedule"/> - and reserved for a possible future third use
-/// (auto-selecting the active <c>PolicyProfile</c> by schedule; not implemented yet, see
-/// docs/decisions/group-based-policy-model.md).
+/// "22:00-06:00" bedtime range). Used by <see cref="CategoryPolicy.AllowedWindows"/>,
+/// <see cref="SessionRule.Schedule"/> and <see cref="ModeScheduleEntry.Window"/> (selecting the
+/// active mode by schedule, see docs/decisions/mode-scheduling-and-temporary-overrides.md).
 /// </summary>
 public class TimeWindow
 {
