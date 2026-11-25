@@ -161,6 +161,42 @@ Trigger the Windows Service to reload its policy configuration.
 }
 ```
 
+### Mode schedule and temporary override
+
+Which mode is in effect is decided per scope (account default, or one child) as
+**override > schedule > default**. See
+`docs/decisions/mode-scheduling-and-temporary-overrides.md`. All endpoints below take an
+optional `childProfileId` query parameter; without it they act on the account default. Every
+change pushes `PolicyBundleUpdated` (and the legacy `PolicyUpdated`) to the affected devices and
+returns the updated `ModeScopeStatusDto[]`.
+
+| Method & path | Body | Effect |
+|---|---|---|
+| `GET /api/policy/modes` | - | `ModeScopeStatusDto[]`: account default first, then each child - default, own/effective schedule, own/effective override, time zone, and `current` (mode, source, `untilUtc`, `nextProfileId`). |
+| `PUT /api/policy/schedule` | `ModeScheduleEntry[]` | Replaces the scope's schedule. For a child, `[]` means "no schedule" (does not follow the account's). |
+| `DELETE /api/policy/schedule` | - | Removes the scope's own schedule: a child follows the account schedule again. |
+| `POST /api/policy/override` | `SetModeOverrideRequest` | Switches the scope to a mode now. |
+| `POST /api/policy/override/everyone` | `SetModeOverrideRequest` | Sets the account override and removes all child overrides. |
+| `DELETE /api/policy/override` | - | Ends the scope's override now. |
+
+`ModeScheduleEntry`: `{ "profileId": "...", "enabled": true, "window": { "daysOfWeek": ["Monday", ...], "startTime": "08:00:00", "endTime": "15:00:00" } }`
+(first enabled match wins; an end before the start wraps past midnight).
+
+`SetModeOverrideRequest`: `{ "profileId": "...", "durationMinutes": 60 }`, or
+`"expiresAtUtc"` instead of a duration, optionally with `"endsAtNextScheduleChange": true`
+(whichever end comes first). No end at all pins the mode until the override is ended.
+
+`POST /api/policy/profiles/{id}/activate-all` ("Set everyone to...") also ends every override,
+but keeps schedules. `DELETE /api/policy/children/{id}/assignment` keeps the child's own
+schedule and override. A mode used by any default, schedule or override can't be deleted.
+
+### Device policy
+
+| Method & path | Returns |
+|---|---|
+| `GET /api/devices/{id}/policy-bundle?timeZoneId=...` | `DevicePolicyBundle`: the device's flattened `ModeSelection` plus the policy of every mode it can resolve to. The device resolves the mode itself every tick with `ModeResolver`. `timeZoneId` (`TimeZoneInfo.Local.Id`) is stored on the device. |
+| `GET /api/devices/{id}/policy?timeZoneId=...` | The `PolicyConfiguration` in effect right now (resolved on the server in the device's time zone). For clients that don't use bundles. |
+
 ## SignalR Hub
 
 The Web Server hosts a SignalR hub for real-time communication with web clients.
@@ -218,6 +254,13 @@ Broadcast when the policy configuration is updated.
   Policies: AppPolicy[];
 }
 ```
+
+#### PolicyBundleUpdated
+
+Sent to a device's own group whenever its `DevicePolicyBundle` changes (mode assignment,
+schedule, override, or the content of any mode in the bundle). Same shape as
+`GET /api/devices/{id}/policy-bundle`. Sent together with `PolicyUpdated` (the currently
+resolved policy) for clients that predate bundles.
 
 #### ReceiveStatus
 

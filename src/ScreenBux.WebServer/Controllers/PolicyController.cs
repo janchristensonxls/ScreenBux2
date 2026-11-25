@@ -1,7 +1,10 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Services;
+using ScreenBux.Shared.Utilities;
 using ScreenBux.WebServer.Hubs;
 using ScreenBux.WebServer.Services;
 
@@ -58,11 +61,11 @@ public class PolicyController : ControllerBase
 
         try
         {
+            var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
             await _policyStore.SavePolicyAsync(accountId, policy, cancellationToken);
 
-            // Notify the devices that use the default mode (the one this legacy endpoint edits).
-            var assignments = await _policyStore.GetAssignmentsAsync(accountId, cancellationToken);
-            await PushToDevicesUsingAsync(accountId, assignments.DefaultProfileId, cancellationToken);
+            // Notify the devices whose bundle includes the default mode (the one this legacy endpoint edits).
+            await PushChangedDevicesAsync(accountId, before, cancellationToken);
 
             _logger.LogInformation("Policy updated successfully for account {AccountId}", accountId);
             return Ok(new { message = "Policy updated successfully" });
@@ -116,16 +119,15 @@ public class PolicyController : ControllerBase
             return Unauthorized();
         }
 
+        var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
         var profile = await _policyStore.UpdateProfileAsync(accountId, profileId, request.Name, request.Policy, cancellationToken);
         if (profile is null)
         {
             return NotFound();
         }
 
-        if (profile.IsActive)
-        {
-            await PushToDevicesUsingAsync(accountId, profileId, cancellationToken);
-        }
+        // Any device whose bundle includes this mode (as default, scheduled, or override).
+        await PushChangedDevicesAsync(accountId, before, cancellationToken);
 
         return Ok(profile);
     }
@@ -142,7 +144,7 @@ public class PolicyController : ControllerBase
         var deleted = await _policyStore.DeleteProfileAsync(accountId, profileId, cancellationToken);
         if (!deleted)
         {
-            return BadRequest(new { message = "Mode not found or is in use (by the default or a child)" });
+            return BadRequest(new { message = "Mode not found or is in use (as a default, in a schedule, or by a temporary switch)" });
         }
 
         return Ok(new { message = "Profile deleted" });
@@ -174,7 +176,7 @@ public class PolicyController : ControllerBase
             return Unauthorized();
         }
 
-        var before = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
+        var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
         var policy = await _policyStore.SetActiveProfileAsync(accountId, profileId, childProfileId, cancellationToken);
         if (policy is null)
         {
@@ -197,7 +199,7 @@ public class PolicyController : ControllerBase
             return Unauthorized();
         }
 
-        var before = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
+        var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
         if (!await _policyStore.ClearChildAssignmentAsync(accountId, childProfileId, cancellationToken))
         {
             return NotFound();
@@ -219,7 +221,7 @@ public class PolicyController : ControllerBase
             return Unauthorized();
         }
 
-        var before = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
+        var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
         var policy = await _policyStore.SetActiveProfileForEveryoneAsync(accountId, profileId, cancellationToken);
         if (policy is null)
         {
@@ -232,32 +234,172 @@ public class PolicyController : ControllerBase
         return Ok(policy);
     }
 
-    /// <summary>Pushes the effective policy to every device whose mode changed since <paramref name="before"/>.</summary>
-    private async Task PushChangedDevicesAsync(string accountId, IReadOnlyDictionary<Guid, Guid> before, CancellationToken cancellationToken)
-    {
-        var after = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
-        var changed = after.Where(kv => !before.TryGetValue(kv.Key, out var old) || old != kv.Value).Select(kv => kv.Key);
-        await PushToDevicesAsync(accountId, changed, cancellationToken);
-    }
+    // --- Mode schedule / temporary override (docs/decisions/mode-scheduling-and-temporary-overrides.md) ---
 
-    /// <summary>Pushes the (edited) policy to every device whose effective mode is <paramref name="profileId"/>.</summary>
-    private async Task PushToDevicesUsingAsync(string accountId, Guid profileId, CancellationToken cancellationToken)
+    /// <summary>Configured and current mode for the account default and every child.</summary>
+    [HttpGet("modes")]
+    public async Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> GetModes(CancellationToken cancellationToken)
     {
-        var map = await _policyStore.GetDeviceProfileMapAsync(accountId, cancellationToken);
-        await PushToDevicesAsync(accountId, map.Where(kv => kv.Value == profileId).Select(kv => kv.Key), cancellationToken);
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        return Ok(await _policyStore.GetModeStatusAsync(accountId, DateTime.UtcNow, cancellationToken));
     }
 
     /// <summary>
-    /// Sends each device its own effective policy over its per-device SignalR group. Policy
-    /// updates must not go to the account group: devices join it too, and with per-child modes
-    /// different devices on one account can run different policies.
+    /// Replaces the schedule of the account default, or of one child (<paramref name="childProfileId"/>).
+    /// An empty list for a child means "no schedule" (not following the account's).
     /// </summary>
-    private async Task PushToDevicesAsync(string accountId, IEnumerable<Guid> deviceIds, CancellationToken cancellationToken)
+    [HttpPut("schedule")]
+    public async Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> SetSchedule([FromQuery] Guid? childProfileId, [FromBody] List<ModeScheduleEntry> schedule, CancellationToken cancellationToken)
     {
-        foreach (var deviceId in deviceIds)
+        var invalid = schedule.FirstOrDefault(e => !IsValidWindow(e.Window));
+        if (invalid is not null)
         {
-            var policy = await _policyStore.GetDevicePolicyAsync(deviceId, accountId, cancellationToken);
-            await _hubContext.Clients.Group(MonitoringHub.GetDeviceGroupName(deviceId)).SendAsync("PolicyUpdated", policy, cancellationToken);
+            return BadRequest(new { message = "Schedule times must be between 00:00 and 23:59, and start and end must differ." });
+        }
+
+        return await ChangeModesAsync(
+            accountId => _policyStore.SetScheduleAsync(accountId, childProfileId, schedule, cancellationToken),
+            "schedule set", childProfileId, cancellationToken);
+    }
+
+    /// <summary>Removes a scope's own schedule: a child follows the account schedule again; the account has none.</summary>
+    [HttpDelete("schedule")]
+    public Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> ClearSchedule([FromQuery] Guid? childProfileId, CancellationToken cancellationToken) =>
+        ChangeModesAsync(
+            accountId => _policyStore.SetScheduleAsync(accountId, childProfileId, null, cancellationToken),
+            "schedule cleared", childProfileId, cancellationToken);
+
+    /// <summary>Temporarily switches the account default, or one child, to a mode.</summary>
+    [HttpPost("override")]
+    public async Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> SetOverride([FromQuery] Guid? childProfileId, [FromBody] SetModeOverrideRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetExpiry(request, out var expiresAtUtc, out var error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        return await ChangeModesAsync(
+            accountId => _policyStore.SetOverrideAsync(accountId, childProfileId, request.ProfileId, expiresAtUtc, request.EndsAtNextScheduleChange, cancellationToken),
+            "override set", childProfileId, cancellationToken);
+    }
+
+    /// <summary>Temporarily switches everyone (account default and every child) to a mode.</summary>
+    [HttpPost("override/everyone")]
+    public async Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> SetOverrideForEveryone([FromBody] SetModeOverrideRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetExpiry(request, out var expiresAtUtc, out var error))
+        {
+            return BadRequest(new { message = error });
+        }
+
+        return await ChangeModesAsync(
+            accountId => _policyStore.SetOverrideForEveryoneAsync(accountId, request.ProfileId, expiresAtUtc, request.EndsAtNextScheduleChange, cancellationToken),
+            "override set for everyone", null, cancellationToken);
+    }
+
+    /// <summary>Ends a scope's temporary override now.</summary>
+    [HttpDelete("override")]
+    public Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> ClearOverride([FromQuery] Guid? childProfileId, CancellationToken cancellationToken) =>
+        ChangeModesAsync(
+            accountId => _policyStore.ClearOverrideAsync(accountId, childProfileId, cancellationToken),
+            "override cleared", childProfileId, cancellationToken);
+
+    private async Task<ActionResult<IReadOnlyList<ModeScopeStatusDto>>> ChangeModesAsync(
+        Func<string, Task<ModeUpdateResult>> change, string what, Guid? childProfileId, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var before = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
+        switch (await change(accountId))
+        {
+            case ModeUpdateResult.NotFound:
+                return NotFound();
+            case ModeUpdateResult.UnknownProfile:
+                return BadRequest(new { message = "Unknown mode." });
+        }
+
+        await PushChangedDevicesAsync(accountId, before, cancellationToken);
+        _logger.LogInformation("Mode {What} for account {AccountId} (child {ChildProfileId})", what, accountId, childProfileId);
+
+        return Ok(await _policyStore.GetModeStatusAsync(accountId, DateTime.UtcNow, cancellationToken));
+    }
+
+    private static bool IsValidWindow(TimeWindow window) =>
+        window.StartTime >= TimeSpan.Zero && window.StartTime < TimeSpan.FromDays(1)
+        && window.EndTime >= TimeSpan.Zero && window.EndTime < TimeSpan.FromDays(1)
+        && window.StartTime != window.EndTime;
+
+    private static bool TryGetExpiry(SetModeOverrideRequest request, out DateTime? expiresAtUtc, out string? error)
+    {
+        expiresAtUtc = null;
+        error = null;
+
+        if (request.DurationMinutes is not null && request.ExpiresAtUtc is not null)
+        {
+            error = "Set either a duration or an end time, not both.";
+            return false;
+        }
+
+        if (request.DurationMinutes is int minutes)
+        {
+            if (minutes <= 0)
+            {
+                error = "Duration must be positive.";
+                return false;
+            }
+
+            expiresAtUtc = DateTime.UtcNow.AddMinutes(minutes);
+        }
+        else if (request.ExpiresAtUtc is DateTime end)
+        {
+            expiresAtUtc = end.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(end, DateTimeKind.Utc) : end.ToUniversalTime();
+            if (expiresAtUtc <= DateTime.UtcNow)
+            {
+                error = "End time must be in the future.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Pushes to every device whose <see cref="DevicePolicyBundle"/> changed since
+    /// <paramref name="before"/> - a mode assignment, schedule, override, or the content of any
+    /// mode the bundle includes. Sent over each device's own SignalR group, never the account
+    /// group: devices join it too, and different devices on one account run different policies.
+    /// </summary>
+    private async Task PushChangedDevicesAsync(string accountId, IReadOnlyDictionary<Guid, DeviceBundle> before, CancellationToken cancellationToken)
+    {
+        var after = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
+        var now = DateTime.UtcNow;
+
+        foreach (var (deviceId, device) in after)
+        {
+            if (before.TryGetValue(deviceId, out var old) && SameBundle(old.Bundle, device.Bundle))
+            {
+                continue;
+            }
+
+            var group = _hubContext.Clients.Group(MonitoringHub.GetDeviceGroupName(deviceId));
+            await group.SendAsync("PolicyBundleUpdated", device.Bundle, cancellationToken);
+
+            // Clients that predate bundles: the policy in effect right now. They pick up later
+            // schedule/override transitions through their periodic GET .../policy.
+            var (policy, _) = ModeResolver.ResolvePolicy(device.Bundle, now, ModeResolver.FindTimeZoneOrUtc(device.TimeZoneId));
+            await group.SendAsync("PolicyUpdated", policy, cancellationToken);
         }
     }
+
+    private static bool SameBundle(DevicePolicyBundle a, DevicePolicyBundle b) =>
+        JsonSerializer.Serialize(a, PolicyJsonOptions.Default) == JsonSerializer.Serialize(b, PolicyJsonOptions.Default);
 }

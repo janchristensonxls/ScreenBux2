@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ScreenBux.Data;
 using ScreenBux.Data.Entities;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Services;
 using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.WebServer.Services;
@@ -51,18 +52,14 @@ public class EfPolicyStore : IPolicyStore
 
     public async Task<PolicyConfiguration> GetDevicePolicyAsync(Guid deviceId, string accountId, CancellationToken cancellationToken = default)
     {
-        var map = await GetDeviceProfileMapAsync(accountId, cancellationToken);
-        var defaultProfile = await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
-        var profileId = map.TryGetValue(deviceId, out var id) ? id : defaultProfile.Id;
+        var device = await GetDeviceBundleAsync(deviceId, accountId, cancellationToken);
+        if (device is null)
+        {
+            // Not a device of this account: the account default, as before.
+            return await GetPolicyAsync(accountId, cancellationToken);
+        }
 
-        var profile = await _db.PolicyProfiles
-            .Where(p => p.AccountId == accountId && p.Id == profileId)
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? defaultProfile;
-
-        var policy = Deserialize(profile.PolicyJson);
-        policy.Name = profile.Name;
-        return policy;
+        return ModeResolver.ResolvePolicy(device.Bundle, DateTime.UtcNow, ModeResolver.FindTimeZoneOrUtc(device.TimeZoneId)).Policy;
     }
 
     /// <summary>
@@ -187,9 +184,15 @@ public class EfPolicyStore : IPolicyStore
             return false;
         }
 
-        // Don't delete a mode that is in use anywhere (the default, a child, or a device).
-        var inUse = await _db.PolicyDocuments
-            .AnyAsync(d => d.AccountId == accountId && d.ActivePolicyProfileId == profileId, cancellationToken);
+        // Don't delete a mode that is in use anywhere: a default (account, child, device), an
+        // override, or a schedule entry. Schedules are JSON, so they are checked in memory.
+        var documents = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId)
+            .ToListAsync(cancellationToken);
+        var inUse = documents.Any(d =>
+            d.ActivePolicyProfileId == profileId
+            || d.OverrideProfileId == profileId
+            || ParseSchedule(d.ScheduleJson)?.Any(e => e.ProfileId == profileId) == true);
         if (inUse)
         {
             return false;
@@ -248,14 +251,28 @@ public class EfPolicyStore : IPolicyStore
             return null;
         }
 
-        // "Everyone" really means every device: drop all child AND device-scoped overrides, since a
-        // device-scoped document takes precedence over the default and would otherwise keep that
-        // device on its old mode (e.g. outside "Sleep") while the UI reports everyone switched.
-        // Removed here and saved together with the default's repointing in SetActiveProfileAsync.
-        var overrides = await _db.PolicyDocuments
-            .Where(d => d.AccountId == accountId && (d.ChildProfileId != null || d.DeviceId != null))
+        // "Everyone" really means every device: drop all child AND device-scoped mode assignments,
+        // since a device-scoped document takes precedence over the default and would otherwise keep
+        // that device on its old mode (e.g. outside "Sleep") while the UI reports everyone switched.
+        // Temporary overrides (account and child) end too, since they would beat the new default.
+        // Schedules are kept: they are standing configuration, not a current-state choice.
+        // Saved together with the default's repointing in SetActiveProfileAsync.
+        var documents = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId)
             .ToListAsync(cancellationToken);
-        _db.PolicyDocuments.RemoveRange(overrides);
+        foreach (var document in documents)
+        {
+            ClearOverride(document);
+            if (document.DeviceId != null)
+            {
+                _db.PolicyDocuments.Remove(document);
+            }
+            else if (document.ChildProfileId != null)
+            {
+                document.ActivePolicyProfileId = null;
+                RemoveIfEmpty(document);
+            }
+        }
 
         return await SetActiveProfileAsync(accountId, profileId, childProfileId: null, cancellationToken);
     }
@@ -267,13 +284,319 @@ public class EfPolicyStore : IPolicyStore
             return false;
         }
 
+        // Only the mode pointer goes; the child's own schedule/override (same document) stay.
         var documents = await _db.PolicyDocuments
             .Where(d => d.AccountId == accountId && d.ChildProfileId == childProfileId && d.DeviceId == null)
             .ToListAsync(cancellationToken);
-        _db.PolicyDocuments.RemoveRange(documents);
+        foreach (var document in documents)
+        {
+            document.ActivePolicyProfileId = null;
+            document.UpdatedAt = DateTime.UtcNow;
+            RemoveIfEmpty(document);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    // --- Mode schedule / temporary override ---
+
+    public async Task<IReadOnlyDictionary<Guid, DeviceBundle>> GetDeviceBundlesAsync(string accountId, CancellationToken cancellationToken = default)
+    {
+        var data = await LoadSelectionDataAsync(accountId, cancellationToken);
+        return data.Devices.ToDictionary(d => d.Id, d => new DeviceBundle(BuildBundle(data, d), d.TimeZoneId));
+    }
+
+    public async Task<DeviceBundle?> GetDeviceBundleAsync(Guid deviceId, string accountId, CancellationToken cancellationToken = default)
+    {
+        var data = await LoadSelectionDataAsync(accountId, cancellationToken);
+        var device = data.Devices.FirstOrDefault(d => d.Id == deviceId);
+        return device is null ? null : new DeviceBundle(BuildBundle(data, device), device.TimeZoneId);
+    }
+
+    public async Task<IReadOnlyList<ModeScopeStatusDto>> GetModeStatusAsync(string accountId, DateTime utcNow, CancellationToken cancellationToken = default)
+    {
+        var data = await LoadSelectionDataAsync(accountId, cancellationToken);
+
+        // Evaluate each scope in the time zone of one of its devices: for a child, its own
+        // devices; for the account default, devices without a child first, then any device.
+        string? TimeZoneFor(Guid? childId) =>
+            data.Devices.Where(d => d.ChildProfileId == childId).Select(d => d.TimeZoneId).FirstOrDefault(tz => tz != null)
+            ?? (childId is null ? data.Devices.Select(d => d.TimeZoneId).FirstOrDefault(tz => tz != null) : null);
+
+        ModeScopeStatusDto Status(Guid? childId, string? displayName)
+        {
+            var own = childId is Guid c ? data.ChildDocs.GetValueOrDefault(c) : data.AccountDoc;
+            var selection = SelectionFor(data, childId, deviceId: null);
+            var timeZone = ModeResolver.FindTimeZoneOrUtc(TimeZoneFor(childId));
+
+            return new ModeScopeStatusDto
+            {
+                ChildProfileId = childId,
+                DisplayName = displayName,
+                DefaultProfileId = selection.DefaultProfileId,
+                OwnSchedule = ParseSchedule(own?.ScheduleJson) ?? (childId is null ? new List<ModeScheduleEntry>() : null),
+                EffectiveSchedule = selection.Schedule,
+                OwnOverride = ToOverride(own),
+                EffectiveOverride = selection.Override,
+                TimeZoneId = timeZone.Id,
+                Current = ModeResolver.Resolve(selection, utcNow, timeZone, data.Profiles.ContainsKey)
+            };
+        }
+
+        var result = new List<ModeScopeStatusDto> { Status(null, null) };
+        result.AddRange(data.Children.OrderBy(c => c.DisplayName).Select(c => Status(c.Id, c.DisplayName)));
+        return result;
+    }
+
+    public async Task<ModeUpdateResult> SetScheduleAsync(string accountId, Guid? childProfileId, List<ModeScheduleEntry>? schedule, CancellationToken cancellationToken = default)
+    {
+        if (schedule is not null && !await ProfilesExistAsync(accountId, schedule.Select(e => e.ProfileId), cancellationToken))
+        {
+            return ModeUpdateResult.UnknownProfile;
+        }
+
+        var document = await GetOrCreateScopeDocumentAsync(accountId, childProfileId, cancellationToken);
+        if (document is null)
+        {
+            return ModeUpdateResult.NotFound;
+        }
+
+        // The account scope has nothing to inherit from: null and empty both mean "no schedule".
+        document.ScheduleJson = schedule is null || (childProfileId is null && schedule.Count == 0)
+            ? null
+            : JsonSerializer.Serialize(schedule, SerializerOptions);
+        document.UpdatedAt = DateTime.UtcNow;
+        RemoveIfEmpty(document);
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return ModeUpdateResult.Ok;
+    }
+
+    public async Task<ModeUpdateResult> SetOverrideAsync(string accountId, Guid? childProfileId, Guid profileId, DateTime? expiresAtUtc, bool endsAtNextScheduleChange, CancellationToken cancellationToken = default)
+    {
+        if (!await ProfilesExistAsync(accountId, new[] { profileId }, cancellationToken))
+        {
+            return ModeUpdateResult.UnknownProfile;
+        }
+
+        var document = await GetOrCreateScopeDocumentAsync(accountId, childProfileId, cancellationToken);
+        if (document is null)
+        {
+            return ModeUpdateResult.NotFound;
+        }
+
+        ApplyOverride(document, profileId, expiresAtUtc, endsAtNextScheduleChange);
+        await _db.SaveChangesAsync(cancellationToken);
+        return ModeUpdateResult.Ok;
+    }
+
+    public async Task<ModeUpdateResult> SetOverrideForEveryoneAsync(string accountId, Guid profileId, DateTime? expiresAtUtc, bool endsAtNextScheduleChange, CancellationToken cancellationToken = default)
+    {
+        if (!await ProfilesExistAsync(accountId, new[] { profileId }, cancellationToken))
+        {
+            return ModeUpdateResult.UnknownProfile;
+        }
+
+        var accountDocument = (await GetOrCreateScopeDocumentAsync(accountId, null, cancellationToken))!;
+        var childDocuments = await _db.PolicyDocuments
+            .Where(d => d.AccountId == accountId && d.ChildProfileId != null && d.DeviceId == null && d.OverrideProfileId != null)
+            .ToListAsync(cancellationToken);
+        foreach (var document in childDocuments)
+        {
+            ClearOverride(document);
+            RemoveIfEmpty(document);
+        }
+
+        ApplyOverride(accountDocument, profileId, expiresAtUtc, endsAtNextScheduleChange);
+        await _db.SaveChangesAsync(cancellationToken);
+        return ModeUpdateResult.Ok;
+    }
+
+    public async Task<ModeUpdateResult> ClearOverrideAsync(string accountId, Guid? childProfileId, CancellationToken cancellationToken = default)
+    {
+        var document = await GetOrCreateScopeDocumentAsync(accountId, childProfileId, cancellationToken);
+        if (document is null)
+        {
+            return ModeUpdateResult.NotFound;
+        }
+
+        ClearOverride(document);
+        RemoveIfEmpty(document);
+        await _db.SaveChangesAsync(cancellationToken);
+        return ModeUpdateResult.Ok;
+    }
+
+    private sealed record DeviceRow(Guid Id, Guid? ChildProfileId, string? TimeZoneId);
+
+    /// <summary>Everything needed to build any scope's <see cref="ModeSelection"/>, loaded in one go.</summary>
+    private sealed record SelectionData(
+        Guid AccountDefaultId,
+        Dictionary<Guid, PolicyProfile> Profiles,
+        PolicyDocument AccountDoc,
+        Dictionary<Guid, PolicyDocument> ChildDocs,
+        Dictionary<Guid, Guid> DeviceDefaults,
+        List<DeviceRow> Devices,
+        List<ChildProfile> Children);
+
+    private async Task<SelectionData> LoadSelectionDataAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var defaultId = (await GetOrCreateActiveProfileAsync(accountId, cancellationToken)).Id;
+        var profiles = await _db.PolicyProfiles.Where(p => p.AccountId == accountId).ToDictionaryAsync(p => p.Id, cancellationToken);
+        var documents = await _db.PolicyDocuments.Where(d => d.AccountId == accountId).ToListAsync(cancellationToken);
+        var devices = await _db.Devices
+            .Where(d => d.AccountId == accountId)
+            .Select(d => new DeviceRow(d.Id, d.ChildProfileId, d.TimeZoneId))
+            .ToListAsync(cancellationToken);
+        var children = await _db.ChildProfiles.Where(c => c.AccountId == accountId).ToListAsync(cancellationToken);
+
+        var accountDoc = documents.First(d => d.ChildProfileId == null && d.DeviceId == null);
+        var childDocs = documents
+            .Where(d => d.ChildProfileId != null && d.DeviceId == null)
+            .GroupBy(d => d.ChildProfileId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
+        var deviceDefaults = documents
+            .Where(d => d.DeviceId != null && d.ActivePolicyProfileId is Guid p && profiles.ContainsKey(p))
+            .GroupBy(d => d.DeviceId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().ActivePolicyProfileId!.Value);
+
+        return new SelectionData(defaultId, profiles, accountDoc, childDocs, deviceDefaults, devices, children);
+    }
+
+    /// <summary>
+    /// Flattens the account and child documents into one selection: the child's own default,
+    /// schedule and override where set, otherwise the account's. A device-scoped document (legacy)
+    /// only overrides the default mode.
+    /// </summary>
+    private static ModeSelection SelectionFor(SelectionData data, Guid? childId, Guid? deviceId)
+    {
+        var childDoc = childId is Guid c ? data.ChildDocs.GetValueOrDefault(c) : null;
+
+        var defaultId = deviceId is Guid d && data.DeviceDefaults.TryGetValue(d, out var deviceDefault) ? deviceDefault
+            : childDoc?.ActivePolicyProfileId is Guid childDefault && data.Profiles.ContainsKey(childDefault) ? childDefault
+            : data.AccountDefaultId;
+
+        return new ModeSelection
+        {
+            DefaultProfileId = defaultId,
+            Schedule = (childDoc?.ScheduleJson is not null ? ParseSchedule(childDoc.ScheduleJson) : ParseSchedule(data.AccountDoc.ScheduleJson))
+                ?? new List<ModeScheduleEntry>(),
+            Override = ToOverride(childDoc) ?? ToOverride(data.AccountDoc)
+        };
+    }
+
+    private static DevicePolicyBundle BuildBundle(SelectionData data, DeviceRow device)
+    {
+        var selection = SelectionFor(data, device.ChildProfileId, device.Id);
+
+        var referenced = new HashSet<Guid> { selection.DefaultProfileId };
+        referenced.UnionWith(selection.Schedule.Select(e => e.ProfileId));
+        if (selection.Override is { } ov)
+        {
+            referenced.Add(ov.ProfileId);
+        }
+
+        var profiles = new Dictionary<Guid, PolicyConfiguration>();
+        foreach (var id in referenced)
+        {
+            if (data.Profiles.TryGetValue(id, out var profile))
+            {
+                var policy = Deserialize(profile.PolicyJson);
+                policy.Name = profile.Name;
+                profiles[id] = policy;
+            }
+        }
+
+        return new DevicePolicyBundle { Selection = selection, Profiles = profiles };
+    }
+
+    /// <summary>
+    /// The account's unscoped document, or a child's document (created with no mode pointer if
+    /// missing - the child then still follows the default). Null if the child isn't on the account.
+    /// </summary>
+    private async Task<PolicyDocument?> GetOrCreateScopeDocumentAsync(string accountId, Guid? childProfileId, CancellationToken cancellationToken)
+    {
+        if (childProfileId is not Guid childId)
+        {
+            await GetOrCreateActiveProfileAsync(accountId, cancellationToken);
+            return await _db.PolicyDocuments
+                .FirstAsync(d => d.AccountId == accountId && d.ChildProfileId == null && d.DeviceId == null, cancellationToken);
+        }
+
+        if (!await _db.ChildProfiles.AnyAsync(c => c.AccountId == accountId && c.Id == childId, cancellationToken))
+        {
+            return null;
+        }
+
+        var document = await _db.PolicyDocuments
+            .FirstOrDefaultAsync(d => d.AccountId == accountId && d.ChildProfileId == childId && d.DeviceId == null, cancellationToken);
+        if (document is null)
+        {
+            document = new PolicyDocument { AccountId = accountId, ChildProfileId = childId };
+            _db.PolicyDocuments.Add(document);
+        }
+
+        return document;
+    }
+
+    private async Task<bool> ProfilesExistAsync(string accountId, IEnumerable<Guid> profileIds, CancellationToken cancellationToken)
+    {
+        var ids = profileIds.Distinct().ToList();
+        var found = await _db.PolicyProfiles.CountAsync(p => p.AccountId == accountId && ids.Contains(p.Id), cancellationToken);
+        return found == ids.Count;
+    }
+
+    private static void ApplyOverride(PolicyDocument document, Guid profileId, DateTime? expiresAtUtc, bool endsAtNextScheduleChange)
+    {
+        document.OverrideProfileId = profileId;
+        document.OverrideStartedAtUtc = DateTime.UtcNow;
+        document.OverrideExpiresAtUtc = expiresAtUtc?.ToUniversalTime();
+        document.OverrideEndsAtScheduleChange = endsAtNextScheduleChange;
+        document.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static void ClearOverride(PolicyDocument document)
+    {
+        document.OverrideProfileId = null;
+        document.OverrideStartedAtUtc = null;
+        document.OverrideExpiresAtUtc = null;
+        document.OverrideEndsAtScheduleChange = false;
+        document.UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>A child/device document with no pointer, schedule or override carries nothing - delete it.</summary>
+    private void RemoveIfEmpty(PolicyDocument document)
+    {
+        var scoped = document.ChildProfileId != null || document.DeviceId != null;
+        if (scoped && document.ActivePolicyProfileId is null && document.OverrideProfileId is null && document.ScheduleJson is null)
+        {
+            if (_db.Entry(document).State == EntityState.Added)
+            {
+                _db.Entry(document).State = EntityState.Detached;
+            }
+            else
+            {
+                _db.PolicyDocuments.Remove(document);
+            }
+        }
+    }
+
+    private static ModeOverride? ToOverride(PolicyDocument? document) =>
+        document?.OverrideProfileId is Guid profileId
+            ? new ModeOverride
+            {
+                ProfileId = profileId,
+                // SQL Server returns Unspecified kinds; these columns are always UTC.
+                StartedAtUtc = DateTime.SpecifyKind(document.OverrideStartedAtUtc ?? document.UpdatedAt, DateTimeKind.Utc),
+                ExpiresAtUtc = document.OverrideExpiresAtUtc is DateTime e ? DateTime.SpecifyKind(e, DateTimeKind.Utc) : null,
+                EndsAtNextScheduleChange = document.OverrideEndsAtScheduleChange
+            }
+            : null;
+
+    private static List<ModeScheduleEntry>? ParseSchedule(string? json) =>
+        string.IsNullOrWhiteSpace(json)
+            ? null
+            : JsonSerializer.Deserialize<List<ModeScheduleEntry>>(json, SerializerOptions) ?? new List<ModeScheduleEntry>();
 
     private sealed record AssignmentState(Guid DefaultProfileId, Dictionary<Guid, Guid> ChildAssigned, List<ChildProfile> Children)
     {

@@ -1,6 +1,7 @@
 # Decision Record: Mode Scheduling and Temporary Mode Overrides
 
-Status: **Accepted (design)**. Phase 1 (Shared model + resolver + tests) in progress.
+Status: **Accepted**. Phases 1-3 implemented (Shared model/resolver, database, WebServer);
+phases 4-5 (Service, WebClient) pending. Endpoints are listed in `API.md`.
 Related: `docs/decisions/group-based-policy-model.md` (decision 3, third bullet, deferred
 "auto-selecting the active mode by schedule" - this record is that follow-up).
 
@@ -114,6 +115,21 @@ exist with `ActivePolicyProfileId = null` (follows the account default, but has 
 schedule/override). Phase 3 must therefore change `ClearChildAssignmentAsync` to null the pointer
 instead of deleting the document, and decide what "Set everyone to..." does with child
 schedules/overrides (proposal: clears child overrides, keeps child schedules).
+
+**As implemented (phase 3):**
+- A child's `ScheduleJson` null means "follow the account schedule"; `[]` means "no schedule"
+  (opt out). The account scope stores null for "no schedule".
+- Child override, if set, wins over the account override; "temporarily switch everyone"
+  (`override/everyone`) sets the account override and removes every child override.
+- "Set everyone to..." (`activate-all`) clears every override (account and children) and
+  every child/device mode assignment, and keeps all schedules.
+- `ClearChildAssignmentAsync` nulls only the mode pointer; documents left with no pointer,
+  schedule or override are deleted.
+- Pushes are driven by comparing every device's bundle before and after a change, so any
+  edit that affects a device (including editing a mode only used in its schedule) reaches it.
+  Both `PolicyBundleUpdated` and the legacy `PolicyUpdated` (resolved now) are sent;
+  `GET .../policy` also resolves schedule/override, so un-updated devices follow transitions
+  within their poll interval (but not while offline).
 
 ## Unchanged / orthogonal
 

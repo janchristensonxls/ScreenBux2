@@ -65,6 +65,45 @@ public static class ModeResolver
     public static bool IsOverrideActive(ModeSelection selection, DateTime utcNow, TimeZoneInfo timeZone, Func<Guid, bool>? isAvailable = null) =>
         Resolve(selection, utcNow, timeZone, isAvailable).Source == ModeSource.Override;
 
+    /// <summary>
+    /// Resolves <paramref name="bundle"/> and returns the policy of the mode in effect, with
+    /// <see cref="PolicyConfiguration.Name"/> set to the mode's name. Falls back to the default
+    /// mode's policy, then to an empty policy, if the resolved mode isn't in the bundle.
+    /// </summary>
+    public static (PolicyConfiguration Policy, ModeResolution Resolution) ResolvePolicy(
+        DevicePolicyBundle bundle, DateTime utcNow, TimeZoneInfo timeZone)
+    {
+        ArgumentNullException.ThrowIfNull(bundle);
+
+        var resolution = Resolve(bundle.Selection, utcNow, timeZone, bundle.Profiles.ContainsKey);
+        var policy = bundle.Profiles.TryGetValue(resolution.ProfileId, out var p) ? p
+            : bundle.Profiles.TryGetValue(bundle.Selection.DefaultProfileId, out var d) ? d
+            : new PolicyConfiguration();
+
+        return (policy, resolution);
+    }
+
+    /// <summary>
+    /// Looks up a time zone by id (as reported by a device's <c>TimeZoneInfo.Local.Id</c>),
+    /// falling back to UTC when the id is missing or unknown on this machine.
+    /// </summary>
+    public static TimeZoneInfo FindTimeZoneOrUtc(string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            return TimeZoneInfo.Utc;
+        }
+
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.Utc;
+        }
+    }
+
     private static bool TryGetActiveOverride(
         ModeSelection selection,
         DateTime utcNow,
