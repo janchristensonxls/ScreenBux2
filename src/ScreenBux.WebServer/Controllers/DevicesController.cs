@@ -213,8 +213,16 @@ public class DevicesController : ControllerBase
             return denied;
         }
 
+        // Stamp before reading (see DevicePolicyBundle.GeneratedAtUtc).
+        var generatedAtUtc = DateTime.UtcNow;
         var device = await _policyStore.GetDeviceBundleAsync(id, accountId, cancellationToken);
-        return device is null ? NotFound() : Ok(device.Bundle);
+        if (device is null)
+        {
+            return NotFound();
+        }
+
+        device.Bundle.GeneratedAtUtc = generatedAtUtc;
+        return Ok(device.Bundle);
     }
 
     /// <summary>

@@ -380,8 +380,10 @@ public class PolicyController : ControllerBase
     /// </summary>
     private async Task PushChangedDevicesAsync(string accountId, IReadOnlyDictionary<Guid, DeviceBundle> before, CancellationToken cancellationToken)
     {
-        var after = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
+        // Stamp before reading, so a bundle built from older data (e.g. a concurrent poll that
+        // read before this change was saved) always carries an older stamp than this push.
         var now = DateTime.UtcNow;
+        var after = await _policyStore.GetDeviceBundlesAsync(accountId, cancellationToken);
 
         foreach (var (deviceId, device) in after)
         {
@@ -391,6 +393,7 @@ public class PolicyController : ControllerBase
             }
 
             var group = _hubContext.Clients.Group(MonitoringHub.GetDeviceGroupName(deviceId));
+            device.Bundle.GeneratedAtUtc = now;
             await group.SendAsync("PolicyBundleUpdated", device.Bundle, cancellationToken);
 
             // Clients that predate bundles: the policy in effect right now. They pick up later

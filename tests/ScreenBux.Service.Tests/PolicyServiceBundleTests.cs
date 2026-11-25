@@ -156,6 +156,49 @@ public class PolicyServiceBundleTests : IDisposable
         Assert.Equal("Legacy", service.GetConfiguration().Name);
     }
 
+    [Fact]
+    public async Task OlderBundle_IsIgnored()
+    {
+        var service = CreateService();
+        var newer = Bundle(new ModeOverride { ProfileId = Open, StartedAtUtc = _time.Now });
+        newer.GeneratedAtUtc = _time.Now;
+        var older = Bundle();
+        older.GeneratedAtUtc = _time.Now.AddSeconds(-5);
+
+        Assert.True(await service.UpdateBundleAsync(newer));
+        Assert.False(await service.UpdateBundleAsync(older));
+
+        Assert.Equal("Open", service.GetConfiguration().Name);
+        var restarted = CreateService();
+        await restarted.LoadPolicyAsync();
+        Assert.Equal("Open", restarted.GetConfiguration().Name);
+    }
+
+    [Fact]
+    public async Task ConcurrentUpdates_LeaveMemoryAndCacheFileOnNewestBundle()
+    {
+        var service = CreateService();
+        var start = _time.Now;
+        var bundles = Enumerable.Range(0, 40)
+            .Select(i =>
+            {
+                var b = Bundle();
+                b.GeneratedAtUtc = start.AddSeconds(i);
+                b.Profiles[Normal].CheckIntervalSeconds = i + 1; // identifies the bundle
+                return b;
+            })
+            .OrderBy(_ => Random.Shared.Next())
+            .ToList();
+
+        await Task.WhenAll(bundles.Select(b => Task.Run(() => service.UpdateBundleAsync(b))));
+
+        Assert.Equal(40, service.GetConfiguration().CheckIntervalSeconds);
+        var restarted = CreateService();
+        await restarted.LoadPolicyAsync();
+        Assert.Equal(40, restarted.GetConfiguration().CheckIntervalSeconds);
+        Assert.False(File.Exists(BundlePath + ".tmp"));
+    }
+
     /// <summary>Controllable clock; schedules are evaluated in UTC so tests are machine-independent.</summary>
     private sealed class FakeTime(DateTime now) : TimeProvider
     {

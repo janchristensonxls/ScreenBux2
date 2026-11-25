@@ -476,12 +476,18 @@ public class EfPolicyStore : IPolicyStore
             : childDoc?.ActivePolicyProfileId is Guid childDefault && data.Profiles.ContainsKey(childDefault) ? childDefault
             : data.AccountDefaultId;
 
+        // A child's own override wins, but the account-wide one stays in the selection behind it
+        // so it resumes when the child's ends (e.g. a short "Open" within an everyone-"Sleep").
+        var childOverride = ToOverride(childDoc);
+        var accountOverride = ToOverride(data.AccountDoc);
+
         return new ModeSelection
         {
             DefaultProfileId = defaultId,
             Schedule = (childDoc?.ScheduleJson is not null ? ParseSchedule(childDoc.ScheduleJson) : ParseSchedule(data.AccountDoc.ScheduleJson))
                 ?? new List<ModeScheduleEntry>(),
-            Override = ToOverride(childDoc) ?? ToOverride(data.AccountDoc)
+            Override = childOverride ?? accountOverride,
+            InheritedOverride = childOverride is null ? null : accountOverride
         };
     }
 
@@ -491,9 +497,12 @@ public class EfPolicyStore : IPolicyStore
 
         var referenced = new HashSet<Guid> { selection.DefaultProfileId };
         referenced.UnionWith(selection.Schedule.Select(e => e.ProfileId));
-        if (selection.Override is { } ov)
+        foreach (var ov in new[] { selection.Override, selection.InheritedOverride })
         {
-            referenced.Add(ov.ProfileId);
+            if (ov is not null)
+            {
+                referenced.Add(ov.ProfileId);
+            }
         }
 
         var profiles = new Dictionary<Guid, PolicyConfiguration>();

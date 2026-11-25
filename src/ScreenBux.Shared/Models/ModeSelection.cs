@@ -17,6 +17,13 @@ public class ModeSelection
 
     /// <summary>A temporary (or pinned) switch that beats the schedule and the default while active.</summary>
     public ModeOverride? Override { get; set; }
+
+    /// <summary>
+    /// An override inherited from a wider scope (the account-wide switch) while this scope has its
+    /// own <see cref="Override"/>. Used once the own override has ended, before the schedule and
+    /// default - so a child's short "Open" doesn't cancel an account-wide pinned "Sleep".
+    /// </summary>
+    public ModeOverride? InheritedOverride { get; set; }
 }
 
 /// <summary>"During <see cref="Window"/>, use mode <see cref="ProfileId"/>" - e.g. School Mon-Fri 08:00-15:00.</summary>
@@ -71,6 +78,12 @@ public class ModeResolution
 
     public ModeSource Source { get; init; }
 
+    /// <summary>
+    /// With <see cref="ModeSource.Override"/>: true when the active override is
+    /// <see cref="ModeSelection.InheritedOverride"/> rather than the scope's own.
+    /// </summary>
+    public bool OverrideIsInherited { get; init; }
+
     /// <summary>Index into <see cref="ModeSelection.Schedule"/> when <see cref="Source"/> is <see cref="ModeSource.Schedule"/>.</summary>
     public int? ScheduleEntryIndex { get; init; }
 
@@ -92,6 +105,13 @@ public class ModeResolution
 public class DevicePolicyBundle
 {
     public ModeSelection Selection { get; set; } = new();
+
+    /// <summary>
+    /// When the server read the data this bundle was built from (UTC), stamped as it is sent. A
+    /// device ignores a bundle older than the one it has, so a slow poll response can't undo a
+    /// newer push. Null in bundles the server compares internally.
+    /// </summary>
+    public DateTime? GeneratedAtUtc { get; set; }
 
     /// <summary>Policy per mode id. Each <see cref="PolicyConfiguration.Name"/> is the mode's name.</summary>
     public Dictionary<Guid, PolicyConfiguration> Profiles { get; set; } = new();

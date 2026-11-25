@@ -286,6 +286,45 @@ public class ModeResolverTests
         Assert.Equal(Normal, ModeResolver.Resolve(selection, Tue(20, 30), Utc).ProfileId);
     }
 
+    // --- Inherited (account-wide) override behind a child's own ---
+
+    [Fact]
+    public void InheritedOverride_ResumesWhenOwnOverrideEnds()
+    {
+        // 20:00 everyone pinned to Sleep; 20:30 the child gets "Open for 30 min".
+        var selection = Family(OverrideFor(Open, Tue(20, 30), TimeSpan.FromMinutes(30)));
+        selection.InheritedOverride = new ModeOverride { ProfileId = Sleep, StartedAtUtc = Tue(20) };
+
+        var during = ModeResolver.Resolve(selection, Tue(20, 45), Utc);
+        Assert.Equal(Open, during.ProfileId);
+        Assert.False(during.OverrideIsInherited);
+        Assert.Equal(Tue(21), during.UntilUtc);
+        Assert.Equal(Sleep, during.NextProfileId);
+
+        // After the child's override: back to the pinned Sleep, not the schedule/default.
+        var after = ModeResolver.Resolve(selection, Tue(21, 0), Utc);
+        Assert.Equal(Sleep, after.ProfileId);
+        Assert.Equal(ModeSource.Override, after.Source);
+        Assert.True(after.OverrideIsInherited);
+        Assert.Null(after.UntilUtc);
+
+        // Still Sleep the next morning, when the schedule alone would say Normal.
+        Assert.Equal(Sleep, ModeResolver.Resolve(selection, Wed(10), Utc).ProfileId);
+    }
+
+    [Fact]
+    public void InheritedOverride_EndedToo_FallsBackToScheduleAndDefault()
+    {
+        var selection = Family(OverrideFor(Open, Tue(16), TimeSpan.FromMinutes(30)));
+        selection.InheritedOverride = OverrideFor(School, Tue(16), TimeSpan.FromHours(1));
+
+        Assert.Equal(School, ModeResolver.Resolve(selection, Tue(16, 45), Utc).ProfileId);
+
+        var after = ModeResolver.Resolve(selection, Tue(17), Utc);
+        Assert.Equal(Normal, after.ProfileId);
+        Assert.Equal(ModeSource.Default, after.Source);
+    }
+
     // --- Pin ---
 
     [Fact]

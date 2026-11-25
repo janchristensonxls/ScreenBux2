@@ -120,7 +120,10 @@ schedules/overrides (proposal: clears child overrides, keeps child schedules).
 - A child's `ScheduleJson` null means "follow the account schedule"; `[]` means "no schedule"
   (opt out). The account scope stores null for "no schedule".
 - Child override, if set, wins over the account override; "temporarily switch everyone"
-  (`override/everyone`) sets the account override and removes every child override.
+  (`override/everyone`) sets the account override and removes every child override. The
+  account override stays in the child's selection as `InheritedOverride` and resumes when the
+  child's own ends (a short "Open" for one child must not cancel an everyone-pinned "Sleep").
+  Resolution order is therefore: own override > inherited override > schedule > default.
 - "Set everyone to..." (`activate-all`) clears every override (account and children) and
   every child/device mode assignment, and keeps all schedules.
 - `ClearChildAssignmentAsync` nulls only the mode pointer; documents left with no pointer,
@@ -143,6 +146,11 @@ schedules/overrides (proposal: clears child overrides, keeps child schedules).
   and re-resolves the mode on every enforcement tick, using `TimeProvider` (injectable for tests).
   `GetConfiguration()` always returns the policy of the mode in effect, so enforcement and usage
   tracking need no changes.
+- Bundle updates (REST poll and SignalR push can arrive together) are serialized with the tick's
+  cache-file reload, and `policy-bundle.json` is replaced atomically (temp file + move), so memory
+  and file always hold the same bundle. The server stamps each bundle it sends with
+  `GeneratedAtUtc` (taken before reading the data); the device ignores a bundle older than the
+  one it has, so a slow poll response can't undo a newer push.
 - A change of mode (not the first resolution after startup) is logged, raised as
   `PolicyService.ModeChanged`, and queued as an `Info` notification for the Agent:
   "School mode is now active until 15:00."

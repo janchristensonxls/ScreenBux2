@@ -35,17 +35,25 @@ public static class ModeResolver
         utcNow = AsUtc(utcNow);
         var nowLocal = ToLocal(utcNow, timeZone);
 
-        if (TryGetActiveOverride(selection, utcNow, nowLocal, timeZone, isAvailable, out var ov, out var overrideEndUtc))
+        // The scope's own override first, then the one it inherits (e.g. the account-wide switch
+        // behind a child's shorter one), so the inherited one resumes when the own one ends.
+        foreach (var (ov, inherited) in new[] { (selection.Override, false), (selection.InheritedOverride, true) })
         {
-            return new ModeResolution
+            if (ov is not null && IsActive(selection, ov, utcNow, nowLocal, timeZone, isAvailable, out var overrideEndUtc))
             {
-                ProfileId = ov.ProfileId,
-                Source = ModeSource.Override,
-                UntilUtc = overrideEndUtc,
-                NextProfileId = overrideEndUtc is DateTime end
-                    ? ResolveUnderlying(selection, ToLocal(end, timeZone), isAvailable).ProfileId
-                    : null
-            };
+                return new ModeResolution
+                {
+                    ProfileId = ov.ProfileId,
+                    Source = ModeSource.Override,
+                    OverrideIsInherited = inherited,
+                    UntilUtc = overrideEndUtc,
+                    // At its end this override no longer applies, so resolving then gives what follows
+                    // (an inherited override, the schedule, or the default).
+                    NextProfileId = overrideEndUtc is DateTime end
+                        ? Resolve(selection, end, timeZone, isAvailable).ProfileId
+                        : null
+                };
+            }
         }
 
         var current = ResolveUnderlying(selection, nowLocal, isAvailable);
@@ -60,10 +68,6 @@ public static class ModeResolver
             NextProfileId = changeLocal is DateTime c2 ? ResolveUnderlying(selection, c2, isAvailable).ProfileId : null
         };
     }
-
-    /// <summary>True if <paramref name="selection"/>'s override is in effect at <paramref name="utcNow"/>.</summary>
-    public static bool IsOverrideActive(ModeSelection selection, DateTime utcNow, TimeZoneInfo timeZone, Func<Guid, bool>? isAvailable = null) =>
-        Resolve(selection, utcNow, timeZone, isAvailable).Source == ModeSource.Override;
 
     /// <summary>
     /// Resolves <paramref name="bundle"/> and returns the policy of the mode in effect, with
@@ -104,20 +108,22 @@ public static class ModeResolver
         }
     }
 
-    private static bool TryGetActiveOverride(
+    /// <summary>
+    /// True if <paramref name="ov"/> is in effect at <paramref name="utcNow"/>; <paramref name="endUtc"/>
+    /// is when it ends (null: no end within the look-ahead, or a pin).
+    /// </summary>
+    private static bool IsActive(
         ModeSelection selection,
+        ModeOverride ov,
         DateTime utcNow,
         DateTime nowLocal,
         TimeZoneInfo timeZone,
         Func<Guid, bool> isAvailable,
-        out ModeOverride activeOverride,
         out DateTime? endUtc)
     {
-        activeOverride = null!;
         endUtc = null;
 
-        var ov = selection.Override;
-        if (ov is null || !isAvailable(ov.ProfileId))
+        if (!isAvailable(ov.ProfileId))
         {
             return false;
         }
@@ -148,7 +154,6 @@ public static class ModeResolver
             scheduleChangeUtc = upcoming is DateTime u ? ToUtc(u, timeZone) : null;
         }
 
-        activeOverride = ov;
         endUtc = Min(expiresUtc, scheduleChangeUtc);
         return true;
     }
