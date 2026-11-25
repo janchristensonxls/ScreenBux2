@@ -77,10 +77,33 @@ public class PolicySyncService : BackgroundService
             .WithAutomaticReconnect()
             .Build();
 
+        _hubConnection.On<DevicePolicyBundle>("PolicyBundleUpdated", async bundle =>
+        {
+            try
+            {
+                _logger.LogInformation("Policy bundle update received from SignalR");
+                await _policyService.UpdateBundleAsync(bundle);
+                _policyService.MarkSyncedSinceStartup();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to apply policy bundle update received from SignalR");
+            }
+        });
+
+        // Sent alongside PolicyBundleUpdated for older devices. Once this device runs on a
+        // bundle it resolves the mode itself, so the server's "resolved now" copy is ignored -
+        // applying it would drop the bundle and freeze the mode.
         _hubConnection.On<PolicyConfiguration>("PolicyUpdated", async policy =>
         {
             try
             {
+                if (_policyService.HasBundle)
+                {
+                    _policyService.MarkSyncedSinceStartup();
+                    return;
+                }
+
                 _logger.LogInformation("Policy update received from SignalR");
                 await _policyService.UpdatePolicyAsync(policy);
                 _policyService.MarkSyncedSinceStartup();

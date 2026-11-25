@@ -1,7 +1,7 @@
 # Decision Record: Mode Scheduling and Temporary Mode Overrides
 
-Status: **Accepted**. Phases 1-3 implemented (Shared model/resolver, database, WebServer);
-phases 4-5 (Service, WebClient) pending. Endpoints are listed in `API.md`.
+Status: **Accepted**. Phases 1-4 implemented (Shared model/resolver, database, WebServer,
+Service); phase 5 (WebClient) pending. Endpoints are listed in `API.md`.
 Related: `docs/decisions/group-based-policy-model.md` (decision 3, third bullet, deferred
 "auto-selecting the active mode by schedule" - this record is that follow-up).
 
@@ -130,6 +130,22 @@ schedules/overrides (proposal: clears child overrides, keeps child schedules).
   Both `PolicyBundleUpdated` and the legacy `PolicyUpdated` (resolved now) are sent;
   `GET .../policy` also resolves schedule/override, so un-updated devices follow transitions
   within their poll interval (but not while offline).
+
+### 6. Service (phase 4, as implemented)
+
+- `DevicePolicySyncService` polls `GET api/devices/{id}/policy-bundle?timeZoneId=...`
+  (reporting `TimeZoneInfo.Local.Id`); on 404 (a server without bundles) it falls back to
+  `GET .../policy` and runs on that single policy.
+- `PolicySyncService` applies `PolicyBundleUpdated`; the legacy `PolicyUpdated` is ignored once
+  a bundle is in use (applying the server's "resolved now" copy would freeze the mode).
+- `PolicyService` caches the bundle in `policy-bundle.json` next to `policy.json` (it takes
+  precedence when present, so a restart while offline keeps the schedule and override expiry)
+  and re-resolves the mode on every enforcement tick, using `TimeProvider` (injectable for tests).
+  `GetConfiguration()` always returns the policy of the mode in effect, so enforcement and usage
+  tracking need no changes.
+- A change of mode (not the first resolution after startup) is logged, raised as
+  `PolicyService.ModeChanged`, and queued as an `Info` notification for the Agent:
+  "School mode is now active until 15:00."
 
 ## Unchanged / orthogonal
 

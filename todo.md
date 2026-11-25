@@ -148,6 +148,9 @@ immediately, same as before this feature, since there's no reasonable
 "offline" fallback for that and closing an app is much lower-stakes than
 suspending the whole machine.
 
+*(Update: scheduling and temporary mode switches are now designed and largely
+implemented - see `docs/decisions/mode-scheduling-and-temporary-overrides.md`.)*
+
 Deliberately **out of scope for this pass**: scheduling (time-of-day/day-of-
 week automatic mode switching) — modes are switched manually only, from
 `Policy.razor`. Also out of scope: per-child/per-device profile scoping in the
