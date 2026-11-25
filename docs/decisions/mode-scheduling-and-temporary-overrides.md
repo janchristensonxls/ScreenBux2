@@ -105,7 +105,15 @@ Override and schedule live on `PolicyDocument`, which already exists once per sc
 default, per child): `OverrideProfileId`, `OverrideStartedAtUtc`, `OverrideExpiresAtUtc`,
 `OverrideEndsAtScheduleChange`, and `ScheduleJson` (serialized `List<ModeScheduleEntry>`,
 consistent with how `TimeWindow` lists are stored inside policy JSON elsewhere).
-`DeleteProfileAsync` must refuse to delete a profile referenced by any schedule or override.
+`DeleteProfileAsync` must refuse to delete a profile referenced by any schedule or override
+(the override is also protected by a `Restrict` FK; schedule references live in JSON and must be
+checked in code).
+
+Because a child's `PolicyDocument` now carries more than the mode pointer, a child document may
+exist with `ActivePolicyProfileId = null` (follows the account default, but has its own
+schedule/override). Phase 3 must therefore change `ClearChildAssignmentAsync` to null the pointer
+instead of deleting the document, and decide what "Set everyone to..." does with child
+schedules/overrides (proposal: clears child overrides, keeps child schedules).
 
 ## Unchanged / orthogonal
 

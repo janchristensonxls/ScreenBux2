@@ -49,6 +49,8 @@ public class AppDbContext : IdentityDbContext<Account>
         {
             entity.HasIndex(d => d.MachineKey).IsUnique();
 
+            entity.Property(d => d.TimeZoneId).HasMaxLength(128);
+
             entity.HasOne(d => d.Account)
                 .WithMany(a => a.Devices)
                 .HasForeignKey(d => d.AccountId)
@@ -75,6 +77,12 @@ public class AppDbContext : IdentityDbContext<Account>
             entity.HasOne(p => p.ActivePolicyProfile)
                 .WithMany()
                 .HasForeignKey(p => p.ActivePolicyProfileId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Restrict: a mode that is the target of an override can't be deleted out from under it.
+            entity.HasOne(p => p.OverrideProfile)
+                .WithMany()
+                .HasForeignKey(p => p.OverrideProfileId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

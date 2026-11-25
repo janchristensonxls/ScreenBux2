@@ -32,5 +32,34 @@ public class PolicyDocument
 
     public PolicyProfile? ActivePolicyProfile { get; set; }
 
+    // --- Mode selection (docs/decisions/mode-scheduling-and-temporary-overrides.md) ---
+    // Like the pointer above, these say *which* profile applies when; they hold no policy
+    // content. A child-scoped document may exist only for these (ActivePolicyProfileId null
+    // = the child follows the account default mode but has its own schedule/override).
+
+    /// <summary>
+    /// Mode of the temporary override, or null when there is none. An expired override may
+    /// linger here until it is replaced or cleared; readers decide "active" via
+    /// <c>ModeResolver</c>, never by this column being non-null.
+    /// </summary>
+    public Guid? OverrideProfileId { get; set; }
+
+    public PolicyProfile? OverrideProfile { get; set; }
+
+    /// <summary>When the override was set (UTC); start point for <see cref="OverrideEndsAtScheduleChange"/>.</summary>
+    public DateTime? OverrideStartedAtUtc { get; set; }
+
+    /// <summary>Fixed end of the override (UTC); null means no fixed end.</summary>
+    public DateTime? OverrideExpiresAtUtc { get; set; }
+
+    /// <summary>Override ends at the next change of the scheduled/default mode.</summary>
+    public bool OverrideEndsAtScheduleChange { get; set; }
+
+    /// <summary>
+    /// Serialized <c>List&lt;ModeScheduleEntry&gt;</c> (PolicyJsonOptions); null or empty means
+    /// no schedule for this scope.
+    /// </summary>
+    public string? ScheduleJson { get; set; }
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

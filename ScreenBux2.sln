@@ -20,6 +20,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{878D0619-8443-4CAE-AE90-A620B8A7C84C}"
 	ProjectSection(SolutionItems) = preProject
 		docs\ARCHITECTURE.md = docs\ARCHITECTURE.md
+		docs\DATABASE-MIGRATIONS.md = docs\DATABASE-MIGRATIONS.md
 		.github\copilot-instructions.md = .github\copilot-instructions.md
 		docs\DEVICE-LINKING.md = docs\DEVICE-LINKING.md
 		docs\flows.md = docs\flows.md
