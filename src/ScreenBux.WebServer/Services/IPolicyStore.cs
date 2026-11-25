@@ -23,7 +23,11 @@ public interface IPolicyStore
     /// </summary>
     Task SavePolicyAsync(string accountId, PolicyConfiguration policy, CancellationToken cancellationToken = default);
 
-    /// <summary>Gets the effective policy for a specific device (falls back to account-level).</summary>
+    /// <summary>
+    /// Gets the policy in effect right now for a specific device - default, schedule and override
+    /// resolved in the device's reported time zone. For clients that don't understand
+    /// <see cref="DevicePolicyBundle"/>.
+    /// </summary>
     Task<PolicyConfiguration> GetDevicePolicyAsync(Guid deviceId, string accountId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -38,7 +42,10 @@ public interface IPolicyStore
     /// <summary>Updates an existing profile's content.</summary>
     Task<PolicyProfileDto?> UpdateProfileAsync(string accountId, Guid profileId, string name, PolicyConfiguration policy, CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes a policy profile. Fails silently (no-op) if it is currently active.</summary>
+    /// <summary>
+    /// Deletes a policy profile. Returns false (no-op) if it is in use anywhere: as a default,
+    /// in a schedule, or by an override.
+    /// </summary>
     Task<bool> DeleteProfileAsync(string accountId, Guid profileId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -63,6 +70,47 @@ public interface IPolicyStore
 
     Task<PolicyAssignmentsDto> GetAssignmentsAsync(string accountId, CancellationToken cancellationToken = default);
 
-    /// <summary>Effective mode id per linked device of the account.</summary>
+    /// <summary>Default mode id per linked device of the account (before schedule/override).</summary>
     Task<IReadOnlyDictionary<Guid, Guid>> GetDeviceProfileMapAsync(string accountId, CancellationToken cancellationToken = default);
+
+    // --- Mode schedule / temporary override (docs/decisions/mode-scheduling-and-temporary-overrides.md) ---
+
+    /// <summary>
+    /// The <see cref="DevicePolicyBundle"/> of every linked device of the account, plus each
+    /// device's reported time zone. Used to serve devices and to detect which devices need a push.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, DeviceBundle>> GetDeviceBundlesAsync(string accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>One device's bundle; null if the device doesn't belong to the account.</summary>
+    Task<DeviceBundle?> GetDeviceBundleAsync(Guid deviceId, string accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>Configured and current mode for the account default and every child.</summary>
+    Task<IReadOnlyList<ModeScopeStatusDto>> GetModeStatusAsync(string accountId, DateTime utcNow, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the schedule of the account default (<paramref name="childProfileId"/> null) or a
+    /// child. For a child, null means "follow the account schedule".
+    /// </summary>
+    Task<ModeUpdateResult> SetScheduleAsync(string accountId, Guid? childProfileId, List<ModeScheduleEntry>? schedule, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets (replaces) the temporary override of a scope, starting now.</summary>
+    Task<ModeUpdateResult> SetOverrideAsync(string accountId, Guid? childProfileId, Guid profileId, DateTime? expiresAtUtc, bool endsAtNextScheduleChange, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets the account override and removes every child override, so it reaches everyone.</summary>
+    Task<ModeUpdateResult> SetOverrideForEveryoneAsync(string accountId, Guid profileId, DateTime? expiresAtUtc, bool endsAtNextScheduleChange, CancellationToken cancellationToken = default);
+
+    /// <summary>Ends a scope's override now ("End now").</summary>
+    Task<ModeUpdateResult> ClearOverrideAsync(string accountId, Guid? childProfileId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>A device's bundle together with the time zone it last reported (null if never).</summary>
+public sealed record DeviceBundle(DevicePolicyBundle Bundle, string? TimeZoneId);
+
+public enum ModeUpdateResult
+{
+    Ok,
+    /// <summary>The child profile doesn't exist on the account.</summary>
+    NotFound,
+    /// <summary>A referenced mode doesn't exist on the account.</summary>
+    UnknownProfile
 }

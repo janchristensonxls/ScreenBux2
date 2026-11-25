@@ -25,4 +25,11 @@ public class Device
     public DateTime LinkedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? LastSeenAt { get; set; }
+
+    /// <summary>
+    /// Windows time-zone id reported by the device (<c>TimeZoneInfo.Local.Id</c>), so the
+    /// server can evaluate mode schedules in the device's local time for display. Null until
+    /// the device has reported it.
+    /// </summary>
+    public string? TimeZoneId { get; set; }
 }

@@ -320,6 +320,10 @@ namespace ScreenBux.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
@@ -413,6 +417,21 @@ namespace ScreenBux.Data.Migrations
                     b.Property<Guid?>("DeviceId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("OverrideEndsAtScheduleChange")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("OverrideExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("OverrideProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("OverrideStartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ScheduleJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -421,6 +440,8 @@ namespace ScreenBux.Data.Migrations
                     b.HasIndex("AccountId");
 
                     b.HasIndex("ActivePolicyProfileId");
+
+                    b.HasIndex("OverrideProfileId");
 
                     b.ToTable("PolicyDocuments");
                 });
@@ -636,9 +657,16 @@ namespace ScreenBux.Data.Migrations
                         .HasForeignKey("ActivePolicyProfileId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ScreenBux.Data.Entities.PolicyProfile", "OverrideProfile")
+                        .WithMany()
+                        .HasForeignKey("OverrideProfileId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Account");
 
                     b.Navigation("ActivePolicyProfile");
+
+                    b.Navigation("OverrideProfile");
                 });
 
             modelBuilder.Entity("ScreenBux.Data.Entities.PolicyProfile", b =>

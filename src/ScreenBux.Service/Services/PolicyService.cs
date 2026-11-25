@@ -1,19 +1,39 @@
 using System.Text.Json;
+using ScreenBux.Shared.Messages;
 using ScreenBux.Shared.Models;
+using ScreenBux.Shared.Services;
 using ScreenBux.Shared.Utilities;
 
 namespace ScreenBux.Service.Services;
 
 /// <summary>
-/// Service for loading and managing policies from JSON configuration
+/// Holds the policy the Service enforces. Normally fed a <see cref="DevicePolicyBundle"/> from
+/// the server (cached in policy-bundle.json): the bundle carries every mode this device may use
+/// plus the default/schedule/override selection, and the mode in effect is re-resolved with
+/// <see cref="ModeResolver"/> on every tick (<see cref="RefreshActiveMode"/>), so schedule
+/// transitions and override expiry happen locally - also while offline. Falls back to a single
+/// <see cref="PolicyConfiguration"/> (policy.json) when no bundle has been received, e.g. from a
+/// server that predates bundles. See docs/decisions/mode-scheduling-and-temporary-overrides.md.
 /// </summary>
 public class PolicyService
 {
     private readonly ILogger<PolicyService> _logger;
+    private readonly NotificationQueueService? _notificationQueue;
+    private readonly TimeProvider _timeProvider;
+    private readonly object _lock = new();
+
+    // Serializes everything that reads or writes the cache files (bundle updates from the REST
+    // poll and the SignalR push, tick reloads, legacy policy updates), so memory and
+    // policy-bundle.json can't end up holding different bundles.
+    private readonly SemaphoreSlim _fileGate = new(1, 1);
     private PolicyConfiguration _configuration;
+    private DevicePolicyBundle? _bundle;
+    private ModeResolution? _activeMode;
     private readonly string _policyFilePath;
+    private readonly string _bundleFilePath;
     private readonly TimeSpan _syncStalenessThreshold;
     private DateTime? _lastWriteTimeUtc;
+    private DateTime? _lastBundleWriteTimeUtc;
     private DateTime? _lastSyncedUtc;
 
     /// <summary>
@@ -33,10 +53,27 @@ public class PolicyService
 
     public void MarkSyncedSinceStartup() => _lastSyncedUtc = DateTime.UtcNow;
 
-    public PolicyService(ILogger<PolicyService> logger, IConfiguration configuration)
+    /// <summary>True when the policy comes from a <see cref="DevicePolicyBundle"/> (not a single legacy policy).</summary>
+    public bool HasBundle => _bundle is not null;
+
+    /// <summary>Which mode is in effect, why, and until when; null without a bundle.</summary>
+    public ModeResolution? ActiveMode => _activeMode;
+
+    /// <summary>Raised when the mode in effect changes (not on the first resolution after startup).</summary>
+    public event EventHandler<ModeChangedEventArgs>? ModeChanged;
+
+    public PolicyService(
+        ILogger<PolicyService> logger,
+        IConfiguration configuration,
+        NotificationQueueService? notificationQueue = null,
+        TimeProvider? timeProvider = null)
     {
         _logger = logger;
+        _notificationQueue = notificationQueue;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
+        _bundleFilePath = configuration["PolicyBundleFilePath"]
+            ?? Path.Combine(Path.GetDirectoryName(_policyFilePath) ?? AppContext.BaseDirectory, "policy-bundle.json");
         var stalenessSeconds = int.TryParse(configuration["PolicySyncStalenessSeconds"], out var s) ? s : 180;
         _syncStalenessThreshold = TimeSpan.FromSeconds(Math.Max(1, stalenessSeconds));
         PolicyStorage.EnsurePolicyDirectory(_policyFilePath);
@@ -45,8 +82,42 @@ public class PolicyService
 
     public async Task LoadPolicyAsync()
     {
+        await _fileGate.WaitAsync();
         try
         {
+            await LoadPolicyCoreAsync();
+        }
+        finally
+        {
+            _fileGate.Release();
+        }
+    }
+
+    /// <summary>Loads the cache files. Callers must hold <see cref="_fileGate"/>.</summary>
+    private async Task LoadPolicyCoreAsync()
+    {
+        try
+        {
+            if (File.Exists(_bundleFilePath))
+            {
+                var json = await File.ReadAllTextAsync(_bundleFilePath);
+                var bundle = JsonSerializer.Deserialize<DevicePolicyBundle>(json, PolicyJsonOptions.Default);
+                if (bundle is not null)
+                {
+                    _lastBundleWriteTimeUtc = File.GetLastWriteTimeUtc(_bundleFilePath);
+                    Apply(bundle);
+                    _logger.LogInformation("Policy bundle loaded with {Count} modes; active mode {Mode}.",
+                        bundle.Profiles.Count, _configuration.Name);
+                    return;
+                }
+            }
+
+            lock (_lock)
+            {
+                _bundle = null;
+                _activeMode = null;
+            }
+
             if (File.Exists(_policyFilePath))
             {
                 var json = await File.ReadAllTextAsync(_policyFilePath);
@@ -68,26 +139,49 @@ public class PolicyService
         }
     }
 
+    /// <summary>
+    /// Called every enforcement tick: reloads the cache files if something else rewrote them,
+    /// then re-resolves the mode in effect (schedule transitions, override expiry).
+    /// </summary>
     public async Task ReloadPolicyIfChangedAsync()
     {
+        await _fileGate.WaitAsync();
         try
         {
-            if (!File.Exists(_policyFilePath))
+            if (File.Exists(_bundleFilePath))
             {
-                return;
+                var bundleWriteTimeUtc = File.GetLastWriteTimeUtc(_bundleFilePath);
+                if (_lastBundleWriteTimeUtc == null || bundleWriteTimeUtc > _lastBundleWriteTimeUtc)
+                {
+                    await LoadPolicyCoreAsync();
+                }
             }
-
-            var lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
-            if (_lastWriteTimeUtc == null || lastWriteTimeUtc > _lastWriteTimeUtc)
+            else if (File.Exists(_policyFilePath))
             {
-                await LoadPolicyAsync();
+                var lastWriteTimeUtc = File.GetLastWriteTimeUtc(_policyFilePath);
+                if (_lastWriteTimeUtc == null || lastWriteTimeUtc > _lastWriteTimeUtc)
+                {
+                    await LoadPolicyCoreAsync();
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking policy file for changes");
         }
+        finally
+        {
+            _fileGate.Release();
+        }
+
+        RefreshActiveMode();
     }
+
+    /// <summary>
+    /// Re-resolves the mode in effect from the bundle at the current time and switches
+    /// <see cref="GetConfiguration"/> to it. No-op without a bundle.
+    /// </summary>
+    public void RefreshActiveMode() => Apply(incoming: null);
 
     public async Task SavePolicyAsync()
     {
@@ -139,8 +233,14 @@ public class PolicyService
         await SavePolicyAsync();
     }
 
+
+    /// <summary>The policy in effect right now (the resolved mode's policy when a bundle is in use).</summary>
     public PolicyConfiguration GetConfiguration() => _configuration;
 
+    /// <summary>
+    /// Replaces the policy with a single fixed <paramref name="configuration"/> and drops any
+    /// bundle - the path for servers that don't serve bundles yet.
+    /// </summary>
     public async Task UpdatePolicyAsync(PolicyConfiguration configuration)
     {
         if (configuration == null)
@@ -148,9 +248,159 @@ public class PolicyService
             throw new ArgumentNullException(nameof(configuration));
         }
 
-        _configuration = configuration;
-        await SavePolicyAsync();
+        await _fileGate.WaitAsync();
+        try
+        {
+            lock (_lock)
+            {
+                _bundle = null;
+                _activeMode = null;
+                _configuration = configuration;
+            }
+
+            TryDeleteBundleFile();
+            await SavePolicyAsync();
+        }
+        finally
+        {
+            _fileGate.Release();
+        }
     }
+
+    /// <summary>
+    /// Switches to <paramref name="bundle"/> (unless it is older than the current one - see
+    /// <see cref="DevicePolicyBundle.GeneratedAtUtc"/>) and caches it to disk. The whole
+    /// apply + write runs under <see cref="_fileGate"/>, and the file is replaced atomically, so
+    /// concurrent updates (REST poll and SignalR push) leave memory and file on the same bundle.
+    /// Returns false if the bundle was ignored as stale.
+    /// </summary>
+    public async Task<bool> UpdateBundleAsync(DevicePolicyBundle bundle)
+    {
+        ArgumentNullException.ThrowIfNull(bundle);
+
+        await _fileGate.WaitAsync();
+        try
+        {
+            if (!Apply(bundle))
+            {
+                return false;
+            }
+
+            try
+            {
+                PolicyStorage.EnsurePolicyDirectory(_bundleFilePath);
+                var tempPath = _bundleFilePath + ".tmp";
+                await File.WriteAllTextAsync(tempPath, JsonSerializer.Serialize(bundle, PolicyJsonOptions.Default));
+                File.Move(tempPath, _bundleFilePath, overwrite: true);
+                _lastBundleWriteTimeUtc = File.GetLastWriteTimeUtc(_bundleFilePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving policy bundle file");
+            }
+
+            return true;
+        }
+        finally
+        {
+            _fileGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="incoming"/> (or, when null, the current bundle again) at the
+    /// current time and makes it the active policy. Read, resolve and swap happen under one lock,
+    /// so a tick's refresh can't put back a bundle that a concurrent update just replaced.
+    /// Returns false when there is nothing to apply or <paramref name="incoming"/> is stale.
+    /// </summary>
+    private bool Apply(DevicePolicyBundle? incoming)
+    {
+        ModeResolution? previous;
+        PolicyConfiguration policy;
+        ModeResolution resolution;
+
+        lock (_lock)
+        {
+            var bundle = incoming ?? _bundle;
+            if (bundle is null)
+            {
+                return false;
+            }
+
+            if (incoming is not null
+                && incoming.GeneratedAtUtc is DateTime incomingAt
+                && _bundle?.GeneratedAtUtc is DateTime currentAt
+                && incomingAt < currentAt)
+            {
+                _logger.LogInformation("Ignoring policy bundle generated at {Incoming:o}; already on one from {Current:o}.", incomingAt, currentAt);
+                return false;
+            }
+
+            (policy, resolution) = ModeResolver.ResolvePolicy(bundle, _timeProvider.GetUtcNow().UtcDateTime, _timeProvider.LocalTimeZone);
+            previous = _activeMode;
+            _bundle = bundle;
+            _configuration = policy;
+            _activeMode = resolution;
+        }
+
+        if (previous is not null && previous.ProfileId != resolution.ProfileId)
+        {
+            OnModeChanged(policy.Name, resolution);
+        }
+
+        return true;
+    }
+
+    private void OnModeChanged(string modeName, ModeResolution resolution)
+    {
+        _logger.LogInformation("Mode changed to {Mode} ({Source}) until {UntilUtc}.", modeName, resolution.Source, resolution.UntilUtc);
+
+        var until = FormatUntil(resolution.UntilUtc);
+        _notificationQueue?.Enqueue(new PendingNotification
+        {
+            Severity = NotificationSeverity.Info,
+            Title = "Mode changed",
+            Message = string.IsNullOrEmpty(until) ? $"{modeName} mode is now active." : $"{modeName} mode is now active {until}.",
+            AutoDismissSeconds = 10
+        });
+
+        ModeChanged?.Invoke(this, new ModeChangedEventArgs(modeName, resolution));
+    }
+
+    /// <summary>"until 15:00", "until Mon 07:00", or empty when there is no known end.</summary>
+    private string FormatUntil(DateTime? untilUtc)
+    {
+        if (untilUtc is not DateTime utc)
+        {
+            return string.Empty;
+        }
+
+        var timeZone = _timeProvider.LocalTimeZone;
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), timeZone);
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(_timeProvider.GetUtcNow().UtcDateTime, timeZone);
+
+        return local.Date == nowLocal.Date
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"until {local:HH:mm}")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"until {local:ddd HH:mm}");
+    }
+
+    private void TryDeleteBundleFile()
+    {
+        try
+        {
+            if (File.Exists(_bundleFilePath))
+            {
+                File.Delete(_bundleFilePath);
+            }
+
+            _lastBundleWriteTimeUtc = null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting policy bundle file");
+        }
+    }
+
 
     /// <summary>
     /// Classifies a process/window into an <see cref="AppCategoryConfig"/> by matching its
@@ -243,4 +493,12 @@ public class PolicyService
     /// </summary>
     public IReadOnlyList<SessionRule> GetActiveSessionRules() =>
         _configuration.SessionRules.Where(rule => rule.IsActiveAt(DateTime.Now)).ToList();
+}
+
+/// <summary>Raised by <see cref="PolicyService.ModeChanged"/>.</summary>
+public sealed class ModeChangedEventArgs(string modeName, ModeResolution resolution) : EventArgs
+{
+    public string ModeName { get; } = modeName;
+
+    public ModeResolution Resolution { get; } = resolution;
 }

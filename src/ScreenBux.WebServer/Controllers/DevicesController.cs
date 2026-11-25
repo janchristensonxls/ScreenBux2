@@ -167,10 +167,13 @@ public class DevicesController : ControllerBase
         return Ok(devices);
     }
 
-    /// <summary>Device (or parent) fetches the effective policy for a specific device.</summary>
+    /// <summary>
+    /// Device (or parent) fetches the policy in effect right now for a specific device (default,
+    /// schedule and override already resolved). For clients that don't use <see cref="GetDevicePolicyBundle"/>.
+    /// </summary>
     [HttpGet("{id:guid}/policy")]
     [Authorize]
-    public async Task<ActionResult<PolicyConfiguration>> GetDevicePolicy(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<PolicyConfiguration>> GetDevicePolicy(Guid id, [FromQuery] string? timeZoneId, CancellationToken cancellationToken)
     {
         var accountId = User.GetAccountId();
         if (accountId is null)
@@ -178,7 +181,57 @@ public class DevicesController : ControllerBase
             return Unauthorized();
         }
 
-        // A device token may only read its own policy.
+        var denied = await TouchDeviceAsync(id, accountId, timeZoneId, cancellationToken);
+        if (denied is not null)
+        {
+            return denied;
+        }
+
+        var policy = await _policyStore.GetDevicePolicyAsync(id, accountId, cancellationToken);
+        return Ok(policy);
+    }
+
+    /// <summary>
+    /// Device fetches its <see cref="DevicePolicyBundle"/>: every mode it may need plus the
+    /// default/schedule/override selection, so it can switch modes itself (also while offline).
+    /// <paramref name="timeZoneId"/> is the device's <c>TimeZoneInfo.Local.Id</c>, stored so the
+    /// server can show schedules in the device's local time.
+    /// </summary>
+    [HttpGet("{id:guid}/policy-bundle")]
+    [Authorize]
+    public async Task<ActionResult<DevicePolicyBundle>> GetDevicePolicyBundle(Guid id, [FromQuery] string? timeZoneId, CancellationToken cancellationToken)
+    {
+        var accountId = User.GetAccountId();
+        if (accountId is null)
+        {
+            return Unauthorized();
+        }
+
+        var denied = await TouchDeviceAsync(id, accountId, timeZoneId, cancellationToken);
+        if (denied is not null)
+        {
+            return denied;
+        }
+
+        // Stamp before reading (see DevicePolicyBundle.GeneratedAtUtc).
+        var generatedAtUtc = DateTime.UtcNow;
+        var device = await _policyStore.GetDeviceBundleAsync(id, accountId, cancellationToken);
+        if (device is null)
+        {
+            return NotFound();
+        }
+
+        device.Bundle.GeneratedAtUtc = generatedAtUtc;
+        return Ok(device.Bundle);
+    }
+
+    /// <summary>
+    /// Authorizes a policy read for device <paramref name="id"/> (a device token may only read its
+    /// own), then records it as seen and stores its reported time zone. Returns an error result,
+    /// or null when the caller may proceed.
+    /// </summary>
+    private async Task<ActionResult?> TouchDeviceAsync(Guid id, string accountId, string? timeZoneId, CancellationToken cancellationToken)
+    {
         var callerDeviceId = User.GetDeviceId();
         if (callerDeviceId is not null && callerDeviceId != id)
         {
@@ -194,10 +247,13 @@ public class DevicesController : ControllerBase
         }
 
         device.LastSeenAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(timeZoneId) && timeZoneId.Length <= 128)
+        {
+            device.TimeZoneId = timeZoneId;
+        }
 
-        var policy = await _policyStore.GetDevicePolicyAsync(id, accountId, cancellationToken);
-        return Ok(policy);
+        await _db.SaveChangesAsync(cancellationToken);
+        return null;
     }
 
     /// <summary>Device (or parent) fetches the current grant status for a specific device.</summary>

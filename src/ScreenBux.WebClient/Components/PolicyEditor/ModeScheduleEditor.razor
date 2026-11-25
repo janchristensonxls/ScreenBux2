@@ -1,0 +1,188 @@
+@using System.Text.Json
+@using ScreenBux.Shared.Models
+@using ScreenBux.Shared.Utilities
+@using static ScreenBux.WebClient.Components.PolicyEditor.PolicyEditorHelpers
+
+@* Weekly schedule of which mode is active by default, for the account or one child. *@
+<div class="card mb-3">
+    <div class="card-header d-flex align-items-center">
+        <span class="fw-semibold me-auto">Schedule – @Title</span>
+        <button type="button" class="btn-close" title="Close" @onclick="() => OnCancel.InvokeAsync()"></button>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-2">
+            During each time slot the chosen mode is active instead of the default mode (@DefaultName).
+            The first matching row wins. A temporary switch always beats the schedule.
+            Times are the device's local time@(Status.TimeZoneId == "UTC" ? " (no device has reported its time zone yet; shown in UTC)" : $" ({Status.TimeZoneId})").
+        </p>
+
+        @if (IsChild)
+        {
+            <div class="d-flex gap-3 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" id="follow-@_id" checked="@_follow" @onchange="() => SetFollow(true)" />
+                    <label class="form-check-label" for="follow-@_id">Follow the account schedule</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" id="own-@_id" checked="@(!_follow)" @onchange="() => SetFollow(false)" />
+                    <label class="form-check-label" for="own-@_id">Own schedule</label>
+                </div>
+            </div>
+        }
+
+        @if (_follow)
+        {
+            <div class="small text-muted fst-italic mb-2">
+                @(Status.EffectiveSchedule.Count == 0 ? "The account has no schedule." : $"Uses the account schedule ({Status.EffectiveSchedule.Count} row{(Status.EffectiveSchedule.Count == 1 ? "" : "s")}).")
+            </div>
+        }
+        else
+        {
+            @if (_entries.Count == 0)
+            {
+                <div class="text-muted small fst-italic mb-2">No schedule – the default mode applies all the time.</div>
+            }
+            @for (var i = 0; i < _entries.Count; i++)
+            {
+                var index = i;
+                var entry = _entries[i];
+                <div class="pe-window @(entry.Enabled ? "" : "opacity-50")">
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                        <select class="form-select form-select-sm w-auto" value="@entry.ProfileId"
+                                @onchange="e => entry.ProfileId = Guid.Parse((string)e.Value!)">
+                            @foreach (var p in Profiles)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                        <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Days">
+                            @foreach (var day in WeekOrder)
+                            {
+                                var on = entry.Window.DaysOfWeek.Count == 0 || entry.Window.DaysOfWeek.Contains(day);
+                                <button type="button" class="btn @(on ? "btn-primary" : "btn-outline-secondary")" title="@day"
+                                        @onclick="() => ToggleDay(entry.Window, day)">@ShortDay(day)</button>
+                            }
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <DxTimeEdit T="TimeSpan" Time="entry.Window.StartTime" TimeChanged="(TimeSpan t) => entry.Window.StartTime = new TimeSpan(t.Hours, t.Minutes, 0)"
+                                    Format="HH:mm" DisplayFormat="HH:mm" ScrollPickerFormat="HH mm" MinuteIncrement="5" Width="100px" />
+                        <span>to</span>
+                        <DxTimeEdit T="TimeSpan" Time="entry.Window.EndTime" TimeChanged="(TimeSpan t) => entry.Window.EndTime = new TimeSpan(t.Hours, t.Minutes, 0)"
+                                    Format="HH:mm" DisplayFormat="HH:mm" ScrollPickerFormat="HH mm" MinuteIncrement="5" Width="100px" />
+                        @if (entry.Window.EndTime < entry.Window.StartTime)
+                        {
+                            <span class="badge bg-info text-dark" title="Wraps past midnight into the next day">overnight</span>
+                        }
+                        <div class="ms-auto d-flex align-items-center gap-1">
+                            <DxCheckBox T="bool" CheckType="CheckType.Switch" @bind-Checked="entry.Enabled">On</DxCheckBox>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" title="Move up" disabled="@(index == 0)" @onclick="() => Move(index, -1)">↑</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" title="Move down" disabled="@(index == _entries.Count - 1)" @onclick="() => Move(index, 1)">↓</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Remove" @onclick="() => _entries.RemoveAt(index)">✕</button>
+                        </div>
+                    </div>
+                    @if (entry.Window.StartTime == entry.Window.EndTime)
+                    {
+                        <div class="small text-danger mt-1">Start and end must differ.</div>
+                    }
+                </div>
+            }
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="Add">+ Add time slot</button>
+
+            var overlaps = ModeUi.FindOverlaps(_entries, NameOf);
+            @if (overlaps.Count > 0)
+            {
+                <div class="alert alert-warning py-1 small mt-2 mb-0">
+                    ⚠ Overlapping slots – the row higher up wins:
+                    <ul class="mb-0">
+                        @foreach (var o in overlaps.Take(6)) { <li>@o</li> }
+                        @if (overlaps.Count > 6) { <li>… and @(overlaps.Count - 6) more</li> }
+                    </ul>
+                </div>
+            }
+        }
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-sm btn-primary" disabled="@(Busy || HasErrors)" @onclick="SaveAsync">Save schedule</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OnCancel.InvokeAsync()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PolicyProfileDto> Profiles { get; set; } = Array.Empty<PolicyProfileDto>();
+    [Parameter, EditorRequired] public ModeScopeStatusDto Status { get; set; } = new();
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>Saved schedule: null = follow the account schedule (children only).</summary>
+    [Parameter] public EventCallback<List<ModeScheduleEntry>?> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly string _id = Guid.NewGuid().ToString("N");
+    private bool _follow;
+    private List<ModeScheduleEntry> _entries = new();
+
+    private bool IsChild => Status.ChildProfileId is not null;
+
+    private string DefaultName => NameOf(Status.DefaultProfileId);
+
+    private bool HasErrors => !_follow && _entries.Any(e => e.Window.StartTime == e.Window.EndTime);
+
+    protected override void OnInitialized()
+    {
+        _follow = IsChild && Status.OwnSchedule is null;
+        _entries = Copy(Status.OwnSchedule ?? Status.EffectiveSchedule);
+    }
+
+    private string NameOf(Guid profileId) => Profiles.FirstOrDefault(p => p.Id == profileId)?.Name ?? "(deleted mode)";
+
+    private static List<ModeScheduleEntry> Copy(List<ModeScheduleEntry> entries) =>
+        JsonSerializer.Deserialize<List<ModeScheduleEntry>>(JsonSerializer.Serialize(entries, PolicyJsonOptions.Default), PolicyJsonOptions.Default) ?? new();
+
+    private void SetFollow(bool follow)
+    {
+        _follow = follow;
+        if (!follow && _entries.Count == 0)
+        {
+            // Start an own schedule from a copy of the account's, which is usually close to what's wanted.
+            _entries = Copy(Status.EffectiveSchedule);
+        }
+    }
+
+    private void Add()
+    {
+        var mode = Profiles.FirstOrDefault(p => p.Name == "School") ?? Profiles.FirstOrDefault();
+        _entries.Add(new ModeScheduleEntry
+        {
+            ProfileId = mode?.Id ?? Status.DefaultProfileId,
+            Window = new TimeWindow { DaysOfWeek = WeekOrder.Take(5).ToList(), StartTime = TimeSpan.FromHours(8), EndTime = TimeSpan.FromHours(15) }
+        });
+    }
+
+    private void Move(int index, int delta)
+    {
+        var entry = _entries[index];
+        _entries.RemoveAt(index);
+        _entries.Insert(index + delta, entry);
+    }
+
+    private static void ToggleDay(TimeWindow window, DayOfWeek day)
+    {
+        // An empty list means "every day"; expand it before toggling so the click removes one day.
+        if (window.DaysOfWeek.Count == 0)
+        {
+            window.DaysOfWeek = WeekOrder.ToList();
+        }
+
+        if (!window.DaysOfWeek.Remove(day))
+        {
+            window.DaysOfWeek.Add(day);
+        }
+
+        window.DaysOfWeek = window.DaysOfWeek.Count == 7
+            ? new List<DayOfWeek>()
+            : window.DaysOfWeek.OrderBy(d => Array.IndexOf(WeekOrder, d)).ToList();
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync(_follow ? null : _entries);
+}

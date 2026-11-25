@@ -69,6 +69,7 @@ discover later).
   manual parent toggling. Explicitly a **non-goal for this migration** — the grid/group model
   doesn't need to anticipate its shape, since it only adds a "which profile is active right now"
   resolution step in front of everything else. Manual override always wins when set.
+  *Now designed in `docs/decisions/mode-scheduling-and-temporary-overrides.md`.*
 
 ### 4. Enforcement precedence (per foreground-classified process, per tick)
 

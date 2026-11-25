@@ -10,8 +10,8 @@ namespace ScreenBux.Service.Services;
 
 /// <summary>
 /// Redeems a parent-provided link code (from configuration) to bind this device to an account,
-/// then periodically fetches this device's policy from the server and writes it to the local
-/// JSON cache consumed by <see cref="PolicyService"/>.
+/// then periodically fetches this device's policy bundle from the server and hands it to
+/// <see cref="PolicyService"/> (which caches it locally and resolves the active mode).
 /// </summary>
 public class DevicePolicySyncService : BackgroundService
 {
@@ -23,7 +23,6 @@ public class DevicePolicySyncService : BackgroundService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly PolicyService _policyService;
     private readonly GrantService _grantService;
-    private readonly string _policyFilePath;
 
     public DevicePolicySyncService(
         ILogger<DevicePolicySyncService> logger,
@@ -39,7 +38,6 @@ public class DevicePolicySyncService : BackgroundService
         _httpClientFactory = httpClientFactory;
         _policyService = policyService;
         _grantService = grantService;
-        _policyFilePath = configuration["PolicyFilePath"] ?? PolicyStorage.GetDefaultPolicyPath();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -152,12 +150,40 @@ public class DevicePolicySyncService : BackgroundService
         var client = CreateClient(serverBaseUrl);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", state.DeviceToken);
 
-        using var response = await client.GetAsync($"api/devices/{state.DeviceId}/policy", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        // The bundle lets this device switch modes itself (schedule, temporary override) - also
+        // offline. Reporting the time zone lets the server show the schedule in local time.
+        var timeZoneId = Uri.EscapeDataString(TimeZoneInfo.Local.Id);
+        using var bundleResponse = await client.GetAsync($"api/devices/{state.DeviceId}/policy-bundle?timeZoneId={timeZoneId}", cancellationToken);
+        if (HandleUnauthorized(bundleResponse, state))
         {
-            _logger.LogWarning("Device token rejected; clearing link state to re-link.");
-            state.DeviceToken = null;
-            _deviceIdentity.Save(state);
+            return;
+        }
+
+        if (bundleResponse.IsSuccessStatusCode)
+        {
+            var bundle = await bundleResponse.Content.ReadFromJsonAsync<DevicePolicyBundle>(WriteOptions, cancellationToken);
+            if (bundle is null)
+            {
+                return;
+            }
+
+            await _policyService.UpdateBundleAsync(bundle);
+            _policyService.MarkSyncedSinceStartup();
+            _logger.LogInformation("Updated local policy bundle from server for device {DeviceId}; active mode {Mode}.",
+                state.DeviceId, _policyService.GetConfiguration().Name);
+            return;
+        }
+
+        if (bundleResponse.StatusCode != System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogWarning("Policy bundle fetch failed ({Status}).", (int)bundleResponse.StatusCode);
+            return;
+        }
+
+        // 404: a server that predates bundles - fall back to the single resolved policy.
+        using var response = await client.GetAsync($"api/devices/{state.DeviceId}/policy?timeZoneId={timeZoneId}", cancellationToken);
+        if (HandleUnauthorized(response, state))
+        {
             return;
         }
 
@@ -173,10 +199,23 @@ public class DevicePolicySyncService : BackgroundService
             return;
         }
 
-        PolicyStorage.EnsurePolicyDirectory(_policyFilePath);
-        await File.WriteAllTextAsync(_policyFilePath, JsonSerializer.Serialize(policy, WriteOptions), cancellationToken);
+        await _policyService.UpdatePolicyAsync(policy);
         _policyService.MarkSyncedSinceStartup();
         _logger.LogInformation("Updated local policy cache from server for device {DeviceId}.", state.DeviceId);
+    }
+
+    /// <summary>On 401 the device token is no longer valid: clear it so the device re-links.</summary>
+    private bool HandleUnauthorized(HttpResponseMessage response, DeviceState state)
+    {
+        if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+        {
+            return false;
+        }
+
+        _logger.LogWarning("Device token rejected; clearing link state to re-link.");
+        state.DeviceToken = null;
+        _deviceIdentity.Save(state);
+        return true;
     }
 
     private async Task FetchGrantAsync(string serverBaseUrl, CancellationToken cancellationToken)
